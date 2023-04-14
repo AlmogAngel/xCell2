@@ -42,7 +42,7 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, mixture_fra
   }
 
 
-  source("utils.R")
+  source("R/utils.R")
 
   # Use only most variable genes for single-cell data
   if (data_type == "sc") {
