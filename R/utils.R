@@ -3,6 +3,7 @@
 library(tidyverse)
 
 print(test)
+print(test)
 
 
 getTopVariableGenes <- function(ref, min_genes, sensitivity){
