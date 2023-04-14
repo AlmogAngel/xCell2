@@ -6,6 +6,8 @@ devtools::install()
 devtools::check()
 
 ?xCell2Analysis()
+?xCell2GetLineage()
+?xCell2Train()
 data("ts_labels_with_ontology")
 
 # data

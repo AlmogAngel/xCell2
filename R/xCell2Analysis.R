@@ -9,6 +9,7 @@
 #' @param xcell2sigs A `xCell2 Signatures` object.
 #' @return A data frame containing the cell type enrichment for each sample in the input matrix, as estimated by xCell2.
 #' @examples
+#' @export
 xCell2Analysis <- function(bulk, xcell2sigs){
 
   # score ranked bulk gene expression matrix

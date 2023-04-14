@@ -10,6 +10,7 @@
 #' @param labels A data frame containing two columns: first column named "ont" for cell type onthology (character) and second column named "label" for cell type labels (character)
 #' @param out_file An optional output file name to write the cell type dependencies to.
 #' @return A list of cell type dependencies, or a TSV file containing the cell type dependencies if an output file is specified.
+#' @export
 xCell2GetLineage <- function(labels, out_file){
 
 
