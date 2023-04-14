@@ -6,17 +6,12 @@ getTopVariableGenes <- function(ref, min_genes, sensitivity){
   genesVar <- plot1$data$variance.standardized
   names(genesVar) <- rownames(plot1$data)
   genesVar <- sort(genesVar, decreasing = TRUE)
-  idx <- 1:length(genesVar)
-  KneeCutOff <- kneedle::kneedle(idx, genesVar, sensitivity = sensitivity)[2]
-  #ggplot(data.frame(x=idx, y=genesVar), aes(x=x, y=y)) +
-  #  geom_point()+
-  #  geom_hline(yintercept = KneeCutOff, col="red")
-  topGenesVar <- names(genesVar[genesVar >= KneeCutOff])
 
-  if (length(topGenesVar) < min_genes) {
-    topGenesVar <- names(genesVar[1:min_genes])
+  if (length(genesVar) < min_genes) {
+    genesVar <- names(genesVar[1:min_genes])
   }
-  return(topGenesVar)
+
+  return(genesVar)
 }
 
 # Generate a matrix of median expression of pure cell types
@@ -426,10 +421,10 @@ filterSignatures <- function(ref, labels, pure_ct_mat, dep_list, signatures_coll
 #' @import dplyr
 #' @import tibble
 #' @import Seurat
-#' @importFrom kneedle kneedle
 #' @import Rfast
-#' @importFrom sparseMatrixStats rowMedians
-#' @import GSEABase
+#' @import sparseMatrixStats
+#' @importFrom  GSEABase GeneSetCollection
+#' @importFrom  GSEABase GeneSet
 #' @import singscore
 #' @param ref A reference gene expression matrix.
 #' @param labels A data frame in which the rows correspond to samples in the ref. The data frame must have four columns:
