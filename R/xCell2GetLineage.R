@@ -1,17 +1,15 @@
-#########################################################################################
-# Generate cell-type lineage automatically for dependencies
-#########################################################################################
-
-# USAGE:
-# (1) labels - a data frame with:
-#   (a) first column for cell type onthology - named "ont" (character)
-#   (b) second column for cell type name - named "label" (character)
-# (2) out_file - path to cell types lineage file for manual check (if NULL dependencies list will be made automatically)
-
-# DEPENDENCIES:
-# tidyverse, ontoProc, ontologyIndex
-
-#' @export
+#' xCell2GetLineage function
+#'
+#' This function uses the `ontoProc` and `ontologyIndex` packages to identify the descendants and ancestors of each cell type based on the cell ontology tree. If no output file is specified, the function returns a list of cell type dependencies as a list. If an output file is specified, the function writes the cell type dependencies to a TSV file.
+#'
+#' @importFrom ontoProc getCellOnto
+#' @importFrom ontologyIndex get_descendants
+#' @importFrom ontologyIndex get_ancestors
+#' @import dplyr
+#' @import tibble
+#' @param labels A data frame containing two columns: first column named "ont" for cell type onthology (character) and second column named "label" for cell type labels (character)
+#' @param out_file An optional output file name to write the cell type dependencies to.
+#' @return A list of cell type dependencies, or a TSV file containing the cell type dependencies if an output file is specified.
 xCell2GetLineage <- function(labels, out_file){
 
 

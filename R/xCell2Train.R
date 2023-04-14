@@ -1,34 +1,24 @@
-##########################################################################################
-# Train signatures
-##########################################################################################
-
-# NOTE (!):
-#  - No underscore in cell types labels
-#  - Cell type onthology with colon in example: CL:0000545 (not CL_0000545)
-
-# USAGE:
-# (1) ref - reference expression matrix: genes x samples ("matrix", "dgCMatrix", "Matrix")
-# (2) labels - a data frame in which the rows correspond to samples in ref:
-#   (a) first column for cell type onthology - named "ont" (character)
-#   (b) second column for cell type name - named "label" (character)
-#   (c) third column for cell type sample - named "sample" (character)
-#   (d) fourth column for cell type dataset - named "dataset" (character)
-# (3) data_type - reference data type ("rnaseq", "array", "scrnaseq")
-# (4) lineage_file - path to the file generated with xCell2GetLineage and was manually checked (if NULL dependencies list will be made automatically)
-
-
-
-# Remove
-if (1 == 0) {
-  data_type = "sc"; mixture_fractions = c(0.001, 0.005, seq(0.01, 0.25, 0.02))
-  probs = c(.1, .25, .33333333, .5); diff_vals = c(0, 0.1, 0.585, 1, 1.585, 2, 3, 4, 5)
-  min_genes = 5; max_genes = 500; is_10x = TRUE
-}
-
-#' @export
+#' xCell2Train function
+#'
+#' This function generates signatures for each cell type.
+#'
+#' @param ref A reference gene expression matrix.
+#' @param labels A data frame in which the rows correspond to samples in the ref. The data frame must have four columns:
+#'   "ont": the cell type ontology as a character (i.e., "CL:0000545").
+#'   "label": the cell type name as a character (i.e., "T-helper 1 cell").
+#'   "sample": the cell type sample should match the column name in ref.
+#'   "dataset": the cell type sample dataset or subject (for single-cell) as a character.
+#' @param data_type Gene expression data type: "rnaseq", "array", or "sc".
+#' @param lineage_file (Optional) Path to the cell type lineage file generated with `xCell2GetLineage` function.
+#' @param mixture_fractions A vector of mixture fractions to be used in signature filtering.
+#' @param probs A vector of probability thresholds to be used for generating signatures.
+#' @param diff_vals A vector of delta values to be used for generating signatures.
+#' @param min_genes The minimum number of genes to include in the signature.
+#' @param max_genes The maximum number of genes to include in the signature.
+#' @return An S4 object containing the signatures, cell type labels, and cell type dependencies.
 xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, mixture_fractions = c(0.001, 0.005, seq(0.01, 0.25, 0.02)),
                         probs = c(.1, .25, .33333333, .5), diff_vals = c(0, 0.1, 0.585, 1, 1.585, 2, 3, 4, 5),
-                        min_genes = 5, max_genes = 500, is_10x = FALSE){
+                        min_genes = 5, max_genes = 500){
 
 
   # Validate inputs
