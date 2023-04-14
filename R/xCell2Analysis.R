@@ -2,8 +2,8 @@
 # Analyze new mixtures
 ########################################################################################
 
-library(tidyverse)
 
+#' @export
 xCell2Analysis <- function(mix, xcell2sigs){
 
   scoreMixtures <- function(ctoi, mixture_ranked){

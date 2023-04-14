@@ -11,8 +11,7 @@
 # DEPENDENCIES:
 # tidyverse, ontoProc, ontologyIndex
 
-library(tidyverse)
-
+#' @export
 xCell2GetLineage <- function(labels, out_file){
 
 

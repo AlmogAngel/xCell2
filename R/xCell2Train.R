@@ -17,7 +17,6 @@
 # (4) lineage_file - path to the file generated with xCell2GetLineage and was manually checked (if NULL dependencies list will be made automatically)
 
 
-library(tidyverse)
 
 # Remove
 if (1 == 0) {
@@ -26,7 +25,7 @@ if (1 == 0) {
   min_genes = 5; max_genes = 500; is_10x = TRUE
 }
 
-
+#' @export
 xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, mixture_fractions = c(0.001, 0.005, seq(0.01, 0.25, 0.02)),
                         probs = c(.1, .25, .33333333, .5), diff_vals = c(0, 0.1, 0.585, 1, 1.585, 2, 3, 4, 5),
                         min_genes = 5, max_genes = 500, is_10x = FALSE){
