@@ -2,6 +2,9 @@
 
 library(tidyverse)
 
+print(test)
+
+
 getTopVariableGenes <- function(ref, min_genes, sensitivity){
 
   ref.srt <- Seurat::CreateSeuratObject(counts = ref)
