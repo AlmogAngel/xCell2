@@ -420,6 +420,7 @@ filterSignatures <- function(ref, labels, pure_ct_mat, dep_list, signatures_coll
 #'
 #' @import dplyr
 #' @import tibble
+#' @import tidyr
 #' @import Seurat
 #' @import Rfast
 #' @import sparseMatrixStats

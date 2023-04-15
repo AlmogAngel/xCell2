@@ -13,7 +13,6 @@
 #' @export
 xCell2GetLineage <- function(labels, out_file){
 
-
   cl <- ontoProc::getCellOnto()
 
   labels_uniq <- labels %>%

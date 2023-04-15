@@ -22,5 +22,9 @@ deconvolutionResults <- runDeconvolution(methodsToRun, bulk = data$bulk, singleC
 
 
 
+xcell2.res <- runDeconvolution(methods = "xCell2", bulk = data$bulk, singleCellExpr = data$singleCellExpr)
+
+
+
 # test args for xCell2.0
 DeconBenchmark::.writeArgs(h5file = "/bigdata/almogangel/twelve_years_decon_paper/docker/xCell2/test_args.h5", bulk = data$bulk, singleCellExpr = data$singleCellExpr)
