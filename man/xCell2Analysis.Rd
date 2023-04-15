@@ -9,11 +9,11 @@ xCell2Analysis(bulk, xcell2sigs)
 \arguments{
 \item{bulk}{A matrix containing gene expression data.}
 
-\item{xcell2sigs}{A `xCell2 Signatures` object.}
+\item{xcell2sigs}{A `xCell2Signatures` object.}
 }
 \value{
 A data frame containing the cell type enrichment for each sample in the input matrix, as estimated by xCell2.
 }
 \description{
-This function takes a matrix of bulk gene expression data and a `xCell2 Signatures` object containing a set of signatures as input. It performs downstream analysis to identify enriched cell types in the bulk sample.
+This function takes a matrix of bulk gene expression data and a `xCell2Signatures` object containing a set of signatures as input. It performs downstream analysis to identify enriched cell types in the bulk sample.
 }

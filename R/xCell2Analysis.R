@@ -1,12 +1,12 @@
 #' xCell2Analysis function
 #'
-#' This function takes a matrix of bulk gene expression data and a `xCell2 Signatures` object containing a set of signatures as input. It performs downstream analysis to identify enriched cell types in the bulk sample.
+#' This function takes a matrix of bulk gene expression data and a `xCell2Signatures` object containing a set of signatures as input. It performs downstream analysis to identify enriched cell types in the bulk sample.
 #'
 #' @import singscore
 #' @import dplyr
 #' @import tibble
 #' @param bulk A matrix containing gene expression data.
-#' @param xcell2sigs A `xCell2 Signatures` object.
+#' @param xcell2sigs A `xCell2Signatures` object.
 #' @return A data frame containing the cell type enrichment for each sample in the input matrix, as estimated by xCell2.
 #' @examples
 #' @export

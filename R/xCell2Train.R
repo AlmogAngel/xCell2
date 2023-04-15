@@ -103,7 +103,6 @@ makeQuantiles <- function(ref, labels, probs){
 }
 
 
-
 createSignatures <- function(ref, labels, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes){
 
   celltypes <- unique(labels[,2])
@@ -413,6 +412,20 @@ filterSignatures <- function(ref, labels, pure_ct_mat, dep_list, signatures_coll
 }
 
 
+#' @slot labels ...
+#' @slot dependencies ...
+#' @slot all_signatures ...
+#' @slot filtered_signatures ...
+#' @name xCell2Signatures
+#' @importFrom methods new
+# Create S4 object for the new reference
+setClass("xCell2Signatures", slots = list(
+  labels = "data.frame",
+  dependencies = "list",
+  all_signatures = "GeneSetCollection",
+  filtered_signatures = "GeneSetCollection"
+))
+
 
 #' xCell2Train function
 #'
@@ -508,17 +521,7 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, mixture_fra
 
   # TODO: Linear tranformation
 
-
-  # Create S4 object for the new reference
-  setClass("xCell2 Signatures", slots = list(
-    labels = "data.frame",
-    dependencies = "list",
-    all_signatures = "GeneSetCollection",
-    filtered_signatures = "GeneSetCollection"
-  ))
-
-
-  xCell2Ref.S4 <- new("xCell2 Signatures", labels = labels, dependencies = dep_list, all_signatures = signatures_collection, filtered_signatures = signatures_collection_filtered)
+  xCell2Ref.S4 <- new("xCell2Signatures", labels = labels, dependencies = dep_list, all_signatures = signatures_collection, filtered_signatures = signatures_collection_filtered)
 
   return(xCell2Ref.S4)
 
