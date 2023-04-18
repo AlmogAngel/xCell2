@@ -1,14 +1,16 @@
 library(tidyverse)
-source("R/xCell2.R")
 
-celltype_conversion_long <- read_tsv("Data/celltype_conversion_with_ontology.txt") %>%
+setwd("/bigdata/almogangel/xCell2/")
+source("R/xCell2Train.R")
+source("R/xCell2GetLineage.R")
+
+celltype_conversion_long <- read_tsv("dev_data/celltype_conversion_with_ontology.txt") %>%
   rowwise() %>%
   mutate(all_labels = str_split(all_labels, ";")) %>%
   unnest(cols = c(all_labels))
 
 
 ######################## Single-cell RNA-seq references ---------------------------------------
-
 ############# Human (Tabula Sapiens)---------------------------------------
 
 ts_labels <- readRDS("/bigdata/almogangel/super_ref_for_xcell2/ts_labels.rds")
@@ -141,31 +143,24 @@ labels <- demo_data$labels
 
 
 # Super reference -----
-sref <- readRDS("/bigdata/almogangel/super_ref_for_xcell2/human_bulk_ref.rds")
 
-# Use main labels
-sref_labels_main <- sref@labels[,c(1,2,5,6)]
+sref.labels <- readRDS("/bigdata/almogangel/xCell2/data/sref_labels.rds")
+sref.data <- readRDS("/bigdata/almogangel/xCell2/data/sref_data.rds")
+
+# Generate signatures for blood
+sref.labels %>%
+  filter(tissue == "blood")
+
+
+sref_labels_main <- sref@labels[sref@labels$,c(1,2,5,6)]
 colnames(sref_labels_main)[1:2] <- c("ont", "label")
-# xCell2GetLineage(sref_labels_main[,1:2], out_file = "/home/almogangel/xCell2_git/Data/sref_bulk_human_dependencies_main.tsv")
-
-# Use main and fine labels
-sref_labels_main <- sref@labels[,c(1,2,5,6)]
-colnames(sref_labels_main)[1:2] <- c("ont", "label")
-
-sref_labels_fine <- sref@labels[sref@labels$label.main != sref@labels$label.fine,c(3,4,5,6)]
-colnames(sref_labels_fine)[1:2] <- c("ont", "label")
-
-sref_labels <- rbind(sref_labels_main, sref_labels_fine)
-# xCell2GetLineage(sref_labels[,1:2], out_file = "/home/almogangel/xCell2_git/Data/sref_bulk_human_dependencies.tsv")
 
 
-ontology_file_checked <- "Data/sref_bulk_human_dependencies_checked.tsv"
+sref_ref <- sref@data[,sref_labels_main$sample]
 
-ref <- cbind(sref@data[,sref_labels_main$sample], sref@data[,sref_labels_fine$sample])
-labels <- sref_labels
-dim(ref)
-dim(labels)
-all(colnames(ref) == labels$sample)
+dim(sref_ref)
+dim(sref_labels_main)
+all(colnames(sref_ref) == sref_labels_main$sample)
 
 
 ######################## Microarry sorted cells references ---------------------------------------

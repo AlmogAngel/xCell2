@@ -1,0 +1,280 @@
+ont.main	label.main	ont.fine	label.fine	family	tissue.organ
+CL:0000115	endothelial cell	CL:0002543	vein endothelial cell	epithelium	blood vessel
+CL:0000115	endothelial cell	CL:0000132	corneal endothelial cell	epithelium	blood vessel
+CL:0000057	fibroblast	CL:0000057	fibroblast	stromal	connective tissue
+CL:0000057	fibroblast	CL:1001608	foreskin fibroblast	stromal	connective tissue
+NA	NA	CL:0010004	mononuclear cell of bone marrow	NA	bone marrow
+CL:0000182	hepatocyte	CL:0000182	hepatocyte	epithelium	liver
+CL:0000115	endothelial cell	CL:1000398	endothelial cell of hepatic sinusoid	epithelium	liver
+CL:0000187	muscle cell	CL:0000192	smooth muscle cell	stromal	muscle
+CL:0002632	epithelial cell	CL:0002328	bronchial epithelial cell	epithelium	lungs
+CL:0000034	stem cell	CL:0002322	embryonic stem cell	stem cell	embryonic
+CL:0000223	endodermal cell	CL:0000223	endodermal cell	NA	embryonic
+CL:0000171	pancreatic A cell	CL:0000171	pancreatic A cell	secretory cell	pancreas
+CL:0000169	type B pancreatic cell	CL:0000169	type B pancreatic cell	secretory cell	pancreas
+CL:0000115	endothelial cell	CL:0000115	endothelial cell	epithelium	blood vessel
+CL:0000115	endothelial cell	CL:2000008	microvascular endothelial cell	epithelium	blood vessel
+CL:0000084	T cell	CL:0000084	T cell	lymphocytes	blood
+CL:0000236	B cell	CL:0000236	B cell	lymphocytes	blood
+CL:0000236	B cell	CL:0000844	germinal center B cell	lymphocytes	blood
+CL:0000501	granulosa cell	CL:0000501	granulosa cell	NA	ovaries
+CL:0000540	neuron	CL:0000540	neuron	neurons	NA
+CL:0002632	epithelial cell	CL:0002327	mammary gland epithelial cell	epithelium	mammary gland 
+CL:0000540	neuron	CL:0002609	neuron of cerebral cortex	neurons	central nervous system
+NA	NA	CL:0000081	blood cell	NA	NA
+CL:0000542	lymphocyte	CL:0000542	lymphocyte	lymphocytes	blood
+NA	NA	CL:0000711	cumulus cell	NA	ovaries
+NA	NA	CL:1000497	kidney cell	NA	kidney
+CL:0000312	keratinocyte	CL:0000312	keratinocyte	epithelium	skin
+CL:0000187	muscle cell	CL:0000187	muscle cell	stromal	muscle
+CL:0000094	granulocyte	CL:0000094	granulocyte	myeloids	blood
+CL:0000576	monocyte	CL:0000576	monocyte	myeloids	blood
+CL:0000540	neuron	CL:0000100	motor neuron	neurons	peripheral nervous system
+CL:0000624	"CD4-positive, alpha-beta T cell"	CL:0000624	"CD4-positive, alpha-beta T cell"	lymphocytes	blood
+CL:0000624	"CD4-positive, alpha-beta T cell"	CL:0000895	"naive thymus-derived CD4-positive, alpha-beta T cell"	lymphocytes	blood
+CL:0000134	mesenchymal stem cell	CL:0000134	mesenchymal stem cell	stromal	connective tissue
+CL:0000540	neuron	CL:0000700	dopaminergic neuron	neurons	central nervous system
+CL:0000187	muscle cell	CL:0000746	cardiac muscle cell	stromal	heart
+CL:0000362	epidermal cell	CL:0000242	Merkel cell	epithelium	skin
+CL:0000765	erythroblast	CL:0000765	erythroblast	myeloids	bone marrow
+CL:0000084	T cell	CL:0000898	naive T cell	lymphocytes	blood
+CL:0000235	macrophage	CL:0000235	macrophage	myeloids	blood
+CL:0000062	osteoblast	CL:0000062	osteoblast	stromal	bone
+CL:0002632	epithelial cell	CL:0002368	respiratory epithelial cell	epithelium	lungs
+CL:0000057	fibroblast	CL:0002620	skin fibroblast	stromal	skin
+NA	NA	CL:0002255	stromal cell of endometrium	stromal	connective tissue
+CL:0000136	fat cell	CL:0000448	white fat cell	stromal	connective tissue
+CL:0000136	fat cell	CL:0000449	brown fat cell	stromal	connective tissue
+CL:0000187	muscle cell	CL:0002372	myotube	stromal	muscle
+CL:0002038	T follicular helper cell	CL:0002038	T follicular helper cell	lymphocytes	blood
+CL:0000084	T cell	CL:0000911	effector T cell	lymphocytes	blood
+CL:0000125	glial cell	CL:0000127	astrocyte	glial cells	central nervous system
+CL:0000547	proerythroblast	CL:0000547	proerythroblast	myeloids	bone marrow
+CL:0000451	dendritic cell	CL:0000451	dendritic cell	myeloids	blood
+CL:0000775	neutrophil	CL:0000775	neutrophil	myeloids	blood
+CL:0000988	hematopoietic cell	CL:0000988	hematopoietic cell	NA	NA
+CL:0000136	fat cell	CL:0000136	fat cell	stromal	connective tissue
+CL:0000540	neuron	CL:3000004	peripheral sensory neuron	neurons	central nervous system
+CL:0000236	B cell	CL:0001201	"B cell, CD19-positive"	lymphocytes	blood
+CL:0002632	epithelial cell	CL:0000066	epithelial cell	epithelium	NA
+CL:0000084	T cell	CL:0000813	memory T cell	lymphocytes	blood
+CL:0002632	epithelial cell	CL:0002231	epithelial cell of prostate	epithelium	prostate
+CL:0000187	muscle cell	CL:0002366	myometrial cell	stromal	muscle
+CL:0000138	chondrocyte	CL:0000138	chondrocyte	stromal	connective tissue
+CL:0000540	neuron	CL:0012001	neuron of the forebrain	neurons	central nervous system
+CL:0000077	mesothelial cell	CL:0000077	mesothelial cell	epithelium	NA
+CL:0002334	preadipocyte	CL:0002334	preadipocyte	stromal	connective tissue
+CL:0000034	stem cell	CL:2000095	cord blood hematopoietic stem cell	stem cell	blood
+CL:0000623	natural killer cell	CL:0000623	natural killer cell	lymphocytes	blood
+CL:0000625	"CD8-positive, alpha-beta T cell"	CL:0000625	"CD8-positive, alpha-beta T cell"	lymphocytes	blood
+CL:0000738	leukocyte	CL:0000738	leukocyte	NA	blood
+CL:0000451	dendritic cell	CL:0000453	Langerhans cell	myeloids	blood
+CL:0000187	muscle cell	CL:0000359	vascular associated smooth muscle cell	stromal	muscle
+CL:0000236	B cell	CL:0000787	memory B cell	lymphocytes	blood
+CL:0000236	B cell	CL:0000788	naive B cell	lymphocytes	blood
+CL:0000815	regulatory T cell	CL:0000815	regulatory T cell	lymphocytes	blood
+CL:0000322	pneumocyte	CL:0002063	type II pneumocyte	epithelium	lungs
+CL:0000322	pneumocyte	CL:0002062	type I pneumocyte	epithelium	lungs
+CL:0000351	trophoblast cell	CL:0000351	trophoblast cell	NA	embryonic
+CL:0000988	hematopoietic cell	CL:2000001	peripheral blood mononuclear cell	NA	blood
+NA	NA	CL:0000499	stromal cell	stromal	NA
+CL:0002632	epithelial cell	CL:0002586	retinal pigment epithelial cell	epithelium	eyes
+CL:0000235	macrophage	CL:0000091	Kupffer cell	myeloids	liver
+CL:0000988	hematopoietic cell	CL:0000037	hematopoietic stem cell	stem cell	bone marrow
+CL:0000988	hematopoietic cell	CL:0000936	early lymphoid progenitor	lymphocytes	bone marrow
+CL:0000988	hematopoietic cell	CL:0000051	common lymphoid progenitor	lymphocytes	NA
+CL:0000125	glial cell	CL:0011028	olfactory ensheathing cell	glial cells	peripheral nervous system
+NA	NA	CL:0001068	ILC1	lymphocytes	NA
+CL:0000988	hematopoietic cell	CL:0000557	granulocyte monocyte progenitor cell	myeloids	bone marrow
+CL:0000775	neutrophil	CL:0000096	mature neutrophil	myeloids	blood
+CL:0000451	dendritic cell	CL:0000784	plasmacytoid dendritic cell	myeloids	blood
+CL:0000451	dendritic cell	CL:0000782	myeloid dendritic cell	myeloids	blood
+CL:0000815	regulatory T cell	CL:0000902	induced T-regulatory cell	lymphocytes	blood
+CL:0011012	neural crest cell	CL:0011012	neural crest cell	neurons	embryonic
+CL:0000540	neuron	CL:0000120	granule cell	neurons	central nervous system
+CL:0000232	erythrocyte	CL:0000232	erythrocyte	myeloids	blood
+CL:0000023	oocyte	CL:0000023	oocyte	NA	NA
+CL:0002079	pancreatic ductal cell	CL:0002079	pancreatic ductal cell	epithelium	pancreas
+CL:0000125	glial cell	CL:0000128	oligodendrocyte	glial cells	central nervous system
+CL:0000542	lymphocyte	CL:0001069	group 2 innate lymphoid cell	lymphocytes	NA
+NA	NA	CL:0000613	basophil progenitor cell	myeloids	NA
+NA	NA	CL:0000049	common myeloid progenitor	myeloids	NA
+NA	NA	CL:0000050	megakaryocyte-erythroid progenitor cell	NA	NA
+CL:0000988	hematopoietic cell	CL:0000837	hematopoietic multipotent progenitor cell	NA	NA
+CL:0000216	Sertoli cell	CL:0000216	Sertoli cell	secretory cell	testes
+CL:0000062	osteoblast	CL:2000058	calvarial osteoblast	stromal	bone
+CL:0000669	pericyte	CL:0000669	pericyte	stromal	connective tissue
+CL:0000622	acinar cell	CL:0000622	acinar cell	secretory cell	NA
+CL:0000646	basal cell	CL:0002633	respiratory basal cell	stem cell	lungs
+CL:0000632	hepatic stellate cell	CL:0000632	hepatic stellate cell	stromal	liver
+CL:0000451	dendritic cell	CL:0000990	conventional dendritic cell	myeloids	blood
+CL:0000057	fibroblast	CL:2000015	fibroblast of arm	stromal	connective tissue
+CL:0000540	neuron	CL:0000121	Purkinje cell	neurons	central nervous system
+CL:0002632	epithelial cell	CL:0010002	epithelial cell of umbilical artery	epithelium	blood vessel
+CL:0000057	fibroblast	CL:0002551	fibroblast of dermis	stromal	skin
+CL:0000650	mesangial cell	CL:0000650	mesangial cell	stromal	kidney
+NA	NA	CL:0002319	neural cell	NA	NA
+CL:0000057	fibroblast	CL:2000066	cardiac ventricle fibroblast	stromal	heart
+CL:0000066	epithelial cell	CL:0002518	kidney epithelial cell	epithelium	kidney
+CL:0000057	fibroblast	CL:2000093	bronchus fibroblast of lung	stromal	lungs
+CL:0000115	endothelial cell	CL:0002138	endothelial cell of lymphatic vessel	epithelium	lymphatic vessel
+CL:0000623	natural killer cell	CL:0002343	"decidual natural killer cell, human"	lymphocytes	uterus
+CL:0002632	epithelial cell	CL:0002563	intestinal epithelial cell	epithelium	intestine
+CL:0000214	synovial cell	CL:0000214	synovial cell	stromal	connective tissue
+CL:0002632	epithelial cell	CL:0000082	epithelial cell of lung	epithelium	lungs
+CL:0002632	epithelial cell	CL:0000653	glomerular visceral epithelial cell	epithelium	NA
+CL:0000138	chondrocyte	CL:1001607	articular chondrocyte	stromal	connective tissue
+NA	NA	CL:0000842	mononuclear cell	NA	NA
+CL:0002503	adventitial cell	CL:0002503	adventitial cell	stromal	connective tissue
+CL:0002632	epithelial cell	CL:0000529	pigmented epithelial cell	epithelium	skin
+CL:0000236	B cell	CL:0000970	unswitched memory B cell	lymphocytes	blood
+CL:0000115	endothelial cell	CL:1001568	pulmonary artery endothelial cell	epithelium	blood vessel
+CL:0000540	neuron	CL:0000740	retinal ganglion cell	neurons	eyes
+NA	NA	CL:0002619	adult endothelial progenitor cell	NA	NA
+NA	NA	CL:1000490	mesothelial cell of peritoneum	epithelium	peritoneum
+CL:0000765	erythroblast	CL:0000549	basophilic erythroblast	myeloids	bone marrow
+CL:0000864	tissue-resident macrophage	CL:0002247	pleural macrophage	myeloids	NA
+CL:0000235	macrophage	CL:0000583	alveolar macrophage	myeloids	lungs
+CL:1000488	cholangiocyte	CL:1000488	cholangiocyte	epithelium	bile duct
+CL:0000115	endothelial cell	CL:0002139	endothelial cell of vascular tree	epithelium	blood vessel
+CL:0002246	peripheral blood stem cell	CL:0002246	peripheral blood stem cell	stem cell	blood
+CL:0002632	epithelial cell	CL:0002306	epithelial cell of proximal tubule	epithelium	kidney
+CL:0000057	fibroblast	CL:2000068	pericardium fibroblast	stromal	heart
+CL:0000115	endothelial cell	CL:0002188	glomerular endothelial cell	epithelium	kidney
+NA	NA	CL:0002009	macrophage dendritic cell progenitor	myeloids	NA
+NA	NA	CL:0001029	common dendritic progenitor	myeloids	NA
+CL:0000057	fibroblast	CL:2000042	embryonic fibroblast	stromal	embryonic
+CL:0000669	pericyte cell	CL:2000078	placental pericyte	stromal	connective tissue
+CL:0000669	pericyte cell	CL:2000043	brain pericyte	stromal	connective tissue
+CL:0000129	microglial cell	CL:0000129	microglial cell	myeloid leukocytes	central nervous system
+CL:0000115	endothelial cell	CL:0002544	aortic endothelial cell	epithelium	heart
+NA	NA	CL:0000696	PP cell	secretory cell	pancreas
+NA	NA	CL:0002570	mesenchymal stem cell of adipose	stem cell	connective tissue
+NA	NA	CL:0002568	mesenchymal stem cell of Wharton's jelly	stem cell	connective tissue
+CL:0000815	regulatory T cell	CL:0000903	natural T-regulatory cell	lymphocytes	blood
+CL:0000125	glial cell	CL:0002573	Schwann cell	glial cells	peripheral nervous system
+CL:0000115	endothelial cell	CL:0002350	endocardial cell	epithelium	heart
+NA	NA	CL:0000038	erythroid progenitor cell	myeloids	blood
+NA	NA	CL:0000233	platelet	NA	blood
+CL:0000912	helper T cell	CL:0000912	helper T cell	lymphocytes	blood
+NA	NA	CL:0002148	dental pulp cell	stromal	teeth
+CL:0000057	fibroblast	CL:0002548	fibroblast of cardiac tissue	stromal	heart
+CL:0002334	preadipocyte	CL:0002335	brown preadipocyte	stromal	connective tissue
+CL:0000115	endothelial cell	CL:2000044	brain microvascular endothelial cell	epithelium	blood vessel
+CL:0000540	neuron	CL:0011001	spinal cord motor neuron	neurons	central nervous system
+CL:0000765	erythroblast	CL:0000550	polychromatophilic erythroblast	myeloids	bone marrow
+CL:0000765	erythroblast	CL:0000552	orthochromatic erythroblast	myeloids	bone marrow
+NA	NA	CL:0000222	mesodermal cell	NA	embryonic
+NA	NA	CL:0000221	ectodermal cell	NA	embryonic
+CL:0002632	epithelial cell	CL:0002303	pigmented ciliary epithelial cell	epithelium	NA
+CL:0002193	myelocyte	CL:0002192	metamyelocyte	NA	bone marrow
+CL:0002193	myelocyte	CL:0002193	myelocyte	NA	bone marrow
+CL:0002193	myelocyte	CL:0000836	promyelocyte	NA	bone marrow
+CL:0000835	myeloblast	CL:0000835	myeloblast	NA	bone marrow
+NA	NA	CL:0010001	stromal cell of bone marrow	stromal	bone marrow
+CL:0000185	myoepithelial cell	CL:0000185	myoepithelial cell	epithelium	glands
+CL:0000115	endothelial cell	CL:1000413	endothelial cell of artery	epithelium	blood vessel
+CL:0000137	osteocyte	CL:0000137	osteocyte	stromal	bone
+CL:0002410	pancreatic stellate cell	CL:0002410	pancreatic stellate cell	stromal	pancreas
+CL:0000362	epidermal cell	CL:1001606	foreskin keratinocyte	epithelium	skin
+NA	NA	CL:0002092	bone marrow cell	NA	bone marrow
+CL:0011025	exhausted T cell	CL:0011025	exhausted T cell	lymphocytes	blood
+CL:0000798	gamma-delta T cell	CL:0000798	gamma-delta T cell	lymphocytes	blood
+CL:0000540	neuron	CL:0000101	sensory neuron	neurons	peripheral nervous system
+CL:0000097	mast cell	CL:0000097	mast cell	lymphocytes	NA
+NA	NA	CL:0002397	"CD14-positive, CD16-positive monocyte"	myeloids	NA
+NA	NA	CL:2000060	placental villous trophoblast	NA	placenta
+CL:0000540	neuron	CL:0000617	GABAergic neuron	neurons	NA
+CL:0000771	eosinophil	CL:0000771	eosinophil	myeloids	blood
+CL:0002334	preadipocyte	CL:0002583	subcutaneous preadipocyte	stromal	skin
+CL:0000912	helper T cell	CL:0000545	T-helper 1 cell	lymphocytes	blood
+CL:0000236	B cell	CL:0000968	Be cell	lymphocytes	blood
+NA	NA	CL:0001071	group 3 innate lymphoid cell	NA	NA
+CL:0000136	fat cell	CL:0002521	subcutaneous fat cell	stromal	skin
+CL:0000540	neuron	CL:0008030	excitatory neuron	neurons	NA
+CL:0000115	endothelial cell	CL:1001567	lung endothelial cell	epithelium	lungs
+CL:0000576	monocyte	CL:0000860	classical monocyte	myeloids	blood
+CL:0000809	"double-positive, alpha-beta thymocyte"	CL:0000809	"double-positive, alpha-beta thymocyte"	lymphocytes	thymus
+CL:0000540	neuron	CL:0000099	interneuron	neurons	peripheral nervous system
+CL:0000786	plasma cell	CL:0000786	plasma cell	lymphocytes	blood
+CL:0000912	helper T cell	CL:0000899	T-helper 17 cell	lymphocytes	blood
+CL:0000556	megakaryocyte	CL:0000556	megakaryocyte	NA	bone marrow
+NA	NA	CL:0011007	paraxial cell	NA	embryonic
+CL:0000910	cytotoxic T cell	CL:0000910	cytotoxic T cell	lymphocytes	blood
+CL:0000540	neuron	CL:0008031	cortical interneuron	neurons	central nervous system
+CL:0002363	keratocyte	CL:0002363	keratocyte	stromal	connective tissue
+CL:0000187	muscle cell	CL:0002539	aortic smooth muscle cell	stromal	heart
+CL:0002367	trabecular meshwork cell	CL:0002367	trabecular meshwork cell	epithelium	eyes
+CL:0000912	helper T cell	CL:0002061	T-helper 9 cell	lymphocytes	blood
+NA	NA	CL:0000831	mast cell progenitor	NA	NA
+CL:0002632	epithelial cell	CL:0011108	colon epithelial cell	epithelium	colon
+CL:0000901	Tr1 cell	CL:0000901	Tr1 cell	lymphocytes	blood
+CL:0000540	neuron	CL:0008039	lower motor neuron	neurons	peripheral nervous system
+CL:0002496	intraepithelial lymphocyte	CL:0002496	intraepithelial lymphocyte	lymphocytes	intestine
+CL:0002293	epithelial cell of thymus	CL:0002364	cortical thymic epithelial cell	epithelium	thymus
+CL:0002293	epithelial cell of thymus	CL:0002293	epithelial cell of thymus	epithelium	thymus
+CL:0002293	epithelial cell of thymus	CL:0002365	medullary thymic epithelial cell	epithelium	thymus
+CL:0002622	prostate stromal cell	CL:0002622	prostate stromal cell	stromal	prostate
+NA	NA	CL:1001319	bladder cell	NA	bladder
+NA	NA	CL:0002337	keratinocyte stem cell	stem cell	NA
+NA	NA	CL:0000031	neuroblast (sensu Vertebrata)	NA	NA
+CL:0000158	club cell	CL:0000158	club cell	epithelium	lungs
+CL:0002632	epithelial cell	CL:0002565	iris pigment epithelial cell	epithelium	eyes
+NA	NA	CL:0000530	primary neuron	neurons	NA
+CL:0000236	B cell	CL:0000972	class switched memory B cell	lymphocytes	blood
+CL:0000731	urothelial cell	CL:0000731	urothelial cell	epithelium	bladder
+NA	NA	CL:0002425	early T lineage precursor	lymphocytes	NA
+NA	NA	CL:0008036	extravillous trophoblast	NA	placenta
+CL:0000706	choroid plexus epithelial cell	CL:0000706	choroid plexus epithelial cell	epithelium	central nervous system
+CL:0000362	epidermal cell	CL:0002562	hair germinal matrix cell	epithelium	hair
+CL:0000362	epidermal cell	CL:0002561	outer root sheath cell	epithelium	hair
+CL:0000362	epidermal cell	CL:0002560	inner root sheath cell	epithelium	hair
+CL:2000092	hair follicular keratinocyte	CL:2000092	hair follicular keratinocyte	epithelium	hair
+CL:0000187	muscle cell	CL:0002504	enteric smooth muscle cell	stromal	intestine
+CL:0000322	pneumocyte	CL:0000322	pneumocyte	epithelium	lungs
+CL:0000307	tracheal epithelial cell	CL:0000307	tracheal epithelial cell	epithelium	lungs
+CL:0000187	muscle cell	CL:0002598	bronchial smooth muscle cell	stromal	lungs
+CL:0002632	epithelial cell	CL:0002584	renal cortical epithelial cell	epithelium	kidney
+CL:0000115	endothelial cell	CL:2000040	bladder microvascular endothelial cell	epithelium	blood vessel
+NA	NA	CL:0002602	annulus pulposus cell	NA	NA
+CL:0000057	fibroblast	CL:2000069	gallbladder fibroblast	stromal	connective tissue
+CL:0000115	endothelial cell	CL:2000053	splenic endothelial cell	epithelium	spleen
+CL:0000057	fibroblast	CL:2000051	splenic fibroblast	stromal	connective tissue
+CL:0002632	epithelial cell	CL:0000575	corneal epithelial cell	epithelium	eyes
+CL:0002632	epithelial cell	CL:0002224	lens epithelial cell	epithelium	eyes
+CL:0002632	epithelial cell	CL:0002536	epithelial cell of amnion	epithelium	placenta
+CL:0000115	endothelial cell	CL:2000072	adipose microvascular endothelial cell	epithelium	blood vessel
+CL:0000115	endothelial cell	CL:2000065	ovarian microvascular endothelial cell	epithelium	blood vessel
+CL:0002632	epithelial cell	CL:2000064	ovarian surface epithelial cell	epithelium	ovary
+CL:0000057	fibroblast	CL:2000063	ovarian fibroblast	stromal	ovary
+NA	NA	CL:0002572	vertebral mesenchymal stem cell	NA	NA
+CL:0000115	endothelial cell	CL:2000052	umbilical artery endothelial cell	epithelium	blood vessel
+CL:0002632	epithelial cell	CL:0000068	duct epithelial cell	epithelium	duct
+CL:0000187	muscle cell	CL:0002601	uterine smooth muscle cell	stromal	muscle
+CL:0000160	goblet cell	CL:0000160	goblet cell	secretory cell	NA
+CL:0000763	myeloid cell	CL:0000763	myeloid cell	myeloids	NA
+CL:0000142	hyalocyte	CL:0000142	hyalocyte	stromal	eyes
+CL:0000980	plasmablast	CL:0000980	plasmablast	lymphocytes	blood
+NA	NA	CL:0000946	antibody secreting cell	NA	NA
+NA	NA	CL:0002323	amniocyte	NA	embryonic
+CL:0000805	immature single positive thymocyte	CL:0000805	immature single positive thymocyte	lymphocytes	thymus
+CL:0000570	parafollicular cell	CL:0000570	parafollicular cell	epithelium	NA
+CL:0000767	basophil	CL:0000767	basophil	myeloids	blood
+CL:1001577	tonsil squamous cell	CL:1001577	tonsil squamous cell	epithelium	tonsil
+CL:0000540	neuron	CL:2000097	midbrain dopaminergic neuron	neurons	central nervous system
+CL:0000540	neuron	CL:0000849	crypt olfactory receptor neuron	neurons	peripheral nervous system
+CL:0002088	interstitial cell of Cajal	CL:0002088	interstitial cell of Cajal	epithelium	intestine
+CL:0000540	neuron	CL:0000111	peripheral neuron	neurons	peripheral nervous system
+CL:0000540	neuron	CL:0000198	pain receptor cell	neurons	peripheral nervous system
+CL:0000540	neuron	CL:1001474	medium spiny neuron	neurons	central nervous system
+CL:0000584	enterocyte	CL:0000584	enterocyte	epithelium	intestine
+CL:0000125	glial cell	CL:0000125	glial cell	glial cells	NA
+CL:0011019	mesothelial cell of epicardium	CL:0011019	mesothelial cell of epicardium	stromal	heart
+CL:0000622	acinar cell	CL:0002064	pancreatic acinar cell	secretory cell	pancreas
+CL:0000576	monocyte	CL:0002393	intermediate monocyte	myeloids	blood
+CL:0002097	cortical cell of adrenal gland	CL:0002097	cortical cell of adrenal gland	secretory cell	glands
+CL:0002632	epithelial cell	CL:0000083	epithelial cell of pancreas	epithelium	pancreas
+CL:0000623	natural killer cell	CL:0000823	immature natural killer cell	lymphocytes	blood
+CL:0000115	endothelial cell	CL:0002618	endothelial cell of umbilical vein	epithelium	blood vessel
+CL:0000187	muscle cell	CL:0002072	nodal myocyte	stromal	muscle
+CL:0000540	neuron	CL:0000679	glutamatergic neuron	neurons	central nervous system
