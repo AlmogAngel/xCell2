@@ -1,4 +1,4 @@
-getTopVariableGenes <- function(ref, min_genes, sensitivity){
+getTopVariableGenes <- function(ref, min_genes){
 
   ref.srt <- Seurat::CreateSeuratObject(counts = ref)
   ref.srt <- Seurat::FindVariableFeatures(ref.srt, selection.method = "vst")
@@ -61,7 +61,6 @@ getCellTypeCorrelation <- function(pure_ct_mat, data_type){
   return(cor_mat)
 }
 
-
 # This function return a vector of cell type dependencies
 getDependencies <- function(lineage_file_checked){
   ont <- read_tsv(lineage_file_checked, show_col_types = FALSE) %>%
@@ -106,16 +105,17 @@ makeQuantiles <- function(ref, labels, probs){
 createSignatures <- function(ref, labels, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes){
 
   celltypes <- unique(labels[,2])
-  samples <- labels[,2]
 
   all_sigs <- list()
+  # Remove:
+  # type = "memory B cell"
   for (type in celltypes){
     # Get dependent cell types and remove them from the quantiles matrix.
     dep_cells <- dep_list[[type]]
     not_dep_celltypes <- celltypes[!celltypes %in% c(type, dep_cells)]
 
     # Find similar cell types
-    cor_values <- cor_mat[type, ]
+    cor_values <- cor_mat[type,]
     cor_values <- sort(cor_values[!names(cor_values) %in% c(type, dep_cells)], decreasing = TRUE)
 
     # Remove cell-types with dependencies in cor_values (new!)
@@ -426,6 +426,13 @@ setClass("xCell2Signatures", slots = list(
   filtered_signatures = "GeneSetCollection"
 ))
 
+# Remove - for debugging
+if (0 == 1) {
+  data_type = "rnaseq"; lineage_file = NULL; mixture_fractions = c(0.001, 0.005, seq(0.01, 0.25, 0.02))
+  probs = c(.1, .25, .33333333, .5); diff_vals = c(0, 0.1, 0.585, 1, 1.585, 2, 3, 4, 5); min_genes = 5; max_genes = 500
+
+}
+
 
 #' xCell2Train function
 #'
@@ -480,11 +487,10 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, mixture_fra
   }
 
 
-
   # Use only most variable genes for single-cell data
   if (data_type == "sc") {
     message("Looking for most variable genes with Seurat...")
-    topVarGenes <- getTopVariableGenes(ref, min_genes = 10000, sensitivity = 15)
+    topVarGenes <- getTopVariableGenes(ref, min_genes = 10000)
     ref <- ref[rownames(ref) %in% topVarGenes,]
   }
 
@@ -496,6 +502,7 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, mixture_fra
   # Get cell type dependencies list
   message("Loading dependencies...")
   if (is.null(lineage_file)) {
+    source("R/xCell2GetLineage.R")
     dep_list <- xCell2GetLineage(labels = labels[,1:2], out_file = NULL)
   }else{
     dep_list <- getDependencies(lineage_file)
@@ -511,15 +518,16 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, mixture_fra
   filter_signature_out <- filterSignatures(ref, labels, pure_ct_mat, dep_list, signatures_collection, mixture_fractions, grubbs_cutoff = 0.8, simulations_cutoff = 0.8)
   scores_mat_pure_tidy <- filter_signature_out$scoreMatTidy
   signatures_collection_filtered <- filter_signature_out$sigCollectionFilt
-  # plotHeatMap("Neutrophils", scores_mat_pure_tidy, signatures_collection_filtered = NULL, cor_mat)
-  # plotHeatMap("Neutrophils", scores_mat_pure_tidy, signatures_collection_filtered = signatures_collection_filtered, cor_mat)
+
 
   # TODO: Weight signatures with Elastic Net
-  # source("train_models.R")
-  # source("R/train_models_tmp.R")
-  # models <- trainModels(ref, labels, dep_list, pure_ct_mat_test, signatures_collection_filtered, mixture_fractions)
 
-  # TODO: Linear tranformation
+
+  # TODO: Linear transformation
+
+
+  # TODO: Spillover correction
+
 
   xCell2Ref.S4 <- new("xCell2Signatures", labels = labels, dependencies = dep_list, all_signatures = signatures_collection, filtered_signatures = signatures_collection_filtered)
 
