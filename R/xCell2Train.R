@@ -417,7 +417,6 @@ if (0 == 1) {
 #' @import sparseMatrixStats
 #' @importFrom  GSEABase GeneSetCollection
 #' @importFrom  GSEABase GeneSet
-#' @importFrom xCell2 xCell2GetLineage
 #' @import singscore
 #' @param ref A reference gene expression matrix.
 #' @param labels A data frame in which the rows correspond to samples in the ref. The data frame must have four columns:
