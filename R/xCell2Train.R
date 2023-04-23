@@ -211,6 +211,12 @@ filterSignatures <- function(ref, labels, pure_ct_mat, dep_list, signatures_coll
 
       n_ds <- length(unique(labels$dataset)) # This number of datasets will effect the sampling of controls
       n_slice <- ifelse(n_ds >= max_control_type, 1, round((max_control_type/n_ds)+0.5))
+     if(n_ds == 1){
+       n_slice <- length(controls2use)
+      }
+      if(length(controls2use) < max_control_type){
+        max_control_type <- length(controls2use)
+      }
 
 
       controls <- sapply(1:length(mixture_fractions), function(x){
@@ -228,18 +234,6 @@ filterSignatures <- function(ref, labels, pure_ct_mat, dep_list, signatures_coll
           as.matrix() %>%
           Rfast::rowmeans()
 
-        # labels %>%
-        #   filter(label %in% controls2use) %>%
-        #   group_by(dataset) %>%
-        #   slice_sample(n=1) %>% # One cell type per dataset
-        #   group_by(label) %>%
-        #   slice_sample(n=1) %>% # One sample per datasets
-        #   ungroup() %>%
-        #   slice_sample(n=max_control_type) %>%
-        #   pull(sample) %>%
-        #   ref[,.] %>%
-        #   as.matrix() %>%
-        #   Rfast::rowmeans()
 
       })
 
@@ -359,6 +353,7 @@ filterSignatures <- function(ref, labels, pure_ct_mat, dep_list, signatures_coll
     group_by(ont, label) %>%
     nest() %>%
     rowwise() %>%
+    # TODO: takes too long
     mutate(mixture = list(getMixtures(ref = ref, labels = labels, ct = label, ct_data = data, dep_list = dep_list, max_control_type = 5, mixture_fractions = mixture_fractions))) %>%
     mutate(mixture_ranked = list(lapply(mixture, function(mix){singscore::rankGenes(mix)})))
 
@@ -372,11 +367,11 @@ filterSignatures <- function(ref, labels, pure_ct_mat, dep_list, signatures_coll
 
 
   # Filter by Grubb's test
-  #grubbs <- scores_mat_tidy %>%
-  #  group_by(signature_ct, signature) %>%
-  #  summarise(grubbs_statistic = outliers::grubbs.test(score, type = 10, opposite = FALSE, two.sided = FALSE)$statistic[1]) %>%
-  #  filter(grubbs_statistic >= quantile(grubbs_statistic, grubbs_cutoff)) %>%
-  #  pull(signature)
+  grubbs <- scores_mat_tidy %>%
+   group_by(signature_ct, signature) %>%
+   summarise(grubbs_statistic = outliers::grubbs.test(score, type = 10, opposite = FALSE, two.sided = FALSE)$statistic[1]) %>%
+   filter(grubbs_statistic >= quantile(grubbs_statistic, grubbs_cutoff)) %>%
+   pull(signature)
 
 
 
@@ -404,7 +399,7 @@ setClass("xCell2Signatures", slots = list(
 
 # Remove - for debugging
 if (0 == 1) {
-  data_type = "rnaseq"; lineage_file = NULL; mixture_fractions = c(0.001, 0.005, seq(0.01, 0.25, 0.02))
+  data_type = "sc"; lineage_file = NULL; mixture_fractions = c(0.001, 0.005, seq(0.01, 0.25, 0.02))
   probs = c(.1, .25, .33333333, .5); diff_vals = c(0, 0.1, 0.585, 1, 1.585, 2, 3, 4, 5); min_genes = 5; max_genes = 200
 }
 
@@ -484,37 +479,11 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, mixture_fra
     dep_list <- getDependencies(lineage_file)
   }
 
-  # Add ancestors cell types
-  addAncestors <- function(ref, labels, dep_list){
-
-    # Get descendants of existing ancestors cell types
-    descendants_list <- lapply(dep_list, function(x){
-      x$descendants
-    })
-
-    labels2add <- data.frame()
-    for (type in names(dep_list)) {
-
-      # Skip cell types with no descendants
-      if (length(dep_list[[type]]$descendants) == 0) {
-        next
-      }
-
-      descen <- dep_list[[type]]$descendants
-      labels.tmp <- labels[labels[,2] %in% descen,]
-      labels.tmp[,2] <- type
-      labels2add <- rbind(labels2add, labels.tmp)
-
-    }
-  }
-
-
-
   # Generate signatures for each cell type
   message("Calculating quantiles...")
   quantiles_matrix <- makeQuantiles(ref, labels, probs, dep_list, include_descendants = TRUE)
   message("Generating signatures...")
-  signatures_collection <- createSignatures(ref, labels, dep_list, probs, cor_mat, diff_vals, min_genes, max_genes)
+  signatures_collection <- createSignatures(ref, labels, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes)
 
   # Filter signatures
   message("Filtering signatures...")
