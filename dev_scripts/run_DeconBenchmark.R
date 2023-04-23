@@ -22,7 +22,8 @@ deconvolutionResults <- runDeconvolution(methodsToRun, bulk = data$bulk, singleC
 
 
 
-xcell2.res <- runDeconvolution(methods = "xCell2", bulk = data$bulk, singleCellExpr = data$singleCellExpr)
+xcell2.res <- runDeconvolution(methods = "xCell2", bulk = data$bulk, singleCellExpr = data$singleCellExpr,
+                               singleCellLabels = data$singleCellLabels, singleCellSubjects = data$singleCellSubjects)
 
 
 

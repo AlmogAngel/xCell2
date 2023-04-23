@@ -36,9 +36,13 @@ xCell2GetLineage <- function(labels, out_file){
     names(dep_list) <- celltypes
 
     for (i in 1:nrow(lineage.out)) {
-      dep_cells <- c(strsplit(pull(lineage.out[i,3]), ";")[[1]], strsplit(pull(lineage.out[i,4]), ";")[[1]])
-      dep_cells <- gsub("_", "-", dep_cells)
-      dep_list[[i]] <- dep_cells[!is.na(dep_cells)]
+      descendants <-  gsub("_", "-", strsplit(pull(lineage.out[i,3]), ";")[[1]])
+      descendants <- descendants[!is.na(descendants)]
+
+      ancestors <-  gsub("_", "-", strsplit(pull(lineage.out[i,4]), ";")[[1]])
+      ancestors <- ancestors[!is.na(ancestors)]
+
+      dep_list[[i]] <- list("descendants" = descendants, "ancestors" = ancestors)
     }
 
     return(dep_list)

@@ -37,20 +37,24 @@ getCellTypeCorrelation <- function(pure_ct_mat, data_type){
 
   celltypes <- colnames(pure_ct_mat)
 
+  # Use 50% most expressed genes because single-cell is zero inflated
   if (data_type != "sc") {
-    # Use top 3K highly variable genes
     mean_gene_expression <- Rfast::rowmeans(pure_ct_mat)
-    high_gene_expression_cutoff <- quantile(mean_gene_expression, 0.5, na.rm=TRUE) # Cutoff for top 50% expression genes
+    high_gene_expression_cutoff <- quantile(mean_gene_expression, 0.5, na.rm=TRUE)
     top_expressed_gene <- mean_gene_expression > high_gene_expression_cutoff
-    genes_sd <- apply(pure_ct_mat[top_expressed_gene,], 1, sd)
-    sd_cutoff <-  sort(genes_sd, decreasing = TRUE)[1001]# Get top 1K genes with high SD as highly variable genes
-    pure_ct_mat <- pure_ct_mat[genes_sd > sd_cutoff,]
+    pure_ct_mat <- pure_ct_mat[top_expressed_gene,]
   }
+
+  # Use top 85% most variable genes
+  genes_var <- apply(pure_ct_mat, 1, var)
+  most_var_genes_cutoff <- quantile(genes_var, 0.85, na.rm=TRUE)
+  pure_ct_mat <- pure_ct_mat[genes_var > most_var_genes_cutoff,]
 
   # Make correlation matrix
   cor_mat <- matrix(1, ncol = length(celltypes), nrow = length(celltypes), dimnames = list(celltypes, celltypes))
   lower_tri_coord <- which(lower.tri(cor_mat), arr.ind = TRUE)
 
+  # TODO: Change for loop to apply function to measure time
   for (i in 1:nrow(lower_tri_coord)) {
     celltype_i <- rownames(cor_mat)[lower_tri_coord[i, 1]]
     celltype_j <- colnames(cor_mat)[lower_tri_coord[i, 2]]
@@ -72,28 +76,41 @@ getDependencies <- function(lineage_file_checked){
   names(dep_list) <- celltypes
 
   for (i in 1:nrow(ont)) {
-    dep_cells <- c(strsplit(pull(ont[i,3]), ";")[[1]], strsplit(pull(ont[i,4]), ";")[[1]])
-    dep_cells <- gsub("_", "-", dep_cells)
-    dep_list[[i]] <- dep_cells[!is.na(dep_cells)]
+    descendants <-  gsub("_", "-", strsplit(pull(ont[i,3]), ";")[[1]])
+    descendants <- descendants[!is.na(descendants)]
+
+    ancestors <-  gsub("_", "-", strsplit(pull(ont[i,4]), ";")[[1]])
+    ancestors <- ancestors[!is.na(ancestors)]
+
+    dep_list[[i]] <- list("descendants" = descendants, "ancestors" = ancestors)
+
   }
 
   return(dep_list)
 }
 
-# Generate a list with quantiles matrices for each cell type
-makeQuantiles <- function(ref, labels, probs){
+makeQuantiles <- function(ref, labels, probs, dep_list, include_descendants){
 
   celltypes <- unique(labels[,2])
-  samples <- labels[,2]
 
-  quantiles_matrix <- lapply(celltypes, function(type){
-    type_samples <- labels[,2] == type
-    # If there is one sample for this cell type - duplicate the sample to make a data frame
+  quantiles_matrix <-  pbapply::pblapply(celltypes, function(type){
+
+    # Include all the descendants of the cell type in the quantiles calculations
+    if (include_descendants) {
+      descen_cells <- dep_list[[type]]$descendants
+      type_samples <- labels[,2] == type | labels[,2] %in% descen_cells
+    }else{
+      type_samples <- labels[,2] == type
+    }
+
+    # If there is one sample for this cell type -> duplicate the sample to make a data frame
     if (sum(type_samples) == 1) {
       type.df <- cbind(ref[,type_samples], ref[,type_samples])
     }else{
       type.df <- ref[,type_samples]
     }
+
+    # Calculate quantiles
     quantiles_matrix <- apply(type.df, 1, function(x) quantile(x, unique(c(probs, rev(1-probs))), na.rm=TRUE))
   })
   names(quantiles_matrix) <- celltypes
@@ -104,102 +121,71 @@ makeQuantiles <- function(ref, labels, probs){
 
 createSignatures <- function(ref, labels, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes){
 
-  celltypes <- unique(labels[,2])
 
-  all_sigs <- list()
-  # Remove:
-  # type = "memory B cell"
-  for (type in celltypes){
-    # Get dependent cell types and remove them from the quantiles matrix.
-    dep_cells <- dep_list[[type]]
-    not_dep_celltypes <- celltypes[!celltypes %in% c(type, dep_cells)]
+  getSigs <- function(celltypes, type, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes){
 
-    # Find similar cell types
-    cor_values <- cor_mat[type,]
-    cor_values <- sort(cor_values[!names(cor_values) %in% c(type, dep_cells)], decreasing = TRUE)
+    # Remove dependent cell types
+    not_dep_celltypes <- celltypes[!celltypes %in% c(type, unname(unlist(dep_list[[type]])))]
 
-    # Remove cell-types with dependencies in cor_values (new!)
-    to_remove <- c()
-    for (i in 1:length(cor_values)) {
-      if (names(cor_values[i]) %in% to_remove) {
+    # Weight cell types by correlation
+    type_weights <- cor_mat[type, not_dep_celltypes]
+
+    # Signature parameters
+    param.df <- expand.grid("diff_vals" = diff_vals, "probs" = probs)
+
+    # Generate signatures
+    type_sigs <- list()
+    for(i in 1:nrow(param.df)){
+
+      # Get a Boolean matrices with genes that pass the quantiles criteria
+      diff <- param.df[i, ]$diff_vals # diffrence criteria
+      lower_prob <- which(probs == param.df[i, ]$probs) # lower quantile criteria
+      upper_prob <- nrow(quantiles_matrix[[1]])-lower_prob+1 # upper quantile criteria
+
+      diff_genes.mat <- sapply(not_dep_celltypes, function(x){
+        get(type, quantiles_matrix)[lower_prob,] > get(x, quantiles_matrix)[upper_prob,] + diff
+      })
+
+      # Score genes using weights
+      gene_scores <- apply(diff_genes.mat, 1, function(x){
+        sum(type_weights[which(x)])
+      })
+
+      gene_passed <- gene_scores[gene_scores > 0]
+
+      # If less than min_genes passed move to next parameters
+      if (length(gene_passed) < min_genes) {
         next
       }
-      deps <- dep_list[[names(cor_values[i])]]
-      to_remove <- c(to_remove, names(cor_values)[names(cor_values) %in% deps])
-    }
-    cor_values <- cor_values[!names(cor_values) %in% to_remove]
 
-    # TODO: Should we add extra genes for similar cell-types or not? What are similar cell-types?
-    cor_cells_cutoff <- quantile(cor_values, 0.9, na.rm=TRUE)
-    sim_cells <- names(cor_values[which(cor_values > cor_cells_cutoff & cor_values > 0.85)])
-    # sim_cells <- names(cor_values[which(cor_values > 0.5)])
-    # sim_cells <- c()
+      # Save signatures
+      gene_passed <- sort(gene_passed, decreasing = TRUE)
+      for (n_genes in round(seq(from = min_genes, to = max_genes, length.out = 8))) {
 
-    for (diff in diff_vals) {
-      for (p in 1:length(probs)) {
-
-        # Get a list of Boolean matrices with genes that pass the quantiles criteria
-        diff_genes <- lapply(not_dep_celltypes, function(x){
-          get(type, quantiles_matrix)[p,] > get(x, quantiles_matrix)[nrow(quantiles_matrix[[1]])-p+1,] + diff
-        })
-
-        diff_genes.mat <- matrix(unlist(diff_genes), nrow = length(diff_genes), byrow = TRUE,
-                                 dimnames = list(not_dep_celltypes, rownames(ref)))
-
-
-        # Find signature genes for similar cell types
-        sim_genes <- c()
-        n_sim <- 0
-
-        # In case there is only one similar cell type
-        if (length(sim_cells) == 1) {
-          n_sim <- 1
-          sim_genes <- names(which(diff_genes.mat[rownames(diff_genes.mat) == sim_cells,] > 0))
-          if (length(sim_genes) > round(max_genes*0.25)) {
-            sim_genes <- sim_genes[1:round(max_genes*0.25)]
-          }
+        if (length(gene_passed) < n_genes) {
+          break
         }
 
-        # In case there are more than one cell types
-        if (length(sim_cells) > 1) {
-          for (n_sim in length(sim_cells):1) {
-            sim_genes <- names(which(colSums(diff_genes.mat[rownames(diff_genes.mat) %in% sim_cells,]) >= n_sim))
-            if (length(sim_genes) > 0) {
-              # Make sure sim_genes is not bigger than 1/4 of max_genes
-              if (length(sim_genes) > round(max_genes*0.25)) {
-                sim_genes <- sim_genes[1:round(max_genes*0.25)]
-              }
-              break
-            }
-          }
-        }
-
-
-        # Find signature genes for all cell types
-        for (n_all in nrow(diff_genes.mat):round(nrow(diff_genes.mat)*0.5)) {
-          genes <- names(which(colSums(diff_genes.mat) >= n_all))
-          # Merge with sim_genes
-          genes <- unique(c(sim_genes, genes))
-          # If check there are enough genes
-          if (length(genes) < min_genes) {
-            next
-          }
-          # Check if there are too many genes
-          if (length(genes) > max_genes) {
-            genes <- genes[1:max_genes]
-          }
-          # Save signature
-          if (length(genes) > 0) {
-            sig_name <-  paste(paste0(type, "#"), probs[p], diff, n_sim, n_all, sep = "_")
-            all_sigs[[sig_name]] <- GSEABase::GeneSet(genes, setName = sig_name)
-          }
-        }
-
+        sig_name <-  paste(paste0(type, "#"), param.df[i, ]$probs, diff, n_genes, sep = "_")
+        type_sigs[[sig_name]] <- GSEABase::GeneSet(names(gene_passed[1:n_genes]), setName = sig_name)
       }
 
     }
 
+    if (length(type_sigs) == 0) {
+      warning(paste0("No signatures found for ", type))
+    }
+
+    return(type_sigs)
   }
+
+  celltypes <- unique(labels[,2])
+
+  all_sigs <- pbapply::pblapply(celltypes, function(type){
+    getSigs(celltypes, type, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes)
+  })
+  all_sigs <- unlist(all_sigs)
+
 
   if (length(all_sigs) == 0) {
     warning("No signatures found for reference!")
@@ -208,13 +194,6 @@ createSignatures <- function(ref, labels, dep_list, quantiles_matrix, probs, cor
   # Make GeneSetCollection object
   signatures_collection <- GSEABase::GeneSetCollection(all_sigs)
 
-  # Check if every cell type got at least one signature
-  sig_type <- unlist(lapply(strsplit(names(signatures_collection), "#"), "[", 1))
-  no_sig_cts <- celltypes[!celltypes %in% sig_type]
-
-  if (length(no_sig_cts) != 0) {
-    warning(paste("No signatures found for cell type(s): ", no_sig_cts, collapse = " "))
-  }
 
   return(signatures_collection)
 }
@@ -285,7 +264,6 @@ filterSignatures <- function(ref, labels, pure_ct_mat, dep_list, signatures_coll
 
     }
 
-    print(ct) #remove
 
     ct_data %>%
       group_by(dataset) %>%
@@ -338,7 +316,6 @@ filterSignatures <- function(ref, labels, pure_ct_mat, dep_list, signatures_coll
 
 
 
-  celltypes <- colnames(pure_ct_mat)
 
   scores_mat <- matrix(nrow = length(signatures_collection),
                        ncol = ncol(pure_ct_mat),
@@ -346,14 +323,13 @@ filterSignatures <- function(ref, labels, pure_ct_mat, dep_list, signatures_coll
 
   sig_type <- unlist(lapply(strsplit(names(signatures_collection), "#"), "[", 1))
 
-  for (type in celltypes) {
-
-    if (sum(type == sig_type) == 0) {
-      errorCondition(paste0("No signatures found for cell type: ", type))
-    }
+  for (type in unique(sig_type)) {
+    print(type)
 
     type_signatures <- signatures_collection[type == sig_type]
-    dep_cells <- dep_list[[type]]
+
+
+    dep_cells <- unname(unlist(dep_list[[type]]))
 
     if (length(dep_cells) > 0) {
       types_to_use <- !colnames(scores_mat) %in% dep_cells
@@ -429,8 +405,7 @@ setClass("xCell2Signatures", slots = list(
 # Remove - for debugging
 if (0 == 1) {
   data_type = "rnaseq"; lineage_file = NULL; mixture_fractions = c(0.001, 0.005, seq(0.01, 0.25, 0.02))
-  probs = c(.1, .25, .33333333, .5); diff_vals = c(0, 0.1, 0.585, 1, 1.585, 2, 3, 4, 5); min_genes = 5; max_genes = 500
-
+  probs = c(.1, .25, .33333333, .5); diff_vals = c(0, 0.1, 0.585, 1, 1.585, 2, 3, 4, 5); min_genes = 5; max_genes = 200
 }
 
 
@@ -443,6 +418,7 @@ if (0 == 1) {
 #' @import tidyr
 #' @import Seurat
 #' @import Rfast
+#' @import pbapply
 #' @import sparseMatrixStats
 #' @importFrom  GSEABase GeneSetCollection
 #' @importFrom  GSEABase GeneSet
@@ -508,10 +484,37 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, mixture_fra
     dep_list <- getDependencies(lineage_file)
   }
 
+  # Add ancestors cell types
+  addAncestors <- function(ref, labels, dep_list){
+
+    # Get descendants of existing ancestors cell types
+    descendants_list <- lapply(dep_list, function(x){
+      x$descendants
+    })
+
+    labels2add <- data.frame()
+    for (type in names(dep_list)) {
+
+      # Skip cell types with no descendants
+      if (length(dep_list[[type]]$descendants) == 0) {
+        next
+      }
+
+      descen <- dep_list[[type]]$descendants
+      labels.tmp <- labels[labels[,2] %in% descen,]
+      labels.tmp[,2] <- type
+      labels2add <- rbind(labels2add, labels.tmp)
+
+    }
+  }
+
+
+
   # Generate signatures for each cell type
+  message("Calculating quantiles...")
+  quantiles_matrix <- makeQuantiles(ref, labels, probs, dep_list, include_descendants = TRUE)
   message("Generating signatures...")
-  quantiles_matrix <- makeQuantiles(ref, labels, probs)
-  signatures_collection <- createSignatures(ref, labels, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes)
+  signatures_collection <- createSignatures(ref, labels, dep_list, probs, cor_mat, diff_vals, min_genes, max_genes)
 
   # Filter signatures
   message("Filtering signatures...")
