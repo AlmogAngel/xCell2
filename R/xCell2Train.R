@@ -367,7 +367,7 @@ filterSignatures <- function(ref, labels, pure_ct_mat, dep_list, signatures_coll
 
 
   # Filter by Grubb's test
-  # grubbs <- scores_mat_tidy %>%
+  ## grubbs <- scores_mat_tidy %>%
   #  group_by(signature_ct, signature) %>%
   #  summarise(grubbs_statistic = outliers::grubbs.test(score, type = 10, opposite = FALSE, two.sided = FALSE)$statistic[1]) %>%
   #  filter(grubbs_statistic >= quantile(grubbs_statistic, grubbs_cutoff)) %>%
