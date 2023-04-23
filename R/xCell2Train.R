@@ -367,11 +367,11 @@ filterSignatures <- function(ref, labels, pure_ct_mat, dep_list, signatures_coll
 
 
   # Filter by Grubb's test
-  grubbs <- scores_mat_tidy %>%
-   group_by(signature_ct, signature) %>%
-   summarise(grubbs_statistic = outliers::grubbs.test(score, type = 10, opposite = FALSE, two.sided = FALSE)$statistic[1]) %>%
-   filter(grubbs_statistic >= quantile(grubbs_statistic, grubbs_cutoff)) %>%
-   pull(signature)
+  # grubbs <- scores_mat_tidy %>%
+  #  group_by(signature_ct, signature) %>%
+  #  summarise(grubbs_statistic = outliers::grubbs.test(score, type = 10, opposite = FALSE, two.sided = FALSE)$statistic[1]) %>%
+  #  filter(grubbs_statistic >= quantile(grubbs_statistic, grubbs_cutoff)) %>%
+  #  pull(signature)
 
 
 
@@ -417,6 +417,7 @@ if (0 == 1) {
 #' @import sparseMatrixStats
 #' @importFrom  GSEABase GeneSetCollection
 #' @importFrom  GSEABase GeneSet
+#' @importFrom xCell2 xCell2GetLineage
 #' @import singscore
 #' @param ref A reference gene expression matrix.
 #' @param labels A data frame in which the rows correspond to samples in the ref. The data frame must have four columns:
@@ -473,8 +474,7 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, mixture_fra
   # Get cell type dependencies list
   message("Loading dependencies...")
   if (is.null(lineage_file)) {
-    source("R/xCell2GetLineage.R")
-    dep_list <- xCell2GetLineage(labels = labels[,1:2], out_file = NULL)
+    dep_list <- xCell2::xCell2GetLineage(labels = labels[,1:2], out_file = NULL)
   }else{
     dep_list <- getDependencies(lineage_file)
   }
