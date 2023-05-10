@@ -1,5 +1,6 @@
-devtools::install_github("AlmogAngel/xCell2")
+devtools::install_github("AlmogAngel/xCell2", force = TRUE)
 library(xCell2)
+setwd("/bigdata/almogangel/xCell2/")
 
 devtools::document()
 devtools::install()
