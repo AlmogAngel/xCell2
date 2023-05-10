@@ -1,140 +1,279 @@
 library(tidyverse)
 library(gridExtra)
 
-# Choose signatures to analyze
-xcell2_sigs <- readRDS("/home/almogangel/xCell2_git/Data/benchmarking_data/xcell2ref_ts_main.rds")
+# Score xCell2.0 signatures
+
+scoreMixture <- function(bulk, signatures_collection){
+
+  celltypes <- unique(unlist(lapply(names(signatures_collection), function(x) {strsplit(x, "#")[[1]][1]})))
+  bulk_ranked <- singscore::rankGenes(bulk)
+
+  scores.list <- lapply(celltypes, function(ctoi){
+    signatures_ctoi <- signatures_collection[startsWith(names(signatures_collection), paste0(ctoi, "#"))]
+
+    scores <- sapply(signatures_ctoi, simplify = TRUE, function(sig){
+      singscore::simpleScore(bulk_ranked, upSet = sig, centerScore = FALSE)$TotalScore
+    })
+    if (is.list(scores)) {
+      signatures_ctoi <- signatures_ctoi[-which(lengths(scores) == 0)]
+      scores <- sapply(signatures_ctoi, simplify = TRUE, function(sig){
+        singscore::simpleScore(bulk_ranked, upSet = sig, centerScore = FALSE)$TotalScore
+      })
+    }
+
+    colnames(scores) <- names(signatures_ctoi)
+    rownames(scores) <- colnames(bulk)
+    t(scores)
+  })
+  names(scores.list) <- celltypes
+
+  return(scores.list)
+
+}
+
+getCors <- function(sigs.out.list, truth, file){
+
+  all_celltypes <- intersect(names(sigs.out.list), rownames(truth))
+
+  all_celltypes_cor <- lapply(all_celltypes, function(ctoi){
+
+
+    truth_ctoi <- truth[ctoi, ]
+    truth_ctoi <- truth_ctoi[1, !is.na(truth_ctoi)]
+    truth_ctoi <- truth_ctoi[1, truth_ctoi != ""]
+
+    results <- sigs.out.list[[ctoi]]
+    shared_samples <- intersect(colnames(truth_ctoi), colnames(results))
+
+
+    cors <- apply(results, 1, function(x){
+      cor(x[shared_samples], as.numeric(truth_ctoi[,shared_samples]), method = "spearman")
+    })
+
+    cors <- sort(cors, decreasing = T)
+    cors
+
+  })
+  all_celltypes_cor <- unlist(all_celltypes_cor)
+  names(all_celltypes_cor) <- paste0(file, "#", names(all_celltypes_cor))
+
+
+  return(all_celltypes_cor)
+
+}
 
 
 # Load benchmarking truths and mixtures
 truths_dir <- "/bigdata/almogangel/kassandra_data/24_validation_datasets/cell_values/"
 mix_dir <- "/bigdata/almogangel/kassandra_data/24_validation_datasets/expressions/"
-ds <- gsub(".tsv", "", list.files(truths_dir))
 
-
-scoreMixtures <- function(ctoi, mixture_ranked, signatures_collection){
-  signatures_ctoi <- signatures_collection[startsWith(names(signatures_collection), paste0(ctoi, "#"))]
-
-  scores <- sapply(signatures_ctoi, simplify = TRUE, function(sig){
-    singscore::simpleScore(mixture_ranked, upSet = sig, centerScore = FALSE)$TotalScore
-  })
-
-  # In case some signatures contain genes that are all not in the mixtures
-  if (is.list(scores)) {
-    signatures_ctoi <- signatures_ctoi[-which(lengths(scores) == 0)]
-    scores <- sapply(signatures_ctoi, simplify = TRUE, function(sig){
-      singscore::simpleScore(mix_ranked, upSet = sig, centerScore = FALSE)$TotalScore
-    })
-  }
-  colnames(scores) <- names(signatures_ctoi)
-  rownames(scores) <- colnames(mixture_ranked)
-  return(t(scores))
-}
-
-getSigsCor <- function(datasets, signatures_collection){
-
-  all_celltypes <- unique(gsub(pattern = "#.*", "", names(signatures_collection)))
-  all_ds <- sapply(datasets, function(x) NULL)
-
-  for (file in datasets) {
-
-    # Load mixture
-    mix <- read.table(paste0(mix_dir, file, "_expressions.tsv"), check.names = FALSE, row.names = 1, header = TRUE)
-
-    # Load truth
-    truth <- read.table(paste0(truths_dir, file, ".tsv"), header = TRUE, check.names = FALSE, sep = "\t", row.names = 1)
-    rownames(truth) <- plyr::mapvalues(rownames(truth), celltype_conversion_long$all_labels, celltype_conversion_long$xCell2_labels, warn_missing = FALSE)
-
-    samples2use <- intersect(colnames(truth), colnames(mix))
-    mix <- mix[,samples2use]
-    truth <- truth[,samples2use]
-
-    mix_ranked <- singscore::rankGenes(mix)
-
-    if (!all(colnames(truth) == colnames(mix_ranked))) {
-      errorCondition(paste0("Error with dataset: ", file))
-    }
-
-
-    all_celltypes_cor <- sapply(all_celltypes, function(ctoi){
-
-      scores_ctoi <- scoreMixtures(ctoi, mix_ranked, signatures_collection)
-      truth_ctoi <- truth[ctoi, colnames(scores_ctoi)]
-      truth_ctoi <- truth_ctoi[1, !is.na(truth_ctoi)]
-      truth_ctoi <- truth_ctoi[1, truth_ctoi != ""]
-      scores_ctoi <- scores_ctoi[,names(truth_ctoi)]
-
-      if (!all(names(truth_ctoi) == colnames(scores_ctoi))) {
-        errorCondition(paste0("Error with dataset: ", file))
-      }
-
-      truth_ctoi <- as.numeric(truth_ctoi)
-
-      if (all(truth_ctoi == 0)) {
-        NULL
-      }else{
-        apply(scores_ctoi, 1, function(x){cor(x, truth_ctoi, method = "spearman")})
-      }
-
-
-    })
-
-    all_ds[[file]] <- all_celltypes_cor
-  }
-
-  all_ds_cors <- unlist(all_ds)
-
-  cor_final <- tibble(id = names(all_ds_cors), cor = all_ds_cors) %>%
-    separate(id, into = c("dataset", "celltype", "signature"), sep = "\\.", extra = "merge")
-
-
-  return(cor_final)
-
-}
-
-getTopSigs <- function(cor_final, top = 0.1){
-  top_sigs <- blood_ref_sigs_cors %>%
-    group_by(celltype, signature) %>%
-    summarise(median_cor = median(cor)) %>%
-    filter(median_cor >= quantile(median_cor, 1-top)) %>%
-    pull(signature)
-
-  return(top_sigs)
-}
-
-
-
-# Filter by Grubb's test - all
-grubbs.filtered <- xcell2_blood_ref@score_mat %>%
-  filter(signature %in% filtered_sigs) %>%
-  group_by(signature_ct, signature) %>%
-  summarise(grubbs_statistic = outliers::grubbs.test(score, type = 10, opposite = FALSE, two.sided = FALSE)$statistic[1]) %>%
-  filter(grubbs_statistic >= quantile(grubbs_statistic, 0.9)) %>%
-  pull(signature)
-
-# Filter by Grubb's test - similarity
-ct_similarity <- xcell2_blood_ref@score_mat %>%
+# Load celltype conversion
+celltype_conversion_long <- read_tsv("/bigdata/almogangel/xCell2/dev_data/celltype_conversion_with_ontology.txt") %>%
   rowwise() %>%
-  mutate(similarity = xcell2_blood_ref@correlationMatrix[signature_ct, sample_ct]) %>%
-  select(signature_ct, sample_ct, similarity) %>%
-  unique() %>%
-  group_by(signature_ct) %>%
-  mutate(similarity_level = ifelse(similarity >= quantile(similarity, 0.8), "high", "low")) %>%
-  mutate(similarity_level = ifelse(signature_ct == sample_ct, "same", similarity_level))
-
-grubbs.filtered.sim <- xcell2_blood_ref@score_mat %>%
-  left_join(ct_similarity, by = c("signature_ct", "sample_ct")) %>%
-  filter(similarity_level != "low") %>%
-  group_by(signature_ct, signature) %>%
-  summarise(grubbs_statistic = outliers::grubbs.test(score, type = 10, opposite = FALSE, two.sided = FALSE)$statistic[1]) %>%
-  filter(grubbs_statistic >= quantile(grubbs_statistic, 0.9)) %>%
-  pull(signature)
+  mutate(all_labels = str_split(all_labels, ";")) %>%
+  unnest(cols = c(all_labels))
 
 
-# Get signatures correlations with the validation datasets
-blood_ref_sigs_cors <- getSigsCor(datasets = validation_ds_blood, signatures_collection = xcell2_blood_ref@all_signatures)
+blood_ds <- c("BG_blood", "GSE107011", "GSE107572", "GSE127813")
 
-# saveRDS(blood_ref_sigs_cors, "../xCell2.0/blood_ref_sigs_cors.rds")
-cytometry_validation <- c("BG_blood", "GSE107011", "GSE107572", "GSE127813")
+all_ds_cors <- c()
+for (file in blood_ds) {
+  bulk <- as.matrix(read.table(paste0(mix_dir, file, "_expressions.tsv"), check.names = FALSE, row.names = 1, header = TRUE))
+
+  # Load truth
+  truth <- read.table(paste0(truths_dir, file, ".tsv"), header = TRUE, check.names = FALSE, sep = "\t", row.names = 1)
+  rownames(truth) <- plyr::mapvalues(rownames(truth), celltype_conversion_long$all_labels, celltype_conversion_long$xCell2_labels, warn_missing = FALSE)
+
+
+  # Run xCell2.0
+  sigs.out.list <- scoreMixture(bulk, signatures_collection)
+  # Add mean score of signatures
+  for (i in 1:length(sigs.out.list)) {
+    mean_score <- colMeans(sigs.out.list[[i]])
+    sigs.out.list[[i]] <- rbind(mean_score, sigs.out.list[[i]])
+    rownames(sigs.out.list[[i]])[1] <- paste0(names(sigs.out.list[i]), "#", "mean_score")
+  }
+  cors.out <- getCors(sigs.out.list, truth, file)
+
+  all_ds_cors <- c(all_ds_cors, cors.out)
+}
+
+
+
+# Analyze worst signatures
+all_sigs_results <- tibble(id = names(all_ds_cors), cor = all_ds_cors, performance = "All sigs") %>%
+  separate(id, into = c("dataset", "signature"), sep = "#", extra = "merge") %>%
+  separate(signature, into = c("celltype", "sig_info"), sep = "#", remove = FALSE) %>%
+  separate(sig_info, into = c("remove", "probs", "diff", "n_genes"), sep = "_", extra = "drop", remove = FALSE) %>%
+  select(-c(sig_info, remove))
+
+worst_sigs <- all_sigs_results %>%
+  group_by(dataset, celltype) %>%
+  slice_min(prop = 0.05, order_by = cor) %>%
+  ungroup() %>%
+  mutate(performance = paste0("Bottom 5% - ", dataset))
+
+ds2use <- "BG_blood"
+
+rbind(all_sigs_results, worst_sigs) %>%
+  filter(dataset == ds2use & performance == "All sigs" | signature %in% worst_sigs[worst_sigs$dataset == ds2use,]$signature & performance != "All sigs") %>%
+  ggplot(., aes(x=celltype,y=cor, fill=performance)) +
+  geom_boxplot() +
+  scale_y_continuous(limits = c(-1, 1), breaks = seq(-1,1,0.1)) +
+  scale_fill_manual(values=c("black", "red", "green", "purple", "blue")) +
+  labs(title = ds2use, y = "Spearman r", x = "") +
+  theme(axis.text.x = element_text(angle = 40, hjust=1, face = "bold"))
+
+ctoi <- "T cell"
+rbind(all_sigs_results, worst_sigs) %>%
+  filter(celltype == ctoi) %>%
+  filter(dataset == ds2use & performance == "All sigs" | signature %in% worst_sigs[worst_sigs$dataset == ds2use,]$signature & performance != "All sigs") %>%
+  rowwise() %>%
+  mutate(dataset = if(performance == "All sigs") paste0(ds2use, " - All sigs") else dataset) %>%
+  ggplot(., aes(x=dataset, y=cor, fill=performance)) +
+  geom_boxplot() +
+  scale_y_continuous(limits = c(-1, 1), breaks = seq(-1,1,0.1)) +
+  scale_fill_manual(values=c("black", "red", "green", "purple", "blue")) +
+  labs(title = ctoi, y = "Spearman r", x = "") +
+  theme(axis.text.x = element_text(angle = 40, hjust=1, face = "bold"))
+
+all_sigs_results %>%
+  drop_na() %>%
+  mutate(n_genes = factor(n_genes, levels = as.character(sort(as.numeric(unique(all_sigs_results$n_genes)), decreasing = T)))) %>%
+  ggplot(., aes(x=celltype,y=cor, fill=n_genes)) +
+  geom_boxplot() +
+  scale_y_continuous(limits = c(-1, 1), breaks = seq(-1,1,0.1)) +
+  facet_wrap(~dataset, scales = "free_x") +
+  labs(title = ds2use, y = "Spearman r", x = "") +
+  theme(axis.text.x = element_text(angle = 40, hjust=1, face = "bold"))
+
+all_sigs_results %>%
+  drop_na() %>%
+  mutate(n_genes = factor(n_genes, levels = as.character(sort(as.numeric(unique(all_sigs_results$n_genes)), decreasing = T)))) %>%
+  ggplot(., aes(x=dataset,y=cor, fill=n_genes)) +
+  geom_boxplot() +
+  scale_y_continuous(limits = c(-1, 1), breaks = seq(-1,1,0.1)) +
+  labs(title = ds2use, y = "Spearman r", x = "") +
+  theme(axis.text.x = element_text(angle = 40, hjust=1, face = "bold"))
+
+
+all_sigs_results %>%
+  drop_na() %>%
+  mutate(probs = factor(probs, levels = as.character(sort(as.numeric(unique(all_sigs_results$probs)), decreasing = T)))) %>%
+  ggplot(., aes(x=celltype,y=cor, fill=probs)) +
+  geom_boxplot() +
+  scale_y_continuous(limits = c(-1, 1), breaks = seq(-1,1,0.1)) +
+  facet_wrap(~dataset, scales = "free_x") +
+  labs(title = ds2use, y = "Spearman r", x = "") +
+  theme(axis.text.x = element_text(angle = 40, hjust=1, face = "bold"))
+
+all_sigs_results %>%
+  drop_na() %>%
+  mutate(probs = factor(probs, levels = as.character(sort(as.numeric(unique(all_sigs_results$probs)), decreasing = T)))) %>%
+  ggplot(., aes(x=dataset,y=cor, fill=probs)) +
+  geom_boxplot() +
+  scale_y_continuous(limits = c(-1, 1), breaks = seq(-1,1,0.1)) +
+  labs(title = ds2use, y = "Spearman r", x = "") +
+  theme(axis.text.x = element_text(angle = 40, hjust=1, face = "bold"))
+
+
+all_sigs_results %>%
+  drop_na() %>%
+  mutate(diff = factor(diff, levels = as.character(sort(as.numeric(unique(all_sigs_results$diff)), decreasing = T)))) %>%
+  ggplot(., aes(x=celltype,y=cor, fill=diff)) +
+  geom_boxplot() +
+  scale_y_continuous(limits = c(-1, 1), breaks = seq(-1,1,0.1)) +
+  facet_wrap(~dataset, scales = "free_x") +
+  labs(title = ds2use, y = "Spearman r", x = "") +
+  theme(axis.text.x = element_text(angle = 40, hjust=1, face = "bold"))
+
+all_sigs_results %>%
+  drop_na() %>%
+  mutate(diff = factor(diff, levels = as.character(sort(as.numeric(unique(all_sigs_results$diff)), decreasing = T)))) %>%
+  ggplot(., aes(x=dataset,y=cor, fill=diff)) +
+  geom_boxplot() +
+  scale_y_continuous(limits = c(-1, 1), breaks = seq(-1,1,0.1)) +
+  labs(title = ds2use, y = "Spearman r", x = "") +
+  theme(axis.text.x = element_text(angle = 40, hjust=1, face = "bold"))
+
+
+all_sigs_results %>%
+  drop_na() %>%
+  mutate(probs_diff = paste0(probs, "-", diff)) %>%
+  ggplot(., aes(x=probs_diff, y=cor, fill=probs_diff)) +
+  geom_boxplot() +
+  scale_y_continuous(limits = c(-1, 1), breaks = seq(-1,1,0.1)) +
+  labs(title = ds2use, y = "Spearman r", x = "") +
+  theme(axis.text.x = element_text(angle = 40, hjust=1, face = "bold"))
+
+
+# Analyze signatures
+
+cor_final <- tibble(id = names(all_ds_cors), cor = all_ds_cors, method = "xCell2.0 - before filtering") %>%
+  separate(id, into = c("dataset", "signature"), sep = "#", extra = "merge")
+
+# For top signature with simbu simulations
+top_sigs_by_sim <- cor_final %>%
+  filter(signature %in% unlist(top_sigs)) %>%
+  mutate(method = "xCell2.0 - top 10% simulations")
+cor_final <- rbind(top_sigs_by_sim, cor_final)
+
+# For top signature with RF regulaztion
+top_sigs_by_rf <- cor_final %>%
+  filter(signature %in% unlist(top_sigs_rf)) %>%
+  mutate(method = "xCell2.0 - top 10% RF")
+cor_final <- rbind(top_sigs_by_rf, cor_final)
+
+cor_final <- cor_final %>%
+  separate(signature, into = c("celltype", "is_mean"), sep = "#", extra = "drop", remove = FALSE) %>%
+  mutate(method = ifelse(is_mean == "mean_score", "xCell2.0 - mean", method))
+
+# Merge cor_final with benchmark_bulk_validation.R results to compare signatures to the alternative method
+xcell2sigs_cors <- cor_final %>%
+  mutate(celltype = gsub("-", "_", celltype)) %>%
+  mutate(celltype = gsub(" ", "_", celltype)) %>%
+  mutate(celltype = gsub(",", "_", celltype)) %>%
+  select(dataset, method, celltype, cor)
+
+all_methods <- alternative_methods_results.tbl %>%
+  select(-results) %>%
+  rbind(xcell2sigs_cors)
+
+celltypes2use <- intersect(unique(xcell2sigs_cors$celltype), unique(alternative_methods_results.tbl$celltype))
+
+
+all_methods %>%
+  filter(celltype %in% celltypes2use) %>%
+  #mutate(passed_filter = factor(ifelse(signature %in% names(signatures_collection_filtered) , "yes", "no"), levels = c("yes", "no"))) %>%
+  ggplot(., aes(x=dataset, y=cor, col=method,
+                alpha = method %in% c("xCell2.0 - length 8", "xCell2.0 - length 100"),
+                size = method %in% c("xCell2.0 - length 8", "xCell2.0 - length 100"))) +
+  geom_jitter(position=position_jitter(width=0.2)) +
+  scale_color_manual(values=c("blue", "red", "green", "orange", "black", "purple", "gray20", "#98F5FF", "#FF00FF", "#FFA500")) +
+  scale_size_ordinal(range = c(3, 1), guide = FALSE) +
+  scale_alpha_manual(values = c(1, 0.1), guide = FALSE) +
+  scale_y_continuous(limits = c(-1, 1), breaks = seq(-1,1,0.1)) +
+  geom_hline(yintercept=0, linetype="dashed", color = "black", size=0.5) +
+  geom_hline(yintercept=0.8, linetype="dashed", color = "#008B8B", size=0.5) +
+  facet_wrap(~celltype, scales = "free_x") +
+  labs(y = "Spearman r", x = "") +
+  theme(axis.text.x = element_text(angle = 40, hjust=1, face = "bold"))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+blood_ref_sigs_cors <- getSigsCor(datasets = cytometry_validation, signatures_collection = xcell2_sigs)
+
 
 blood_ref_sigs_cors %>%
   ungroup() %>%
