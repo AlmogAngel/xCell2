@@ -1,3 +1,23 @@
+validateInputs <- function(ref, labels, data_type){
+  if (!any(class(ref) %in% c("matrix", "dgCMatrix", "Matrix"))) {
+    stop("ref should be as matrix.")
+  }
+
+  if (!"data.frame" %in% class(labels)) {
+    stop("labels should be as dataframe.")
+  }
+
+  if (!data_type %in% c("rnaseq", "array", "sc")) {
+    stop("data_type should be rnaseq, array or scrnaseq.")
+  }
+
+  if (sum(grepl("_", labels$label)) != 0 | sum(grepl("_", rownames(ref))) != 0) {
+    message("Changing underscores to dashes in genes / cell-types labels!")
+    labels$label <- gsub("_", "-", labels$label)
+    rownames(ref) <- gsub("_", "-", rownames(ref))
+  }
+
+}
 getTopVariableGenes <- function(ref, min_genes){
 
   ref.srt <- Seurat::CreateSeuratObject(counts = ref)
@@ -13,8 +33,6 @@ getTopVariableGenes <- function(ref, min_genes){
 
   return(genesVar)
 }
-
-# Generate a matrix of median expression of pure cell types
 makePureCTMat <- function(ref, labels){
 
   celltypes <- unique(labels$label)
@@ -31,8 +49,6 @@ makePureCTMat <- function(ref, labels){
 
   return(pure_ct_mat)
 }
-
-# This function return a correlation matrix given the counts and cell types
 getCellTypeCorrelation <- function(pure_ct_mat, data_type){
 
   celltypes <- colnames(pure_ct_mat)
@@ -64,8 +80,6 @@ getCellTypeCorrelation <- function(pure_ct_mat, data_type){
 
   return(cor_mat)
 }
-
-# This function return a vector of cell type dependencies
 getDependencies <- function(lineage_file_checked){
   ont <- read_tsv(lineage_file_checked, show_col_types = FALSE) %>%
     mutate_all(as.character)
@@ -88,7 +102,6 @@ getDependencies <- function(lineage_file_checked){
 
   return(dep_list)
 }
-
 makeQuantiles <- function(ref, labels, probs, dep_list, include_descendants){
 
   celltypes <- unique(labels[,2])
@@ -117,8 +130,6 @@ makeQuantiles <- function(ref, labels, probs, dep_list, include_descendants){
 
   return(quantiles_matrix)
 }
-
-
 createSignatures <- function(ref, labels, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes){
 
 
@@ -197,8 +208,6 @@ createSignatures <- function(ref, labels, dep_list, quantiles_matrix, probs, cor
 
   return(signatures_collection)
 }
-
-
 filterSignatures <- function(ref, labels, pure_ct_mat, dep_list, signatures_collection, mixture_fractions, grubbs_cutoff, simulations_cutoff){
 
   # This function created mixtures for the simulations
@@ -399,7 +408,7 @@ setClass("xCell2Signatures", slots = list(
 
 # Remove - for debugging
 if (0 == 1) {
-  data_type = "sc"; lineage_file = NULL; mixture_fractions = c(0.001, 0.005, seq(0.01, 0.25, 0.02))
+  data_type = "rnaseq"; lineage_file = NULL; mixture_fractions = c(0.001, 0.005, seq(0.01, 0.25, 0.02))
   probs = c(.1, .25, .33333333, .5); diff_vals = c(0, 0.1, 0.585, 1, 1.585, 2, 3, 4, 5); min_genes = 5; max_genes = 200
 }
 
@@ -439,24 +448,7 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, mixture_fra
 
 
   # Validate inputs
-  if (!any(class(ref) %in% c("matrix", "dgCMatrix", "Matrix"))) {
-    stop("ref should be as matrix.")
-  }
-
-  if (!"data.frame" %in% class(labels)) {
-    stop("labels should be as dataframe.")
-  }
-
-  if (!data_type %in% c("rnaseq", "array", "sc")) {
-    stop("data_type should be rnaseq, array or scrnaseq.")
-  }
-
-  if (sum(grepl("_", labels$label)) != 0 | sum(grepl("_", rownames(ref))) != 0) {
-    message("Changing underscores to dashes in genes / cell-types labels!")
-    labels$label <- gsub("_", "-", labels$label)
-    rownames(ref) <- gsub("_", "-", rownames(ref))
-  }
-
+  validateInputs(ref, labels, data_type)
 
   # Use only most variable genes for single-cell data
   if (data_type == "sc") {
@@ -486,12 +478,12 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, mixture_fra
 
   # Filter signatures
   message("Filtering signatures...")
-  filter_signature_out <- filterSignatures(ref, labels, pure_ct_mat, dep_list, signatures_collection, mixture_fractions, grubbs_cutoff = 0.8, simulations_cutoff = 0.8)
-  scores_mat_pure_tidy <- filter_signature_out$scoreMatTidy
-  signatures_collection_filtered <- filter_signature_out$sigCollectionFilt
+  #filter_signature_out <- filterSignatures(ref, labels, pure_ct_mat, dep_list, signatures_collection, mixture_fractions, grubbs_cutoff = 0.8, simulations_cutoff = 0.8)
+  #scores_mat_pure_tidy <- filter_signature_out$scoreMatTidy
+  #signatures_collection_filtered <- filter_signature_out$sigCollectionFilt
 
 
-  # TODO: Weight signatures with Elastic Net
+  # TODO: Weight signatures
 
 
   # TODO: Linear transformation
