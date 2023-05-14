@@ -208,187 +208,196 @@ createSignatures <- function(ref, labels, dep_list, quantiles_matrix, probs, cor
 
   return(signatures_collection)
 }
-filterSignatures <- function(ref, labels, pure_ct_mat, dep_list, signatures_collection, mixture_fractions, grubbs_cutoff, simulations_cutoff){
+filterSignatures <- function(ref, labels, mixture_fractions, dep_list, signatures_collection, top_sigs = 0.05){
 
-  # This function created mixtures for the simulations
-  getMixtures <- function(ref, labels, ct, ct_data, dep_list, max_control_type,
-                          mixture_fractions){
+  # Make simulations
+  makeSimulations <- function(ref, labels, mixture_fractions, dep_list, n_ct_sim = 20, add_noise = TRUE, seed = 123){
 
-    getControlsMeanExpression <- function(ref, labels, ct, dep_list, max_control_type, mixture_fractions){
+    set.seed(seed)
 
-      controls2use <- names(dep_list)[!names(dep_list) %in% c(ct, dep_list[[ct]])]
+    makeFractionMatrixCTOI <- function(ref, mixture_fractions, ctoi_samples_pool){
 
-      n_ds <- length(unique(labels$dataset)) # This number of datasets will effect the sampling of controls
-      n_slice <- ifelse(n_ds >= max_control_type, 1, round((max_control_type/n_ds)+0.5))
-     if(n_ds == 1){
-       n_slice <- length(controls2use)
+
+      # Make CTOI fraction matrix
+      ctoi_frac_mat <- matrix(NA, nrow = nrow(ref), ncol = length(mixture_fractions), dimnames = list(rownames(ref), mixture_fractions))
+      for (i in 1:length(mixture_fractions)) {
+        frac <- mixture_fractions[i]
+        ctoi_samples2use <- ctoi_samples_pool[1:length(mixture_fractions)] # Choose the first samples (homogeneous by datasets)
+        frac_fracs <- diff(c(0, sort(runif(length(ctoi_samples2use)-1, min = 0, max = frac)), frac)) # Generate random fraction for each sample to sum to frac in mixture_fractions
+        ctoi_frac_mat[,i] <- Rfast::rowsums(ref[,ctoi_samples2use] %*% diag(frac_fracs)) # Sum all fractions
+        ctoi_samples_pool <- c(ctoi_samples_pool[!ctoi_samples_pool %in% ctoi_samples2use], ctoi_samples2use) # Move ctoi_samples2use to be last
       }
-      if(length(controls2use) < max_control_type){
-        max_control_type <- length(controls2use)
-      }
+
+      out <- list(frac_mat = ctoi_frac_mat,
+                  samples_pool = ctoi_samples_pool)
+
+      return(out)
+    }
+
+    makeFractionMatrixControls <- function(ref, labels, ctoi, dep_cts, mixture_fractions){
 
 
-      controls <- sapply(1:length(mixture_fractions), function(x){
+      # Pick controls
+      control_samples <- labels %>%
+        filter(!label %in% dep_cts) %>%
+        slice_sample(n=1, by = label) %>%
+        slice_sample(n=length(mixture_fractions)) %>%
+        pull(sample)
+      controls_expression <- ref[,control_samples]
 
-        labels %>%
-          filter(label %in% controls2use) %>% # Only controls
-          group_by(dataset, label) %>%
-          slice_sample(n=1) %>% # One cell type per dataset
-          group_by(dataset) %>%
-          slice_sample(n=n_slice) %>%
-          ungroup() %>%
-          slice_sample(n=max_control_type) %>%
-          pull(sample) %>%
-          ref[,.] %>%
-          as.matrix() %>%
-          Rfast::rowmeans()
-
-
+      controls_mat <- sapply(1-mixture_fractions, function(frac){
+        random_fracs <- diff(c(0, sort(runif(ncol(controls_expression)-1, min = 0, max = frac)), frac)) # Generate random numbers from the controls from a uniform distribution that sum to frac
+        Rfast::rowsums(controls_expression %*% diag(random_fracs))
       })
 
-      controls_fracs <- controls %*% diag(1-mixture_fractions)
-      return(controls_fracs)
-
-    }
-
-    mixSmaples <- function(ref, labels, ct, dep_list, max_control_type, ct_mean_expression, mixture_fractions){
-
-      # Generate a matrix of CTOI fractions:
-      m <- matrix(rep(ct_mean_expression, length(mixture_fractions)), byrow = FALSE, ncol = length(mixture_fractions)) %*% diag(mixture_fractions)
-      # Get random controls fractions
-      c <- getControlsMeanExpression(ref, labels, ct, dep_list, max_control_type, mixture_fractions)
-      # Add controls
-      m <- m + c
-
-      rownames(m) <- rownames(ref)
-      colnames(m) <- as.character(mixture_fractions)
-
-      return(m)
+      return(controls_mat)
 
     }
 
 
-    ct_data %>%
-      group_by(dataset) %>%
-      summarise(samples = list(sample)) %>%
-      rowwise() %>%
-      mutate(n_samples = length(samples)) %>%
-      ungroup() %>%
-      # Use top 20 references with most samples
-      top_n(n = 20, wt = n_samples) %>%
-      rowwise() %>%
-      # Get cell type mean expression for each dataset
-      mutate(ct_mean_expression = list(Rfast::rowmeans(as.matrix(ref[,samples])))) %>%
-      mutate(mixtures = list(mixSmaples(ref, labels, ct, dep_list, max_control_type, ct_mean_expression, mixture_fractions))) %>%
-      pull(mixtures) %>%
-      return()
+    celltypes <- unique(labels[,2])
+    ctoi_sim_list <- list()
+    sim_list <- pbapply::pblapply(celltypes, function(ctoi){
+
+      # Sort CTOI samples to be homogeneous by datasets
+      ctoi_samples_pool <- c()
+      while(!all(labels[labels$label == ctoi,]$sample %in% ctoi_samples_pool)) {
+        ctoi_samples_pool <- c(ctoi_samples_pool,
+                               labels %>%
+                                 filter(label == ctoi & !sample %in% ctoi_samples_pool) %>%
+                                 slice_head(n = 1, by = dataset) %>%
+                                 pull(sample))
+      }
+
+      if (length(ctoi_samples_pool) < length(mixture_fractions)) {
+        ctoi_samples_pool <- rep(ctoi_samples_pool, length(mixture_fractions))
+      }
+
+      dep_cts <- unique(c(ctoi, unname(unlist(dep_list[[ctoi]]))))
+      n_ctoi_ds <- length(unique(labels[labels$label == ctoi,]$dataset))
+
+
+      for (i in 1:n_ct_sim) {
+
+        ctoi_frac_mat_results <- makeFractionMatrixCTOI(ref, mixture_fractions, ctoi_samples_pool)
+        ctoi_frac_mat <- ctoi_frac_mat_results$frac_mat
+        ctoi_samples_pool <- ctoi_frac_mat_results$samples_pool
+
+        # Make Controls fraction matrix
+        controls_frac_mat <- makeFractionMatrixControls(ref, labels, ctoi, dep_cts, mixture_fractions)
+
+        # Combine CTOI and controls fractions matrix
+        simulation <- ctoi_frac_mat + controls_frac_mat
+
+        # Add noise
+        if (add_noise) {
+          noise_sd <- 1 + 1/n_ctoi_ds
+          noise <- matrix(rnorm(nrow(simulation) * ncol(simulation), mean = 0, sd = noise_sd),
+                          nrow = nrow(simulation), ncol = ncol(simulation))
+          simulation <- simulation + noise
+          simulation <- pmax(simulation, 0)
+        }
+
+        ctoi_sim_list[[paste0("sim-", i)]] <- simulation
+      }
+
+      ctoi_sim_list
+    })
+    names(sim_list) <- celltypes
+
+    return(sim_list)
+
   }
+  sim_list <- makeSimulations(ref, labels, mixture_fractions, dep_list, n_ct_sim = 20, add_noise = TRUE, seed = 123)
 
+  # Score simulations
+  scoreSimulations <- function(signatures_collection, sim_list){
 
-  getMixturesCors <- function(signatures_collection, ct, mixture_ranked, mixture_fractions){
+    celltypes <- names(sim_list)
+    out <- pbapply::pblapply(celltypes, function(ctoi){
+      signatures_ctoi <- signatures_collection[startsWith(names(signatures_collection), paste0(ctoi, "#"))]
 
-    sigs <- signatures_collection[startsWith(names(signatures_collection), paste0(ct, "#"))]
+      scores_ctoi <- lapply(sim_list[[ctoi]], function(sim){
+        sim_ranked <- singscore::rankGenes(sim)
+        scores <- t(sapply(signatures_ctoi, simplify = TRUE, function(sig){
+          singscore::simpleScore(sim_ranked, upSet = sig, centerScore = FALSE)$TotalScore
+        }))
 
-    # Score every ranked mixtures of CTOI
-    cors <- sapply(mixture_ranked, function(ranked_mix){
+        rownames(scores) <- names(signatures_ctoi)
+        colnames(scores) <- colnames(sim)
 
-      # Score
-      scores <- sapply(sigs, simplify = TRUE, function(sig){
-        singscore::simpleScore(ranked_mix, upSet = sig, centerScore = FALSE)$TotalScore
+        scores
       })
-      if (is.list(scores)) {
-        sigs <- sigs[-which(lengths(scores) == 0)]
-        scores <- sapply(sigs, simplify = TRUE, function(sig){
-          singscore::simpleScore(ranked_mix, upSet = sig, centerScore = FALSE)$TotalScore
-        })
-      }
-      colnames(scores) <- names(sigs)
-
-      # Correlation
-      apply(scores, 2, function(sig_scores){
-        cor(sig_scores, mixture_fractions, method = "spearman")
-      })
+      scores_ctoi
 
     })
-
-    median_cors <- Rfast::rowMedians(cors)
-    names(median_cors) <- rownames(cors)
-
-    return(median_cors)
+    names(out) <- celltypes
+    return(out)
   }
+  scores_list <- scoreSimulations(signatures_collection, sim_list)
 
-
-
-
-  scores_mat <- matrix(nrow = length(signatures_collection),
-                       ncol = ncol(pure_ct_mat),
-                       dimnames = list(names(signatures_collection), colnames(pure_ct_mat)))
-
-  sig_type <- unlist(lapply(strsplit(names(signatures_collection), "#"), "[", 1))
-
-  for (type in unique(sig_type)) {
-    print(type)
-
-    type_signatures <- signatures_collection[type == sig_type]
-
-
-    dep_cells <- unname(unlist(dep_list[[type]]))
-
-    if (length(dep_cells) > 0) {
-      types_to_use <- !colnames(scores_mat) %in% dep_cells
-    }else{
-      types_to_use <- rep(TRUE, ncol(scores_mat))
-    }
-
-    sub_mix <- pure_ct_mat[,types_to_use]
-    sub_mix_ranked <- singscore::rankGenes(sub_mix)
-    for (i in 1:length(type_signatures)) {
-      sig <- type_signatures[i]
-      scores_out <- singscore::simpleScore(sub_mix_ranked, upSet = sig[[1]], centerScore = FALSE)$TotalScore
-      scores_mat[which(rownames(scores_mat) == names(sig)), colnames(sub_mix_ranked)] <- scores_out
-    }
-
+  # Get simulation correlations results
+  getSimulationCor <- function(scores){
+    fractions <- as.numeric(colnames(scores))
+    sig_cors <- apply(scores, 1, function(sig){
+      cor(sig, fractions, method = "spearman")
+    })
+    return(sig_cors)
   }
-
-  scores_mat_tidy <- scores_mat %>%
-    as_tibble(., rownames = NA) %>%
-    rownames_to_column(var = "signature") %>%
-    pivot_longer(cols = -signature, values_to = "score", names_to = "sample_ct") %>%
-    separate(signature, into = "signature_ct", sep = "#", remove = FALSE, extra = "drop")%>%
-    drop_na()
-
-  # Filter by simulations
-  simulations <- labels %>%
-    group_by(ont, label) %>%
-    nest() %>%
+  sim_scores_cors_tidy <- enframe(scores_list, name = "celltype") %>%
+    unnest_longer(value, indices_to = "sim_id", values_to = "scores") %>%
     rowwise() %>%
-    # TODO: takes too long
-    mutate(mixture = list(getMixtures(ref = ref, labels = labels, ct = label, ct_data = data, dep_list = dep_list, max_control_type = 5, mixture_fractions = mixture_fractions))) %>%
-    mutate(mixture_ranked = list(lapply(mixture, function(mix){singscore::rankGenes(mix)})))
+    mutate(cor = list(getSimulationCor(scores))) %>%
+    unnest_longer(cor, indices_to = "signature") %>%
+    ungroup()
 
-  simulations.cors <- simulations %>%
-    mutate(mixture_cor = list(getMixturesCors(signatures_collection = signatures_collection, ct = label, mixture_ranked = mixture_ranked, mixture_fractions = mixture_fractions)))
+  # Filter by top signatures
+  top_sigs <- sim_scores_cors_tidy %>%
+    group_by(celltype, signature) %>%
+    summarise(mean_cor = mean(cor)) %>%
+    group_by(celltype) %>%
+    top_frac(n=top_sigs, wt=mean_cor) %>%
+    pull(signature)
+  signatures_filtered <- signatures_collection[names(signatures_collection) %in% top_sigs]
 
-  simulations.filtered <- simulations.cors %>%
-    mutate(sig_filtered = list(names(mixture_cor)[mixture_cor >= quantile(mixture_cor, simulations_cutoff)])) %>%
-    pull(sig_filtered) %>%
-    unlist()
+  # Filter by Grubbs' test (?)
 
+  # Return: (1) filtered_signatures (2) simulations + signatures scores
+  out <- list(signatures_filtered = signatures_filtered,
+              sim_scores_cors = sim_scores_cors_tidy)
 
-  # Filter by Grubb's test
-  ## grubbs <- scores_mat_tidy %>%
-  #  group_by(signature_ct, signature) %>%
-  #  summarise(grubbs_statistic = outliers::grubbs.test(score, type = 10, opposite = FALSE, two.sided = FALSE)$statistic[1]) %>%
-  #  filter(grubbs_statistic >= quantile(grubbs_statistic, grubbs_cutoff)) %>%
-  #  pull(signature)
+  return(out)
+}
+# TODO:
+transformScores <- function(scores_mat_tidy, signatures_filtered){
 
+  # TODO: check mixture_fraction hard numbers in the filters
 
+  # Find calibration values
+  calibration_values <- scores_mat_tidy %>%
+    filter(signature %in% pull(signatures_filtered, signature) & signature_ct == mixture_ct & mixture_fraction < 1) %>%
+    # Take the mean of all signatures' scores per cell type per mixture fraction
+    group_by(signature_ct, mixture_fraction) %>%
+    summarise(mean_score = mean(score)) %>%
+    # The shift value is the minimum score per cell type
+    mutate(shift_value = min(mean_score)) %>%
+    # The scale factor is the slope of the new linear line (i.e., 0.25/shifted_score(25%))
+    mutate(shifted_score = mean_score - shift_value) %>%
+    mutate(scale_factor = max(as.numeric(mixture_fraction))/max(shifted_score)) %>%
+    select(signature_ct, shift_value, scale_factor) %>%
+    unique()
 
-  signatures_collection_filtered <- signatures_collection[names(signatures_collection) %in% simulations.filtered]
+  # Transform scores
+  scores_transformed <- scores_mat_tidy %>%
+    filter(signature %in% pull(signatures_filtered, signature) & mixture_fraction == 0.25) %>%
+    group_by(signature_ct, mixture_ct) %>%
+    summarise(mean_score = mean(score)) %>%
+    left_join(calibration_values, by = "signature_ct") %>%
+    rowwise() %>%
+    mutate(transformed_score = (mean_score-shift_value)*scale_factor)
 
-  filter_signature_out <- list("scoreMatTidy" = scores_mat_tidy, "sigCollectionFilt" = signatures_collection_filtered)
+  return(scores_transformed)
 
-  return(filter_signature_out)
 }
 
 
@@ -408,7 +417,7 @@ setClass("xCell2Signatures", slots = list(
 
 # Remove - for debugging
 if (0 == 1) {
-  data_type = "rnaseq"; lineage_file = NULL; mixture_fractions = c(0.001, 0.005, seq(0.01, 0.25, 0.02))
+  data_type = "rnaseq"; lineage_file = NULL; mixture_fractions = c(seq(0, 0.25, 0.03), 1)
   probs = c(.1, .25, .33333333, .5); diff_vals = c(0, 0.1, 0.585, 1, 1.585, 2, 3, 4, 5); min_genes = 5; max_genes = 200
 }
 
