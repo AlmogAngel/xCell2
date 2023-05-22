@@ -41,7 +41,7 @@ makeSigMatForCIBERSORTx <- function(singleCellExpr, refName){
   }
 
   cmd <- paste0("docker run -v ", dir, ":/src/data -v ", results_dir, ":/src/outdir cibersortx/fractions --username almog.angel@campus.technion.ac.il --token ",
-                token, " --single_cell FALSE --refsample ", refsample_file, " --phenoclasses ", pheno_file, " --QN TRUE 1> ",
+                token, " --single_cell FALSE --refsample ", refsample_file, " --phenoclasses ", pheno_file, " --QN FALSE 1> ",
                 results_dir, "/cibersortx.stdout 2> ", results_dir, "/cibersortx.stderr")
 
   # Run Docker via shell
@@ -235,7 +235,6 @@ sigmat_path <- "/bigdata/almogangel/CIBERSORTx_docker/sref_blood_sigmat.txt"
 # saveRDS(reference, "/bigdata/almogangel/xCell2/dev_data/DeconBenchmark_sref_blood_reference.rds")
 reference <- readRDS("/bigdata/almogangel/xCell2/dev_data/DeconBenchmark_sref_blood_reference.rds")
 
-truths_dir <- "/bigdata/almogangel/kassandra_data/24_validation_datasets/cell_values/"
 mix_dir <- "/bigdata/almogangel/kassandra_data/24_validation_datasets/expressions/"
 blood_ds <- c("BG_blood", "GSE107011", "GSE107572", "GSE127813")
 
@@ -280,7 +279,65 @@ for (file in blood_ds) {
 
 }
 
+
 saveRDS(results.list, paste0("/bigdata/almogangel/twelve_years_decon_paper/sref_blood_deconvolution_results.rds"))
 
+# Get correlations for results
+# results.list <- readRDS("/bigdata/almogangel/twelve_years_decon_paper/sref_blood_deconvolution_results.rds")
+
+truths_dir <- "/bigdata/almogangel/kassandra_data/24_validation_datasets/cell_values/"
+
+for (i in 1:length(results.list)) {
+  results.list[[i]]$scaden <- results.list[[i]]$scaden$scaden$P
+}
+
+results.tbl <- enframe(results.list, name = "dataset", value = "results") %>%
+  unnest(results) %>%
+  mutate(method = names(results)) %>%
+  select(dataset, method, results)
+
+# Load truth
+celltype_conversion_long <- read_tsv("/bigdata/almogangel/xCell2/dev_data/celltype_conversion_with_ontology.txt") %>%
+  rowwise() %>%
+  mutate(all_labels = str_split(all_labels, ";")) %>%
+  unnest(cols = c(all_labels))
+
+truth.list <- list()
+for (file in unique(results.tbl$dataset)) {
+   truth <- read.table(paste0(truths_dir, file, ".tsv"), header = TRUE, check.names = FALSE, sep = "\t", row.names = 1)
+  rownames(truth) <- plyr::mapvalues(rownames(truth), celltype_conversion_long$all_labels, celltype_conversion_long$xCell2_labels, warn_missing = FALSE)
+  rownames(truth) <- gsub("-", "_", rownames(truth))
+  rownames(truth) <- gsub(" ", "_", rownames(truth))
+  rownames(truth) <- gsub(",", "_", rownames(truth))
+  truth.list[[file]] <- t(truth)
+}
+
+getCors <- function(truth, results){
+
+  all_celltypes <- intersect(colnames(results), colnames(truth))
+
+  all_celltypes_cor <- sapply(all_celltypes, function(ctoi){
+
+    truth_ctoi <- truth[,ctoi]
+    truth_ctoi <- truth_ctoi[!is.na(truth_ctoi)]
+    truth_ctoi <- truth_ctoi[truth_ctoi != ""]
+
+    results_ctoi <- results[, ctoi]
+
+    shared_samples <- intersect(names(truth_ctoi), names(results_ctoi))
+    cor(as.numeric(results_ctoi[shared_samples]), as.numeric(truth_ctoi[shared_samples]), method = "spearman")
+
+  })
+
+  all_celltypes_cor.tbl <- tibble("celltype" = names(all_celltypes_cor), "cor" = all_celltypes_cor)
+  return(all_celltypes_cor.tbl)
+
+}
+
+
+alternative_methods_results.tbl <- results.tbl %>%
+  rowwise() %>%
+  mutate(cors = list(getCors(truth = truth.list[[dataset]], results = results))) %>%
+  unnest(cors)
 
 

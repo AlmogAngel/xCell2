@@ -4,7 +4,7 @@ setwd("/bigdata/almogangel/xCell2/")
 source("R/xCell2Train.R")
 source("R/xCell2GetLineage.R")
 
-celltype_conversion_long <- read_tsv("dev_data/celltype_conversion_with_ontology.txt") %>%
+celltype_conversion_long <- read_tsv("/bigdata/almogangel/xCell2/dev_data/celltype_conversion_with_ontology.txt") %>%
   rowwise() %>%
   mutate(all_labels = str_split(all_labels, ";")) %>%
   unnest(cols = c(all_labels))
@@ -147,20 +147,33 @@ labels <- demo_data$labels
 sref.labels <- readRDS("/bigdata/almogangel/xCell2/data/sref_labels.rds")
 sref.data <- readRDS("/bigdata/almogangel/xCell2/data/sref_data.rds")
 
+sref.metadata <- readxl::read_excel("/bigdata/almogangel/xCell2/data/sref_cell_types_metadata.xlsx") %>%
+  rowwise() %>%
+  mutate(tissue.organ = str_split(tissue.organ, ", ")) %>%
+  unnest(cols = c(tissue.organ))
+
 # Generate signatures for blood
-sref.labels %>%
-  filter(tissue == "blood")
+blood_onts <- sref.metadata %>%
+  filter(tissue.organ == "blood") %>%
+  pull(ont) %>%
+  unique()
 
+sref.labels.blood <- sref.labels %>%
+  filter(ont %in% blood_onts)
 
-sref_labels_main <- sref@labels[sref@labels$,c(1,2,5,6)]
-colnames(sref_labels_main)[1:2] <- c("ont", "label")
+# Remove those cell types
+sort(table(sref.labels.blood$label), decreasing = T)
+celltype2remove <- c("cord blood hematopoietic stem cell", "peripheral blood mononuclear cell", "blood cell", "leukocyte")
+sref.labels.blood <- sref.labels.blood %>%
+  filter(!label %in% celltype2remove)
 
+labels <- as.data.frame(sref.labels.blood)
+ref <- sref.data[,labels$sample]
+all(colnames(ref) == labels$sample)
 
-sref_ref <- sref@data[,sref_labels_main$sample]
+saveRDS(labels, "/bigdata/almogangel/xCell2/dev_data/sref_blood_labels_bulk.rds")
+saveRDS(ref, "/bigdata/almogangel/xCell2/dev_data/sref_blood_data_bulk.rds")
 
-dim(sref_ref)
-dim(sref_labels_main)
-all(colnames(sref_ref) == sref_labels_main$sample)
 
 
 ######################## Microarry sorted cells references ---------------------------------------

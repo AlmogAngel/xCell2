@@ -4,12 +4,12 @@ library(tidyverse)
 labels <- readRDS("/bigdata/almogangel/xCell2/dev_data/sref_blood_labels_bulk.rds")
 ref <- readRDS("/bigdata/almogangel/xCell2/dev_data/sref_blood_data_bulk.rds")
 dep_list <- xCell2::xCell2GetLineage(labels = labels[,1:2], out_file = NULL)
-mixture_fractions = c(0.001, 0.005, seq(0.01, 0.25, 0.02))
+mixture_fractions = c(seq(0, 0.25, 0.03), 1)
 
 makeSimulations <- function(ref, labels, mixture_fractions, dep_list, n_ct_sim = 20, add_noise = FALSE){
 
 
-  makeControlsMatrix <- function(ref, labels, ctoi, dep_cts, mixture_fractions, ds_used){
+  makeControlsMatrix <- function(ref, labels, ctoi, dep_cts, mixture_fractions, ds_used, samples_used){
 
     # In case we need to take more samples from a dataset that already have been used
     if(all(labels[labels$label == ctoi,]$dataset %in% ds_used)){
@@ -36,9 +36,7 @@ makeSimulations <- function(ref, labels, mixture_fractions, dep_list, n_ct_sim =
 
   }
 
-  # This function return a fraction matrix of pure cell type
-  # Ideally from different samples in different datasets
-  makeFractionMatrix <- function(ref, labels, ctoi, mixture_fractions, ds_used){
+  makeFractionMatrix <- function(ref, labels, ctoi, mixture_fractions, ds_used, samples_used){
 
 
     if(all(labels[labels$label == ctoi,]$dataset %in% ds_used)){ # If all datasets have been used
@@ -97,26 +95,25 @@ makeSimulations <- function(ref, labels, mixture_fractions, dep_list, n_ct_sim =
     ctoi_sim_list <- list()
     n_ctoi_ds <- length(unique(labels[labels$label == ctoi,]$dataset))
     ds_used <- c()
+    samples_used <- c()
     for (i in 1:n_ct_sim) {
 
       # Make CTOI fractions matrix
-      makeFractionMatrix.out <- makeFractionMatrix(ref, labels, ctoi, mixture_fractions, ds_used)
+      makeFractionMatrix.out <- makeFractionMatrix(ref, labels, ctoi, mixture_fractions, ds_used, samples_used)
       ctoi_frac_mat <- makeFractionMatrix.out$frac_mat
 
       # Make Controls 1-fraction matrix
-      controls_frac_mat <- makeControlsMatrix(ref, labels, ctoi, dep_cts, mixture_fractions, ds_used)
+      controls_frac_mat <- makeControlsMatrix(ref, labels, ctoi, dep_cts, mixture_fractions, ds_used, samples_used)
 
       # Combine CTOI and controls fractions matrix
       simulation <- ctoi_frac_mat + controls_frac_mat
 
       # Add noise
-      if (add_noise & n_ctoi_ds < 10) {
+      if (add_noise & n_ctoi_ds < 5) {
 
         if (n_ctoi_ds == 1) {
-          noise_sd <- 1.5
-        }else if(n_ctoi_ds > 1 & n_ctoi_ds < 5){
           noise_sd <- 1
-        }else if(n_ctoi_ds >= 5){
+        }else if(n_ctoi_ds > 1 & n_ctoi_ds <= 5){
           noise_sd <- 0.5
         }
 
@@ -139,25 +136,12 @@ makeSimulations <- function(ref, labels, mixture_fractions, dep_list, n_ct_sim =
 
 # Make simulation with and without noise
 
-sim_list <- makeSimulations(ref, labels, mixture_fractions, dep_list, n_ct_sim = 20, add_noise = FALSE)
+sim_list_no_noise <- makeSimulations(ref, labels, mixture_fractions, dep_list, n_ct_sim = 20, add_noise = FALSE)
 # saveRDS(sim_list, "/bigdata/almogangel/xCell2/dev_data/sim_list080523.rds")
 
-sim_list_noise_sd0.5 <- makeSimulations(ref, labels, mixture_fractions, dep_list, n_ct_sim = 20, add_noise = TRUE, noise_sd = 0.5)
-# saveRDS(sim_list_noise_sd0.5, "/bigdata/almogangel/xCell2/dev_data/sim_list_noise_sd1090523.rds")
-
-sim_list_noise_sd1 <- makeSimulations(ref, labels, mixture_fractions, dep_list, n_ct_sim = 20, add_noise = TRUE, noise_sd = 1)
-# saveRDS(sim_list_noise_sd1, "/bigdata/almogangel/xCell2/dev_data/sim_list_noise_sd1090523.rds")
-
-sim_list_noise_sd1.5 <- makeSimulations(ref, labels, mixture_fractions, dep_list, n_ct_sim = 20, add_noise = TRUE, noise_sd = 1.5)
-# saveRDS(sim_list_noise_sd1.5, "/bigdata/almogangel/xCell2/dev_data/sim_list_noise_sd1090523.rds")
-
-sim_list_noise_sd2 <- makeSimulations(ref, labels, mixture_fractions, dep_list, n_ct_sim = 20, add_noise = TRUE, noise_sd = 2)
-# saveRDS(sim_list_noise_sd1, "/bigdata/almogangel/xCell2/dev_data/sim_list_noise_sd1090523.rds")
 
 sim_list_noise_adjusted <- makeSimulations(ref, labels, mixture_fractions, dep_list, n_ct_sim = 20, add_noise = TRUE)
 # saveRDS(sim_list_noise_adjusted, "/bigdata/almogangel/xCell2/dev_data/sim_list_noise_sd1090523.rds")
-
-
 
 
 # Investigate best parameters of probs, diff and n_genes for each cell type using the simulation
@@ -198,65 +182,17 @@ makeSimulationResultsTidy <- function(simulations_results, simulation_type){
 }
 
 # Get simulations correlation scores
-celltypes <- names(sim_list)
+celltypes <- names(sim_list_no_noise)
 simulations_results <- lapply(celltypes, function(ctoi){
   print(ctoi)
 
-  pbapply::pblapply(sim_list[[ctoi]], function(sim){
+  pbapply::pblapply(sim_list_no_noise[[ctoi]], function(sim){
     getSimulationCors(sim, ctoi, signatures_collection)
   })
 
 })
 names(simulations_results) <- celltypes
 # saveRDS(simulations_results, "/bigdata/almogangel/xCell2/dev_data/simulations_results080523.rds")
-
-celltypes <- names(sim_list_noise_sd0.5)
-simulations_results_noise_sd0.5 <- lapply(celltypes, function(ctoi){
-  print(ctoi)
-
-  pbapply::pblapply(sim_list_noise_sd0.5[[ctoi]], function(sim){
-    getSimulationCors(sim, ctoi, signatures_collection)
-  })
-
-})
-names(simulations_results_noise_sd0.5) <- celltypes
-# saveRDS(simulations_results_noise_sd0.5, "/bigdata/almogangel/xCell2/dev_data/simulations_results_noise_sd1080523.rds")
-
-celltypes <- names(sim_list_noise_sd1)
-simulations_results_noise_sd1 <- lapply(celltypes, function(ctoi){
-  print(ctoi)
-
-  pbapply::pblapply(sim_list_noise_sd1[[ctoi]], function(sim){
-    getSimulationCors(sim, ctoi, signatures_collection)
-  })
-
-})
-names(simulations_results_noise_sd1) <- celltypes
-# saveRDS(simulations_results_noise_sd1, "/bigdata/almogangel/xCell2/dev_data/simulations_results_noise_sd1080523.rds")
-
-celltypes <- names(sim_list_noise_sd1.5)
-simulations_results_noise_sd1.5 <- lapply(celltypes, function(ctoi){
-  print(ctoi)
-
-  pbapply::pblapply(sim_list_noise_sd1.5[[ctoi]], function(sim){
-    getSimulationCors(sim, ctoi, signatures_collection)
-  })
-
-})
-names(simulations_results_noise_sd1.5) <- celltypes
-# saveRDS(simulations_results_noise_sd1.5, "/bigdata/almogangel/xCell2/dev_data/simulations_results_noise_sd1080523.rds")
-
-celltypes <- names(sim_list_noise_sd2)
-simulations_results_noise_sd2 <- lapply(celltypes, function(ctoi){
-  print(ctoi)
-
-  pbapply::pblapply(sim_list_noise_sd2[[ctoi]], function(sim){
-    getSimulationCors(sim, ctoi, signatures_collection)
-  })
-
-})
-names(simulations_results_noise_sd2) <- celltypes
-# saveRDS(simulations_results_noise_sd2, "/bigdata/almogangel/xCell2/dev_data/simulations_results_noise_sd1080523.rds")
 
 celltypes <- names(sim_list_noise_adjusted)
 simulations_results_noise_adjusted <- lapply(celltypes, function(ctoi){
@@ -272,11 +208,7 @@ names(simulations_results_noise_adjusted) <- celltypes
 
 
 # Analyze simulations
-simulations_results_tidy <- makeSimulationResultsTidy(simulations_results, simulation_type = "simulation - no noise")
-simulations_results_noise_sd0.5_tidy <- makeSimulationResultsTidy(simulations_results_noise_sd0.5, simulation_type = "simulation - 0.5sd noise")
-simulations_results_noise_sd1_tidy <- makeSimulationResultsTidy(simulations_results_noise_sd1, simulation_type = "simulation - 1sd noise")
-simulations_results_noise_sd1.5_tidy <- makeSimulationResultsTidy(simulations_results_noise_sd1.5, simulation_type = "simulation - 1.5sd noise")
-simulations_results_noise_sd2_tidy <- makeSimulationResultsTidy(simulations_results_noise_sd2, simulation_type = "simulation - 2sd noise")
+simulations_results_no_noise_tidy <- makeSimulationResultsTidy(simulations_results, simulation_type = "simulation - no noise")
 simulations_results_noise_adjusted_tidy <- makeSimulationResultsTidy(simulations_results_noise_adjusted, simulation_type = "simulation - adjusted noise")
 
 
@@ -293,67 +225,32 @@ validation_results_tidy <- validation_results %>%
   mutate(test = "validation") %>%
   ungroup()
 
-top_sigs_no_noise <- simulations_results_tidy %>%
+top_sigs_no_noise <- simulations_results_no_noise_tidy %>%
   group_by(celltype) %>%
-  top_frac(n=0.1, wt=median_cor) %>%
-  pull(signature)
-
-top_sigs_noise_0.5sd <- simulations_results_noise_sd0.5_tidy %>%
-  group_by(celltype) %>%
-  top_frac(n=0.1, wt=median_cor) %>%
-  pull(signature)
-
-top_sigs_noise_1sd <- simulations_results_noise_sd1_tidy %>%
-  group_by(celltype) %>%
-  top_frac(n=0.1, wt=median_cor) %>%
-  pull(signature)
-
-top_sigs_noise_1.5sd <- simulations_results_noise_sd1.5_tidy %>%
-  group_by(celltype) %>%
-  top_frac(n=0.1, wt=median_cor) %>%
-  pull(signature)
-
-top_sigs_noise_2sd <- simulations_results_noise_sd2_tidy %>%
-  group_by(celltype) %>%
-  top_frac(n=0.1, wt=median_cor) %>%
+  top_frac(n=0.2, wt=median_cor) %>%
   pull(signature)
 
 top_sigs_noise_adjusted <- simulations_results_noise_adjusted_tidy %>%
   group_by(celltype) %>%
-  top_frac(n=0.1, wt=median_cor) %>%
+  top_frac(n=0.2, wt=median_cor) %>%
   pull(signature)
 
 
 validation_results_tidy_top_sigs_no_noise <- validation_results_tidy %>%
   filter(signature %in% top_sigs_no_noise) %>%
-  mutate(test = "validation - top 10% sigs in simulation - no noise")
-
-validation_results_tidy_top_sigs_noise_0.5sd <- validation_results_tidy %>%
-  filter(signature %in% top_sigs_noise_0.5sd) %>%
-  mutate(test = "validation - top 10% sigs in simulation - 0.5sd noise")
-
-validation_results_tidy_top_sigs_noise_1sd <- validation_results_tidy %>%
-  filter(signature %in% top_sigs_noise_1sd) %>%
-  mutate(test = "validation - top 10% sigs in simulation - 1sd noise")
-
-validation_results_tidy_top_sigs_noise_1.5sd <- validation_results_tidy %>%
-  filter(signature %in% top_sigs_noise_1.5sd) %>%
-  mutate(test = "validation - top 10% sigs in simulation - 1.5sd noise")
-
-validation_results_tidy_top_sigs_noise_2sd <- validation_results_tidy %>%
-  filter(signature %in% top_sigs_noise_2sd) %>%
-  mutate(test = "validation - top 10% sigs in simulation - 2sd noise")
+  mutate(test = "validation - top 10% sigs in simulation - without noise")
 
 validation_results_tidy_top_sigs_noise_adjusted <- validation_results_tidy %>%
   filter(signature %in% top_sigs_noise_adjusted) %>%
-  mutate(test = "validation - top 10% sigs in simulation")
+  mutate(test = "validation - top 10% sigs in simulation - with noise")
+
 
 shared_celltypes <- intersect(unique(simulations_results_tidy$celltype), unique(validation_results_tidy$celltype))
 celltypes2use <- c("T cell", "monocyte", "CD4-positive, alpha-beta T cell", "memory T cell", "B cell", "eosinophil", "natural killer cell", "CD8-positive, alpha-beta T cell",
                    "neutrophil", "helper T cell")
 
-rbind(validation_results_tidy, validation_results_tidy_top_sigs_noise_adjusted) %>%
-  filter(celltype %in% celltypes2use) %>%
+rbind(validation_results_tidy, validation_results_tidy_top_sigs_no_noise, validation_results_tidy_top_sigs_noise_adjusted) %>%
+  filter(celltype %in% shared_celltypes) %>%
   ggplot(., aes(x=test, y=median_cor, fill=test)) +
   geom_boxplot() +
   facet_wrap(~celltype, scales = "free_x")

@@ -5,16 +5,30 @@ library(tidyverse)
 sref <- readRDS("/bigdata/mahmoudy/humanCellTypeAtlas.rds")
 
 # Make tibble
-sref.labels <- tibble(ont = sref$cl.id, label = sref$lowest.label, sample = as.character(sref$samples), dataset = as.character(sref$series), info = sref$tissue_titles)
+sref.labels <- tibble(ont = sref$cl.id, label = sref$lowest.label, sample = as.character(sref$samples),
+                      dataset = as.character(sref$series), info = sref$tissue_titles)
 sref.labels[sref.labels$label == "B cell, CD19-positive",]$label <- "B cell" # Fix this label
 
 # Add part of Kassandra's reference samples
 kref <- readRDS("/bigdata/mahmoudy/kass_tpm.rds")
 kref.labels <- readRDS("/bigdata/almogangel/xCell2/data/kass_labels_mahmoud.rds")
+samples2add <- kref.labels[!kref.labels$sample %in% sref.labels$sample,]
+sref.labels <- rbind(sref.labels, samples2add)
+
+# Save
+sref.data <- cbind(sref$data, kref)
+sref.data <- sref.data[,sref.labels$sample]
+all(sref.labels$sample == colnames(sref.data))
+
+saveRDS(sref.labels, "/bigdata/almogangel/xCell2/data/sref_labels.rds")
+saveRDS(sref.data, "/bigdata/almogangel/xCell2/data/sref_data.rds")
 
 
-
-
+sref.dic <- readxl::read_excel("/bigdata/almogangel/xCell2/dev_data/sref_cell_types_location.xlsx")
+x<-sref.dic %>%
+  rowwise() %>%
+  mutate(tissue.organ = str_split(tissue.organ, ", ")) %>%
+  unnest(cols = c(tissue.organ))
 
 # # Load dictionary for main ont, main label and more
 # sref.dic <- readxl::read_excel("/bigdata/almogangel/xCell2/data/sref_cell_types_dictionary_3groups.xlsx")

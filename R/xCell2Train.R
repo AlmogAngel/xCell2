@@ -208,7 +208,7 @@ createSignatures <- function(ref, labels, dep_list, quantiles_matrix, probs, cor
 
   return(signatures_collection)
 }
-filterSignatures <- function(ref, labels, mixture_fractions, dep_list, signatures_collection, top_sigs = 0.05){
+filterSignatures <- function(ref, labels, mixture_fractions, dep_list, cor_mat, signatures_collection){
 
   # Make simulations
   makeSimulations <- function(ref, labels, mixture_fractions, dep_list, n_ct_sim = 20, add_noise = TRUE, seed = 123){
@@ -234,13 +234,13 @@ filterSignatures <- function(ref, labels, mixture_fractions, dep_list, signature
       return(out)
     }
 
-    makeFractionMatrixControls <- function(ref, labels, ctoi, dep_cts, mixture_fractions){
+    makeFractionMatrixControls <- function(ref, labels, ctoi, dep_cts, mixture_fractions, cor_mat){
 
 
-      # Pick controls
+      control_ct <- names(sort(cor_mat[ctoi, !colnames(cor_mat) %in% dep_cts])[1])
+      # Pick control samples
       control_samples <- labels %>%
-        filter(!label %in% dep_cts) %>%
-        slice_sample(n=1, by = label) %>%
+        filter(label == control_ct) %>%
         slice_sample(n=length(mixture_fractions)) %>%
         pull(sample)
       controls_expression <- ref[,control_samples]
@@ -284,14 +284,14 @@ filterSignatures <- function(ref, labels, mixture_fractions, dep_list, signature
         ctoi_samples_pool <- ctoi_frac_mat_results$samples_pool
 
         # Make Controls fraction matrix
-        controls_frac_mat <- makeFractionMatrixControls(ref, labels, ctoi, dep_cts, mixture_fractions)
+        controls_frac_mat <- makeFractionMatrixControls(ref, labels, ctoi, dep_cts, mixture_fractions, cor_mat)
 
         # Combine CTOI and controls fractions matrix
         simulation <- ctoi_frac_mat + controls_frac_mat
 
         # Add noise
         if (add_noise) {
-          noise_sd <- 1 + 1/n_ctoi_ds
+          noise_sd <- 1/n_ctoi_ds
           noise <- matrix(rnorm(nrow(simulation) * ncol(simulation), mean = 0, sd = noise_sd),
                           nrow = nrow(simulation), ncol = ncol(simulation))
           simulation <- simulation + noise
@@ -337,66 +337,53 @@ filterSignatures <- function(ref, labels, mixture_fractions, dep_list, signature
   scores_list <- scoreSimulations(signatures_collection, sim_list)
 
   # Get simulation correlations results
-  getSimulationCor <- function(scores){
-    fractions <- as.numeric(colnames(scores))
-    sig_cors <- apply(scores, 1, function(sig){
-      cor(sig, fractions, method = "spearman")
-    })
-    return(sig_cors)
+  mat2tidy <- function(mat){
+    names <- rownames(mat)
+    as_tibble(mat) %>%
+      mutate(signature=names) %>%
+      relocate(signature) %>%
+      pivot_longer(-signature, names_to = "fraction", values_to = "score") %>%
+      #mutate(fraction = as.numeric(fraction)) %>%
+      return(.)
   }
-  sim_scores_cors_tidy <- enframe(scores_list, name = "celltype") %>%
+
+  scores_tidy <- enframe(scores_list, name = "celltype") %>%
     unnest_longer(value, indices_to = "sim_id", values_to = "scores") %>%
     rowwise() %>%
-    mutate(cor = list(getSimulationCor(scores))) %>%
-    unnest_longer(cor, indices_to = "signature") %>%
-    ungroup()
+    mutate(scores = list(mat2tidy(scores))) %>%
+    unnest(scores) %>%
+    mutate(fraction = as.numeric(fraction)) %>%
+    group_by(celltype, signature, fraction) %>% # Get the mean scores of all simulations
+    summarise(mean_sim_score = mean(score))
 
-  # Filter by top signatures
-  top_sigs <- sim_scores_cors_tidy %>%
-    group_by(celltype, signature) %>%
-    summarise(mean_cor = mean(cor)) %>%
-    group_by(celltype) %>%
-    top_frac(n=top_sigs, wt=mean_cor) %>%
+  # Filter signatures
+  # Use only signatures in which their mean simulations score have perfect correlation with fraction
+  sigs2use <- scores_tidy %>%
+    summarise(cor = cor(fraction, mean_sim_score, method = "spearman")) %>%
+    filter(as.character(cor) == "1") %>%
     pull(signature)
-  signatures_filtered <- signatures_collection[names(signatures_collection) %in% top_sigs]
 
-  # Filter by Grubbs' test (?)
+  scores_tidy_filtered <- scores_tidy %>%
+    filter(signature %in% sigs2use)
 
-  # Return: (1) filtered_signatures (2) simulations + signatures scores
-  out <- list(signatures_filtered = signatures_filtered,
-              sim_scores_cors = sim_scores_cors_tidy)
-
-  return(out)
+  return(scores_tidy_filtered)
 }
-# TODO:
-transformScores <- function(scores_mat_tidy, signatures_filtered){
+getTranformationParameters <- function(scores_tidy_filtered){
 
-  # TODO: check mixture_fraction hard numbers in the filters
+  tmp_small_value <- 0.0001 # Use this value to avoid 0 and 1 in the beta regression
 
-  # Find calibration values
-  calibration_values <- scores_mat_tidy %>%
-    filter(signature %in% pull(signatures_filtered, signature) & signature_ct == mixture_ct & mixture_fraction < 1) %>%
-    # Take the mean of all signatures' scores per cell type per mixture fraction
-    group_by(signature_ct, mixture_fraction) %>%
-    summarise(mean_score = mean(score)) %>%
-    # The shift value is the minimum score per cell type
-    mutate(shift_value = min(mean_score)) %>%
-    # The scale factor is the slope of the new linear line (i.e., 0.25/shifted_score(25%))
-    mutate(shifted_score = mean_score - shift_value) %>%
-    mutate(scale_factor = max(as.numeric(mixture_fraction))/max(shifted_score)) %>%
-    select(signature_ct, shift_value, scale_factor) %>%
-    unique()
-
-  # Transform scores
-  scores_transformed <- scores_mat_tidy %>%
-    filter(signature %in% pull(signatures_filtered, signature) & mixture_fraction == 0.25) %>%
-    group_by(signature_ct, mixture_ct) %>%
-    summarise(mean_score = mean(score)) %>%
-    left_join(calibration_values, by = "signature_ct") %>%
+  scores_tidy_filtered <- scores_tidy_filtered %>%
+    filter(fraction != 1) %>% # TODO: remove fraciton = 1 from mixture_fractions
+    mutate(shift_value = min(mean_sim_score)) %>% # Get shift values
+    mutate(shifted_score = mean_sim_score - shift_value) %>% # Shift scores
+    mutate(fraction_transformed = fraction/max(fraction)) %>%   # Scale and transform fractions between 0 and 1 but not 0 and 1 for the beta regression
     rowwise() %>%
-    mutate(transformed_score = (mean_score-shift_value)*scale_factor)
-
-  return(scores_transformed)
+    mutate(fraction_transformed = if(fraction_transformed == 0) fraction_transformed + tmp_small_value else fraction_transformed) %>%
+    mutate(fraction_transformed = if(fraction_transformed == 1) fraction_transformed - tmp_small_value else fraction_transformed) %>%
+    group_by(celltype, signature, shift_value) %>%
+    summarise(betareg = list(betareg::betareg(fraction_transformed ~ shifted_score, link = "logit"))) %>%  # Build beta regression models
+    select(celltype, signature, shift_value, betareg) %>%
+    return(.)
 
 }
 
@@ -487,15 +474,13 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, mixture_fra
 
   # Filter signatures
   message("Filtering signatures...")
-  #filter_signature_out <- filterSignatures(ref, labels, pure_ct_mat, dep_list, signatures_collection, mixture_fractions, grubbs_cutoff = 0.8, simulations_cutoff = 0.8)
-  #scores_mat_pure_tidy <- filter_signature_out$scoreMatTidy
-  #signatures_collection_filtered <- filter_signature_out$sigCollectionFilt
+  scores_tidy_filtered <- filterSignatures(ref, labels, mixture_fractions, dep_list, cor_mat, signatures_collection)
+  signatures_filtered <- signatures_collection[names(signatures_collection) %in% scores_tidy_filtered$signature]
+
+  # Get linear transformation parameters
+  trans_parameters <- getTranformationParameters(scores_tidy_filtered)
 
 
-  # TODO: Weight signatures
-
-
-  # TODO: Linear transformation
 
 
   # TODO: Spillover correction
