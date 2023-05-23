@@ -416,6 +416,7 @@ setClass("xCell2Signatures", slots = list(
 #' @importFrom  GSEABase GeneSetCollection
 #' @importFrom  GSEABase GeneSet
 #' @import singscore
+#' @import betareg
 #' @param ref A reference gene expression matrix.
 #' @param labels A data frame in which the rows correspond to samples in the ref. The data frame must have four columns:
 #'   "ont": the cell type ontology as a character (i.e., "CL:0000545").
