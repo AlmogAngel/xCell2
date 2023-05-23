@@ -471,7 +471,7 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, mixture_fra
   signatures_filtered <- signatures_collection[names(signatures_collection) %in% filterSignatures.out$scores$signature]
 
   # Get linear transformation parameters
-  trans_parameters <- getTranformationParameters(scores_tidy_filtered)
+  trans_parameters <- getTranformationParameters(filterSignatures.out$scores)
 
 
 
