@@ -3,6 +3,7 @@
 export(xCell2Analysis)
 export(xCell2GetLineage)
 export(xCell2Train)
+import(GSEABase)
 import(Rfast)
 import(Seurat)
 import(betareg)

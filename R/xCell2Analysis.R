@@ -5,6 +5,7 @@
 #' @import singscore
 #' @import dplyr
 #' @import tibble
+#' @import GSEABase
 #' @param bulk A matrix containing gene expression data.
 #' @param xcell2sigs A `xCell2Signatures` object.
 #' @return A data frame containing the cell type enrichment for each sample in the input matrix, as estimated by xCell2.
@@ -21,7 +22,7 @@ xCell2Analysis <- function(bulk, xcell2sigs){
     sig2remove <- c()
     for (i in 1:length(signatures_ctoi)) {
       sig <- signatures_ctoi[[i]]
-      sig_genes <- geneIds(sig)
+      sig_genes <- GSEABase::geneIds(sig)
       shared_genes <- intersect(sig_genes, rownames(bulk_ranked))
 
       if (length(shared_genes) / length(sig_genes) < genes_overlap) {
