@@ -215,32 +215,26 @@ filterSignatures <- function(ref, labels, mixture_fractions, dep_list, cor_mat, 
 
     set.seed(seed)
 
-    makeFractionMatrixCTOI <- function(ref, mixture_fractions, ctoi_samples_pool){
+    makeFractionMatrixCTOI <- function(ref, mixture_fractions, ctoi_samples2use){
 
 
       # Make CTOI fraction matrix
       ctoi_frac_mat <- matrix(NA, nrow = nrow(ref), ncol = length(mixture_fractions), dimnames = list(rownames(ref), mixture_fractions))
       for (i in 1:length(mixture_fractions)) {
         frac <- mixture_fractions[i]
-        ctoi_samples2use <- ctoi_samples_pool[1:length(mixture_fractions)] # Choose the first samples (homogeneous by datasets)
         frac_fracs <- diff(c(0, sort(runif(length(ctoi_samples2use)-1, min = 0, max = frac)), frac)) # Generate random fraction for each sample to sum to frac in mixture_fractions
         ctoi_frac_mat[,i] <- Rfast::rowsums(ref[,ctoi_samples2use] %*% diag(frac_fracs)) # Sum all fractions
-        ctoi_samples_pool <- c(ctoi_samples_pool[!ctoi_samples_pool %in% ctoi_samples2use], ctoi_samples2use) # Move ctoi_samples2use to be last
       }
 
-      out <- list(frac_mat = ctoi_frac_mat,
-                  samples_pool = ctoi_samples_pool)
-
-      return(out)
+      return(ctoi_frac_mat)
     }
 
-    makeFractionMatrixControls <- function(ref, labels, ctoi, dep_cts, mixture_fractions, cor_mat){
+    makeFractionMatrixControls <- function(ref, labels, mixture_fractions, control_cts){
 
 
-      control_ct <- names(sort(cor_mat[ctoi, !colnames(cor_mat) %in% dep_cts])[1])
       # Pick control samples
       control_samples <- labels %>%
-        filter(label == control_ct) %>%
+        filter(label == control_cts) %>%
         slice_sample(n=length(mixture_fractions)) %>%
         pull(sample)
       controls_expression <- ref[,control_samples]
@@ -279,12 +273,13 @@ filterSignatures <- function(ref, labels, mixture_fractions, dep_list, cor_mat, 
 
       for (i in 1:n_ct_sim) {
 
-        ctoi_frac_mat_results <- makeFractionMatrixCTOI(ref, mixture_fractions, ctoi_samples_pool)
-        ctoi_frac_mat <- ctoi_frac_mat_results$frac_mat
-        ctoi_samples_pool <- ctoi_frac_mat_results$samples_pool
+        ctoi_samples2use <- ctoi_samples_pool[1:length(mixture_fractions)] # Choose the first samples (homogeneous by datasets)
+        ctoi_frac_mat <- makeFractionMatrixCTOI(ref, mixture_fractions, ctoi_samples2use)
+        ctoi_samples_pool <- c(ctoi_samples_pool[!ctoi_samples_pool %in% ctoi_samples2use], ctoi_samples2use) # Move ctoi_samples2use to be last
 
         # Make Controls fraction matrix
-        controls_frac_mat <- makeFractionMatrixControls(ref, labels, ctoi, dep_cts, mixture_fractions, cor_mat)
+        control_cts <- names(sort(cor_mat[ctoi, !colnames(cor_mat) %in% dep_cts])[1])
+        controls_frac_mat <- makeFractionMatrixControls(ref, labels, mixture_fractions, control_cts)
 
         # Combine CTOI and controls fractions matrix
         simulation <- ctoi_frac_mat + controls_frac_mat
@@ -353,60 +348,58 @@ filterSignatures <- function(ref, labels, mixture_fractions, dep_list, cor_mat, 
     mutate(scores = list(mat2tidy(scores))) %>%
     unnest(scores) %>%
     mutate(fraction = as.numeric(fraction)) %>%
-    group_by(celltype, signature, fraction) %>% # Get the mean scores of all simulations
-    summarise(mean_sim_score = mean(score))
+    group_by(celltype, signature, fraction) %>%
+    summarise(median_sim_score = median(score))
 
   # Filter signatures
-  # Use only signatures in which their mean simulations score have perfect correlation with fraction
   sigs2use <- scores_tidy %>%
-    summarise(cor = cor(fraction, mean_sim_score, method = "spearman")) %>%
-    filter(as.character(cor) == "1") %>%
+    summarise(cor = cor(fraction, median_sim_score, method = "spearman")) %>%
+    top_frac(n = 0.1, wt=cor) %>%
     pull(signature)
 
   scores_tidy_filtered <- scores_tidy %>%
     filter(signature %in% sigs2use)
 
-  return(scores_tidy_filtered)
+  out <- list(scores = scores_tidy_filtered,
+              simulations = sim_list)
+
+  return(out)
 }
 getTranformationParameters <- function(scores_tidy_filtered){
 
   tmp_small_value <- 0.0001 # Use this value to avoid 0 and 1 in the beta regression
 
   scores_tidy_filtered <- scores_tidy_filtered %>%
-    filter(fraction != 1) %>% # TODO: remove fraciton = 1 from mixture_fractions
-    mutate(shift_value = min(mean_sim_score)) %>% # Get shift values
-    mutate(shifted_score = mean_sim_score - shift_value) %>% # Shift scores
-    mutate(fraction_transformed = fraction/max(fraction)) %>%   # Scale and transform fractions between 0 and 1 but not 0 and 1 for the beta regression
+    mutate(shift_value = min(median_sim_score)) %>% # Get shift values
+    mutate(shifted_score = median_sim_score - shift_value) %>% # Shift scores
+    mutate(scaling_value = max(fraction)) %>%
+    mutate(fraction_transformed = fraction/scaling_value) %>%   # Scale and transform fractions between 0 and 1 but not 0 and 1 for the beta regression
     rowwise() %>%
     mutate(fraction_transformed = if(fraction_transformed == 0) fraction_transformed + tmp_small_value else fraction_transformed) %>%
     mutate(fraction_transformed = if(fraction_transformed == 1) fraction_transformed - tmp_small_value else fraction_transformed) %>%
-    group_by(celltype, signature, shift_value) %>%
+    group_by(celltype, signature, shift_value, scaling_value) %>%
     summarise(betareg = list(betareg::betareg(fraction_transformed ~ shifted_score, link = "logit"))) %>%  # Build beta regression models
-    select(celltype, signature, shift_value, betareg) %>%
+    select(celltype, signature, shift_value, scaling_value, betareg) %>%
     return(.)
 
 }
+
 
 
 #' @slot labels ...
 #' @slot dependencies ...
 #' @slot all_signatures ...
 #' @slot filtered_signatures ...
-#' @name xCell2Signatures
+#' @slot transformation_parameters ...
 #' @importFrom methods new
 # Create S4 object for the new reference
 setClass("xCell2Signatures", slots = list(
   labels = "data.frame",
   dependencies = "list",
   all_signatures = "GeneSetCollection",
-  filtered_signatures = "GeneSetCollection"
+  filtered_signatures = "GeneSetCollection",
+  transformation_parameters = "data.frame"
 ))
-
-# Remove - for debugging
-if (0 == 1) {
-  data_type = "rnaseq"; lineage_file = NULL; mixture_fractions = c(seq(0, 0.25, 0.03), 1)
-  probs = c(.1, .25, .33333333, .5); diff_vals = c(0, 0.1, 0.585, 1, 1.585, 2, 3, 4, 5); min_genes = 5; max_genes = 200
-}
 
 
 #' xCell2Train function
@@ -474,19 +467,20 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, mixture_fra
 
   # Filter signatures
   message("Filtering signatures...")
-  scores_tidy_filtered <- filterSignatures(ref, labels, mixture_fractions, dep_list, cor_mat, signatures_collection)
-  signatures_filtered <- signatures_collection[names(signatures_collection) %in% scores_tidy_filtered$signature]
+  filterSignatures.out <- filterSignatures(ref, labels, mixture_fractions, dep_list, cor_mat, signatures_collection)
+  signatures_filtered <- signatures_collection[names(signatures_collection) %in% filterSignatures.out$scores$signature]
 
   # Get linear transformation parameters
   trans_parameters <- getTranformationParameters(scores_tidy_filtered)
 
 
 
-
   # TODO: Spillover correction
 
 
-  xCell2Ref.S4 <- new("xCell2Signatures", labels = labels, dependencies = dep_list, all_signatures = signatures_collection, filtered_signatures = signatures_collection_filtered)
+  xCell2Ref.S4 <- new("xCell2Signatures", labels = labels, dependencies = dep_list,
+                      all_signatures = signatures_collection, filtered_signatures = signatures_filtered,
+                      transformation_parameters = trans_parameters)
 
   return(xCell2Ref.S4)
 
