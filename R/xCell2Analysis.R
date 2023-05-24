@@ -80,10 +80,11 @@ xCell2Analysis <- function(bulk, xcell2sigs){
     rowwise() %>%
     mutate(scores = list(scoreBulk(ctoi = label, bulk_ranked, xcell2sigs))) %>%
     filter(all(!is.na(scores))) %>%  # Remove cell types with low gene overlap with bulk sample
-    mutate(ct_fractions = list(transfomScores(ctoi = label, scores, xcell2sigs))) %>%
-    unnest(ct_fractions) %>%
-    select(-scores) %>%
-    pivot_wider(names_from = sample, values_from = fraction)
+    #mutate(ct_fractions = list(transfomScores(ctoi = label, scores, xcell2sigs))) %>%
+    #unnest(ct_fractions) %>%
+    unnest(scores) # remove
+    #select(-scores) %>%
+    #pivot_wider(names_from = sample, values_from = fraction)
 
   # Convert to matrix
   xCell2_out.mat <- as.matrix(xCell2_out.tbl[,-1])
