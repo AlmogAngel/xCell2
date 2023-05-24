@@ -9,7 +9,7 @@ xCell2Train(
   labels,
   data_type,
   lineage_file = NULL,
-  mixture_fractions = c(0.001, 0.005, seq(0.01, 0.25, 0.02)),
+  mixture_fractions = seq(0, 0.24, 0.02),
   probs = c(0.1, 0.25, 0.33333333, 0.5),
   diff_vals = c(0, 0.1, 0.585, 1, 1.585, 2, 3, 4, 5),
   min_genes = 5,

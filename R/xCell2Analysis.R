@@ -54,8 +54,8 @@ xCell2Analysis <- function(bulk, xcell2sigs){
 
     xcell2sigs@transformation_parameters[xcell2sigs@transformation_parameters$celltype == ctoi,] %>%
       rowwise() %>%
-      mutate(scores = if(signature %in% rownames(scores)) list(scores[signature,]) else NA) %>%
       print()
+      #mutate(scores = if(signature %in% rownames(scores)) list(scores[signature,]) else NA) %>%
       # drop_na() %>%
       # mutate(shifted_score = map2(shift_value, scores, ~ .y - .x)) %>%  # Shift scores
       # mutate(shifted_score = map(shifted_score, ~ pmax(., 0))) %>%
