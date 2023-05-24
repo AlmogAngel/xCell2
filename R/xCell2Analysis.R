@@ -55,16 +55,17 @@ xCell2Analysis <- function(bulk, xcell2sigs){
     xcell2sigs@transformation_parameters[xcell2sigs@transformation_parameters$celltype == ctoi,] %>%
       rowwise() %>%
       mutate(scores = if(signature %in% rownames(scores)) list(scores[signature,]) else NA) %>%
-      drop_na() %>%
-      mutate(shifted_score = map2(shift_value, scores, ~ .y - .x)) %>%  # Shift scores
-      mutate(shifted_score = map(shifted_score, ~ pmax(., 0))) %>%
-      rowwise() %>%
-      mutate(trasfomed_score = list(round(predict(betareg, newdata = data.frame(shifted_score), type = "response")*scaling_value, 3))) %>%
-      unnest_longer(trasfomed_score, indices_to = "sample") %>%
-      group_by(celltype, sample) %>%
-      summarise(fraction = mean(trasfomed_score)) %>%
-      ungroup() %>%
-      select(-celltype) %>%
+      print()
+      # drop_na() %>%
+      # mutate(shifted_score = map2(shift_value, scores, ~ .y - .x)) %>%  # Shift scores
+      # mutate(shifted_score = map(shifted_score, ~ pmax(., 0))) %>%
+      # rowwise() %>%
+      # mutate(trasfomed_score = list(round(predict(betareg, newdata = data.frame(shifted_score), type = "response")*scaling_value, 3))) %>%
+      # unnest_longer(trasfomed_score, indices_to = "sample") %>%
+      # group_by(celltype, sample) %>%
+      # summarise(fraction = mean(trasfomed_score)) %>%
+      # ungroup() %>%
+      # select(-celltype) %>%
       return(.)
   }
 
@@ -77,20 +78,15 @@ xCell2Analysis <- function(bulk, xcell2sigs){
     unique() %>%
     rowwise() %>%
     mutate(scores = list(scoreBulk(ctoi = label, bulk_ranked, xcell2sigs))) %>%
-    filter(all(!is.na(scores)))
+    filter(all(!is.na(scores))) %>%  # Remove cell types with low gene overlap with bulk sample
+    mutate(ct_fractions = list(transfomScores(ctoi = label, scores, xcell2sigs))) %>%
+    unnest(ct_fractions) %>%
+    select(-scores) %>%
+    pivot_wider(names_from = sample, values_from = fraction)
 
-  print(xCell2_out.tbl)
-  print("-----------")
-  print(xCell2_out.tbl[1,]$scores)
-  # %>%  # Remove cell types with low gene overlap with bulk sample
-  #   mutate(ct_fractions = list(transfomScores(ctoi = label, scores, xcell2sigs))) %>%
-  #   unnest(ct_fractions) %>%
-  #   select(-scores) %>%
-  #   pivot_wider(names_from = sample, values_from = fraction)
-  #
-  # # Convert to matrix
-  # xCell2_out.mat <- as.matrix(xCell2_out.tbl[,-1])
-  # row.names(xCell2_out.mat) <- pull(xCell2_out.tbl[,1])
+  # Convert to matrix
+  xCell2_out.mat <- as.matrix(xCell2_out.tbl[,-1])
+  row.names(xCell2_out.mat) <- pull(xCell2_out.tbl[,1])
 
   return(xCell2_out.mat)
 }
