@@ -57,7 +57,7 @@ xCell2Analysis <- function(bulk, xcell2sigs){
       mutate(scores = if(signature %in% rownames(scores)) list(scores[signature,]) else NA) %>%
       drop_na() %>%
       mutate(shifted_score = map2(shift_value, scores, ~ .y - .x)) %>%  # Shift scores
-      mutate(shifted_score = if(shifted_score < 0) 0 else shifted_score) %>%
+      mutate(shifted_score = map(shifted_score, ~ pmax(., 0))) %>%
       rowwise() %>%
       mutate(trasfomed_score = list(round(predict(betareg, newdata = data.frame(shifted_score), type = "response")*scaling_value, 3))) %>%
       unnest_longer(trasfomed_score, indices_to = "sample") %>%
