@@ -51,14 +51,9 @@ xCell2Analysis <- function(bulk, xcell2sigs){
 
   # Transform scores
   transfomScores <- function(ctoi, scores, xcell2sigs){
-    print(ctoi)
-    print("----------------------------")
-    print(scores)
-    print("----------------------------")
-    print(xcell2sigs)
 
-
-    xcell2sigs@transformation_parameters[xcell2sigs@transformation_parameters$celltype == ctoi,] %>%
+    xcell2sigs@transformation_parameters%>%
+      filter(celltype == ctoi) %>%
       rowwise() %>%
       mutate(scores = if(signature %in% rownames(scores)) list(scores[signature,]) else NA) %>%
       drop_na() %>%
@@ -84,6 +79,7 @@ xCell2Analysis <- function(bulk, xcell2sigs){
     rowwise() %>%
     mutate(scores = list(scoreBulk(ctoi = label, bulk_ranked, xcell2sigs))) %>%
     filter(all(!is.na(scores)))   # Remove cell types with low gene overlap with bulk sample
+
     print(xCell2_out.tbl)
 
     xCell2_out.tbl <- xCell2_out.tbl %>%
