@@ -6,6 +6,7 @@
 #' @import dplyr
 #' @import tibble
 #' @import GSEABase
+#' @import purrr
 #' @param bulk A matrix containing gene expression data.
 #' @param xcell2sigs A `xCell2Signatures` object.
 #' @return A data frame containing the cell type enrichment for each sample in the input matrix, as estimated by xCell2.
@@ -52,13 +53,13 @@ xCell2Analysis <- function(bulk, xcell2sigs){
   # Transform scores
   transfomScores <- function(ctoi, scores, xcell2sigs){
 
-    xcell2sigs@transformation_parameters%>%
+    xcell2sigs@transformation_parameters %>%
       filter(celltype == ctoi) %>%
       rowwise() %>%
       mutate(scores = if(signature %in% rownames(scores)) list(scores[signature,]) else NA) %>%
       drop_na() %>%
-      mutate(shifted_score = map2(shift_value, scores, ~ .y - .x)) %>%  # Shift scores
-      mutate(shifted_score = map(shifted_score, ~ pmax(., 0))) %>%
+      mutate(shifted_score = purrr::map2(shift_value, scores, ~ .y - .x)) %>%  # Shift scores
+      mutate(shifted_score = purrr::map(shifted_score, ~ pmax(., 0))) %>%
       rowwise() %>%
       mutate(trasfomed_score = list(round(predict(betareg, newdata = data.frame(shifted_score), type = "response")*scaling_value, 3))) %>%
       unnest_longer(trasfomed_score, indices_to = "sample") %>%
@@ -78,11 +79,7 @@ xCell2Analysis <- function(bulk, xcell2sigs){
     unique() %>%
     rowwise() %>%
     mutate(scores = list(scoreBulk(ctoi = label, bulk_ranked, xcell2sigs))) %>%
-    filter(all(!is.na(scores)))   # Remove cell types with low gene overlap with bulk sample
-
-    print(xCell2_out.tbl)
-
-    xCell2_out.tbl <- xCell2_out.tbl %>%
+    filter(all(!is.na(scores))) %>%  # Remove cell types with low gene overlap with bulk sample
     mutate(ct_fractions = list(transfomScores(ctoi = label, scores, xcell2sigs))) %>%
     unnest(ct_fractions) %>%
     select(-scores) %>%
