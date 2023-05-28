@@ -2,9 +2,10 @@
 #'
 #' This function uses the `ontoProc` and `ontologyIndex` packages to identify the descendants and ancestors of each cell type based on the cell ontology tree. If no output file is specified, the function returns a list of cell type dependencies as a list. If an output file is specified, the function writes the cell type dependencies to a TSV file.
 #'
-#' @importFrom ontoProc getCellOnto
+#' @importFrom ontoProc
 #' @importFrom ontologyIndex get_descendants
 #' @importFrom ontologyIndex get_ancestors
+#' @import ontoProc
 #' @import dplyr
 #' @import tibble
 #' @param labels A data frame containing two columns: first column named "ont" for cell type onthology (character) and second column named "label" for cell type labels (character)
