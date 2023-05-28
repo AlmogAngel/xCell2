@@ -39,35 +39,27 @@ xCell2Analysis <- function(bulk, xcell2sigs){
 
     signatures_ctoi <- signatures_ctoi[!names(signatures_ctoi) %in% sig2remove]
 
-    scores <- t(sapply(signatures_ctoi, simplify = TRUE, function(sig){
+    scores <- sapply(signatures_ctoi, simplify = TRUE, function(sig){
       singscore::simpleScore(bulk_ranked, upSet = sig, centerScore = FALSE)$TotalScore
-    }))
+    })
 
+    median_scores <- apply(scores, 1, median)
+    names(median_scores) <- colnames(bulk_ranked)
 
-    colnames(scores) <- colnames(bulk_ranked)
-    rownames(scores) <- names(signatures_ctoi)
-
-    return(scores)
+    return(median_scores)
   }
 
   # Transform scores
   transfomScores <- function(ctoi, scores, xcell2sigs){
 
-    xcell2sigs@transformation_parameters %>%
-      filter(celltype == ctoi) %>%
-      rowwise() %>%
-      mutate(scores = if(signature %in% rownames(scores)) list(scores[signature,]) else NA) %>%
-      drop_na() %>%
-      mutate(shifted_score = purrr::map2(shift_value, scores, ~ .y - .x)) %>%  # Shift scores
-      mutate(shifted_score = purrr::map(shifted_score, ~ pmax(., 0))) %>%
-      rowwise() %>%
-      mutate(trasfomed_score = list(round(predict(betareg, newdata = data.frame(shifted_score), type = "response")*scaling_value, 3))) %>%
-      unnest_longer(trasfomed_score, indices_to = "sample") %>%
-      group_by(celltype, sample) %>%
-      summarise(fraction = mean(trasfomed_score)) %>%
-      ungroup() %>%
-      select(-celltype) %>%
-      return(.)
+    shift_value <- filter(xcell2sigs@transformation_parameters, celltype == ctoi)$shift_value
+    shifted_scores <- scores - shift_value
+
+    scaling_value <- filter(xcell2sigs@transformation_parameters, celltype == ctoi)$scaling_value
+    transformation_model <- filter(xcell2sigs@transformation_parameters, celltype == ctoi)$model[[1]]
+    transformed_scores <- round(predict(transformation_model, newdata = data.frame("shifted_score" = shifted_scores)), 4) * scaling_value
+
+    return(transformed_scores)
   }
 
   # Rank bulk gene expression matrix
@@ -79,12 +71,11 @@ xCell2Analysis <- function(bulk, xcell2sigs){
     unique() %>%
     rowwise() %>%
     mutate(scores = list(scoreBulk(ctoi = label, bulk_ranked, xcell2sigs))) %>%
-    filter(all(!is.na(scores))) %>%  # Remove cell types with low gene overlap with bulk sample
-    #mutate(ct_fractions = list(transfomScores(ctoi = label, scores, xcell2sigs))) %>%
-    #unnest(ct_fractions) %>%
-    unnest(scores) # remove
-    #select(-scores) %>%
-    #pivot_wider(names_from = sample, values_from = fraction)
+    filter(all(!is.na(scores))) %>%
+    mutate(transfomed_scores = list(transfomScores(ctoi = label, scores, xcell2sigs))) %>%
+    unnest_longer(transfomed_scores, indices_to = "sample") %>%
+    select(-scores) %>%
+    pivot_wider(names_from = sample, values_from = transfomed_scores)
 
   # Convert to matrix
   xCell2_out.mat <- as.matrix(xCell2_out.tbl[,-1])
@@ -92,3 +83,5 @@ xCell2Analysis <- function(bulk, xcell2sigs){
 
   return(xCell2_out.mat)
 }
+
+

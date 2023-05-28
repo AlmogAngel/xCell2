@@ -171,7 +171,9 @@ createSignatures <- function(ref, labels, dep_list, quantiles_matrix, probs, cor
 
       # Save signatures
       gene_passed <- sort(gene_passed, decreasing = TRUE)
-      for (n_genes in round(seq(from = min_genes, to = max_genes, length.out = 8))) {
+      gaps <- seq(0, 1, length.out = 25)
+      n_sig_genes <- round(min_genes + (gaps ^ 2) * (max_genes - min_genes))
+      for (n_genes in n_sig_genes) {
 
         if (length(gene_passed) < n_genes) {
           break
@@ -347,14 +349,14 @@ filterSignatures <- function(ref, labels, mixture_fractions, dep_list, cor_mat, 
     rowwise() %>%
     mutate(scores = list(mat2tidy(scores))) %>%
     unnest(scores) %>%
-    mutate(fraction = as.numeric(fraction)) %>%
-    group_by(celltype, signature, fraction) %>%
-    summarise(median_sim_score = median(score))
+    mutate(fraction = as.numeric(fraction))
 
   # Filter signatures
   sigs2use <- scores_tidy %>%
-    summarise(cor = cor(fraction, median_sim_score, method = "spearman")) %>%
-    top_frac(n = 0.1, wt=cor) %>%
+    group_by(celltype, signature, fraction) %>%
+    summarise(median_sim_score = median(score)) %>%
+    summarise(cor = cor(fraction, median_sim_score, method = "pearson")) %>%
+    top_frac(n=0.2, wt=cor) %>%
     pull(signature)
 
   scores_tidy_filtered <- scores_tidy %>%
@@ -369,22 +371,30 @@ getTranformationParameters <- function(scores_tidy_filtered){
 
   tmp_small_value <- 0.0001 # Use this value to avoid 0 and 1 in the beta regression
 
+
+
   scores_tidy_filtered <- scores_tidy_filtered %>%
-    mutate(shift_value = min(median_sim_score)) %>% # Get shift values
-    mutate(shifted_score = median_sim_score - shift_value) %>% # Shift scores
+    group_by(celltype, signature, fraction) %>%
+    summarise(median_sim_score = median(score)) %>%
+    group_by(celltype, fraction) %>%
+    summarise(median_ct_score = median(median_sim_score)) %>%
+    mutate(shift_value = min(median_ct_score)) %>% # Get shift values
+    mutate(shifted_score = median_ct_score - shift_value) %>% # Shift scores
+    select(-median_ct_score) %>%
     mutate(scaling_value = max(fraction)) %>%
-    mutate(fraction_transformed = fraction/scaling_value) %>%   # Scale and transform fractions between 0 and 1 but not 0 and 1 for the beta regression
     rowwise() %>%
-    mutate(fraction_transformed = if(fraction_transformed == 0) fraction_transformed + tmp_small_value else fraction_transformed) %>%
-    mutate(fraction_transformed = if(fraction_transformed == 1) fraction_transformed - tmp_small_value else fraction_transformed) %>%
-    group_by(celltype, signature, shift_value, scaling_value) %>%
-    summarise(betareg = list(betareg::betareg(fraction_transformed ~ shifted_score, link = "logit"))) %>%  # Build beta regression models
-    select(celltype, signature, shift_value, scaling_value, betareg) %>%
+    mutate(fraction = fraction/scaling_value) %>%   # Scale and transform fractions between 0 and 1 but not 0 and 1 for the beta regression
+    mutate(fraction = if(fraction == 0) fraction + tmp_small_value else fraction) %>%
+    mutate(fraction = if(fraction == 1) fraction - tmp_small_value else fraction) %>%
+    group_by(celltype) %>%
+    nest(data = c(shifted_score, fraction)) %>%
+    rowwise() %>%
+    mutate(model = list(betareg::betareg(fraction ~ shifted_score, data = data))) %>%  # Build beta regression models
+    select(-data) %>%
     return(.)
 
+
 }
-
-
 
 #' @slot labels ...
 #' @slot dependencies ...
@@ -434,7 +444,7 @@ setClass("xCell2Signatures", slots = list(
 #' @export
 xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, mixture_fractions = seq(0, 0.24, 0.02),
                         probs = c(.1, .25, .33333333, .5), diff_vals = c(0, 0.1, 0.585, 1, 1.585, 2, 3, 4, 5),
-                        min_genes = 5, max_genes = 500){
+                        min_genes = 5, max_genes = 300){
 
 
   # Validate inputs
@@ -474,7 +484,6 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, mixture_fra
   # Get linear transformation parameters
   message("Calculating transformation parameters...")
   trans_parameters <- getTranformationParameters(filterSignatures.out$scores)
-
 
 
   # TODO: Spillover correction
