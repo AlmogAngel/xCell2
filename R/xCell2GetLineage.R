@@ -13,7 +13,7 @@
 #' @export
 xCell2GetLineage <- function(labels, out_file){
 
-  cl <- ontoProc::getOnto()
+  cl <- ontoProc::getOnto(ontoname = "cellOnto", year_added = "2023")
 
   labels_uniq <- labels %>%
     as_tibble() %>%
