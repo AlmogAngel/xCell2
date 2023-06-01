@@ -666,6 +666,7 @@ setClass("xCell2Signatures", slots = list(
 #' @param diff_vals A vector of delta values to be used for generating signatures.
 #' @param min_genes The minimum number of genes to include in the signature.
 #' @param max_genes The maximum number of genes to include in the signature.
+#' @param return_unfiltered_signatures for development (remove)!
 #' @return An S4 object containing the signatures, cell type labels, and cell type dependencies.
 #' @export
 xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, mixture_fractions = seq(0, 0.24, 0.02),
