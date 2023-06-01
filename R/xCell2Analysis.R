@@ -7,6 +7,7 @@
 #' @import tibble
 #' @import GSEABase
 #' @import purrr
+#' @importFrom  pracma lsqlincon
 #' @param bulk A matrix containing gene expression data.
 #' @param xcell2sigs A `xCell2Signatures` object.
 #' @return A data frame containing the cell type enrichment for each sample in the input matrix, as estimated by xCell2.
@@ -15,7 +16,7 @@
 xCell2Analysis <- function(bulk, xcell2sigs){
 
   # score ranked bulk gene expression matrix
-  scoreBulk <- function(ctoi, bulk_ranked, xcell2sigs, genes_overlap = 0.8){
+  scoreBulk <- function(ctoi, bulk_ranked, xcell2sigs, genes_overlap = 0.8, spillover_alpha = 0.5){
 
     signatures_ctoi <- xcell2sigs@filtered_signatures[startsWith(names(xcell2sigs@filtered_signatures), paste0(ctoi, "#"))]
 
@@ -43,10 +44,10 @@ xCell2Analysis <- function(bulk, xcell2sigs){
       singscore::simpleScore(bulk_ranked, upSet = sig, centerScore = FALSE)$TotalScore
     })
 
-    median_scores <- apply(scores, 1, median)
-    names(median_scores) <- colnames(bulk_ranked)
+    mean_scores <- apply(scores, 1, mean)
+    names(mean_scores) <- colnames(bulk_ranked)
 
-    return(median_scores)
+    return(mean_scores)
   }
 
   # Transform scores
@@ -57,7 +58,7 @@ xCell2Analysis <- function(bulk, xcell2sigs){
 
     scaling_value <- filter(xcell2sigs@transformation_parameters, celltype == ctoi)$scaling_value
     transformation_model <- filter(xcell2sigs@transformation_parameters, celltype == ctoi)$model[[1]]
-    transformed_scores <- round(predict(transformation_model, newdata = data.frame("shifted_score" = shifted_scores)), 4) * scaling_value
+    transformed_scores <- round(predict(transformation_model, newdata = data.frame("shifted_score" = shifted_scores)) * scaling_value, 2)
 
     return(transformed_scores)
   }
@@ -65,9 +66,13 @@ xCell2Analysis <- function(bulk, xcell2sigs){
   # Rank bulk gene expression matrix
   bulk_ranked <- singscore::rankGenes(bulk)
 
-  xCell2_out.tbl <- xcell2sigs@labels %>%
+
+  # Score and transform
+  sigs_celltypes <- unique(unlist(lapply(names(xcell2sigs@filtered_signatures), function(x){strsplit(x, "#")[[1]][1]})))
+  scores_transformed <- xcell2sigs@labels %>%
     as_tibble() %>%
     select(label = 2) %>%
+    filter(label %in% sigs_celltypes) %>%
     unique() %>%
     rowwise() %>%
     mutate(scores = list(scoreBulk(ctoi = label, bulk_ranked, xcell2sigs))) %>%
@@ -78,10 +83,20 @@ xCell2Analysis <- function(bulk, xcell2sigs){
     pivot_wider(names_from = sample, values_from = transfomed_scores)
 
   # Convert to matrix
-  xCell2_out.mat <- as.matrix(xCell2_out.tbl[,-1])
-  row.names(xCell2_out.mat) <- pull(xCell2_out.tbl[,1])
+  scores_transformed_mat <- as.matrix(scores_transformed[,-1])
+  row.names(scores_transformed_mat) <- pull(scores_transformed[,1])
 
-  return(xCell2_out.mat)
+  # Spillover correction
+  spill_mat <- xcell2sigs@spill_mat * spillover_alpha
+  diag(spill_mat) <- 1
+
+  rows <- rownames(scores_transformed_mat)[rownames(scores_transformed_mat) %in% rownames(spill_mat)]
+
+  scores_corrected <- apply(scores_transformed_mat[rows, ], 2, function(x) pracma::lsqlincon(spill_mat[rows, rows], x, lb = 0))
+  scores_corrected[scores_corrected < 0] <- 0
+  rownames(scores_corrected) <- rows
+
+  return(scores_corrected)
 }
 
 
