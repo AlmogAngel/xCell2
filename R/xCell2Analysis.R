@@ -13,10 +13,10 @@
 #' @return A data frame containing the cell type enrichment for each sample in the input matrix, as estimated by xCell2.
 #' @examples
 #' @export
-xCell2Analysis <- function(bulk, xcell2sigs, genes_overlap = 0.8, spillover_alpha = 0.5){
+xCell2Analysis <- function(bulk, xcell2sigs, min_genes_overlap = 0.8, spillover_alpha = 0.5){
 
   # score ranked bulk gene expression matrix
-  scoreBulk <- function(ctoi, bulk_ranked, xcell2sigs, genes_overlap){
+  scoreBulk <- function(ctoi, bulk_ranked, xcell2sigs, genes_overlap = min_genes_overlap){
 
     signatures_ctoi <- xcell2sigs@filtered_signatures[startsWith(names(xcell2sigs@filtered_signatures), paste0(ctoi, "#"))]
 
