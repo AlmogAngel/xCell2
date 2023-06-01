@@ -373,8 +373,11 @@ filterSignatures <- function(ref, labels, mixture_fractions, dep_list, cor_mat, 
 
   # Print warning if a cell type lost all his signature in this filtering step
   # TODO: find solution for those cell types
+  noSigs <- c()
   noSigs <- celltypes[!celltypes %in% sigsPassed_1$sig_celltype]
-  warning("First filtering - all signatures lost for those cell type(s): \n", paste0(noSigs, collapse = "\n"), "\n* Please check those cell types dependencies...")
+  if (length(noSigs) > 0) {
+    warning("First filtering - all signatures lost for those cell type(s): \n", paste0(noSigs, collapse = "\n"), "\n* Please check those cell types dependencies...")
+  }
 
 
   # (2) Second filtering - top 50% of delta score between CTO - median(all other cell types)
