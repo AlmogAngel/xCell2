@@ -670,8 +670,9 @@ setClass("xCell2Signatures", slots = list(
 #' @export
 xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, mixture_fractions = seq(0, 0.24, 0.02),
                         probs = c(.1, .25, .33333333, .5), diff_vals = c(0, 0.1, 0.585, 1, 1.585, 2, 3, 4, 5),
-                        min_genes = 5, max_genes = 300){
+                        min_genes = 5, max_genes = 300, return_unfiltered_signatures = FALSE){
 
+  # TODO: remove return_unfiltered_signatures parameter
 
   # Validate inputs
   inputs_validated <- validateInputs(ref, labels, data_type)
@@ -703,6 +704,10 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, mixture_fra
   quantiles_matrix <- makeQuantiles(ref, labels, probs, dep_list, include_descendants = FALSE)
   message("Generating signatures...")
   signatures_collection <- createSignatures(ref, labels, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes)
+
+  if (return_unfiltered_signatures) {
+    return(signatures_collection)
+  }
 
   # Filter signatures
   message("Filtering signatures...")
