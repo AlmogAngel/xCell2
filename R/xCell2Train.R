@@ -707,7 +707,7 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, mixture_fra
   signatures_collection <- createSignatures(ref, labels, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes)
 
   if (return_unfiltered_signatures) {
-    out <- list("sigs" = signatures_collection, "cor_mat" = cor_mat, "dep_list" = dep_list, "pure_ct_mat" = pure_ct_mat)
+    out <- list(ref = "ref", labels = "labels", "sigs" = signatures_collection, "cor_mat" = cor_mat, "dep_list" = dep_list, "pure_ct_mat" = pure_ct_mat)
     return(out)
   }
 
