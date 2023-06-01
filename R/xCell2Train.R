@@ -669,7 +669,7 @@ setClass("xCell2Signatures", slots = list(
 #' @param return_unfiltered_signatures for development (remove)!
 #' @return An S4 object containing the signatures, cell type labels, and cell type dependencies.
 #' @export
-xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, mixture_fractions = seq(0, 0.24, 0.02),
+xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, mixture_fractions = c(0.001, 0.005, seq(0.01, 0.25, 0.02)),
                         probs = c(.1, .25, .33333333, .5), diff_vals = c(0, 0.1, 0.585, 1, 1.585, 2, 3, 4, 5),
                         min_genes = 5, max_genes = 300, return_unfiltered_signatures = FALSE){
 
