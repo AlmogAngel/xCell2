@@ -137,10 +137,10 @@ makeQuantiles <- function(ref, labels, probs, dep_list, include_descendants){
 
   return(quantiles_matrix)
 }
-createSignatures <- function(ref, labels, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, weight_genes){
+createSignatures <- function(ref, labels, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, min_cts_gene_pass){
 
 
-  getSigs <- function(celltypes, type, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, weight_genes){
+  getSigs <- function(celltypes, type, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, min_cts_gene_pass){
 
     # Remove dependent cell types
     not_dep_celltypes <- celltypes[!celltypes %in% c(type, unname(unlist(dep_list[[type]])))]
@@ -161,39 +161,25 @@ createSignatures <- function(ref, labels, dep_list, quantiles_matrix, probs, cor
         get(type, quantiles_matrix)[lower_prob,] > get(x, quantiles_matrix)[upper_prob,] + diff
       })
 
+      # Check percentage of cell types genes passed
+      gene_passed_per <- apply(diff_genes.mat, 1, function(x){
+        sum(x)/ncol(diff_genes.mat)
+      })
 
-      if(weight_genes){
-        # Score genes using weights
-        type_weights <- cor_mat[type, not_dep_celltypes]
-        gene_scores <- apply(diff_genes.mat, 1, function(x){
-          sum(type_weights[which(x)])
-        })
-      }else{
-        gene_scores <- apply(diff_genes.mat, 1, function(x){
-          sum(x)
-        })
-      }
+      # Filter only genes that passed at least min_cts_gene_pass of cell types
+      gene_passed_per <- gene_passed_per[gene_passed_per >= min_cts_gene_pass]
 
-
-      gene_passed <- gene_scores[gene_scores > 0]
 
       # If less than min_genes passed move to next parameters
-      if (length(gene_passed) < min_genes) {
+      if (length(gene_passed_per) < min_genes) {
         next
       }
 
       # Save signatures
-      gene_passed <- sort(gene_passed, decreasing = TRUE)
-      gaps <- seq(0, 1, length.out = 40)
-      n_sig_genes <- unique(round(min_genes + (gaps ^ 2) * (max_genes - min_genes)))
-      for (n_genes in n_sig_genes) {
-
-        if (length(gene_passed) < n_genes) {
-          break
-        }
-
-        sig_name <-  paste(paste0(type, "#"), param.df[i, ]$probs, diff, n_genes, sep = "_")
-        type_sigs[[sig_name]] <- GSEABase::GeneSet(names(gene_passed[1:n_genes]), setName = sig_name)
+      for (per_passed in unique(gene_passed_per)) {
+        genes <- names(which(gene_passed_per == per_passed))
+        sig_name <-  paste(paste0(type, "#"), param.df[i, ]$probs, diff, per_passed, sep = "_")
+        type_sigs[[sig_name]] <- GSEABase::GeneSet(genes, setName = sig_name)
       }
 
     }
@@ -208,7 +194,7 @@ createSignatures <- function(ref, labels, dep_list, quantiles_matrix, probs, cor
   celltypes <- unique(labels[,2])
 
   all_sigs <- pbapply::pblapply(celltypes, function(type){
-    getSigs(celltypes, type, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, weight_genes)
+    getSigs(celltypes, type, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, min_cts_gene_pass)
   })
   all_sigs <- unlist(all_sigs)
 
@@ -710,7 +696,7 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, mixture_fra
   message("Calculating quantiles...")
   quantiles_matrix <- makeQuantiles(ref, labels, probs, dep_list, include_descendants = FALSE)
   message("Generating signatures...")
-  signatures_collection <- createSignatures(ref, labels, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, weight_genes = FALSE)
+  signatures_collection <- createSignatures(ref, labels, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, min_cts_gene_pass = 0.5)
 
   if (return_unfiltered_signatures) {
     out <- list("ref" = ref, "labels" = labels, "sigs" = signatures_collection, "cor_mat" = cor_mat, "dep_list" = dep_list, "pure_ct_mat" = pure_ct_mat)
