@@ -137,16 +137,13 @@ makeQuantiles <- function(ref, labels, probs, dep_list, include_descendants){
 
   return(quantiles_matrix)
 }
-createSignatures <- function(ref, labels, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes){
+createSignatures <- function(ref, labels, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, weight_genes){
 
 
-  getSigs <- function(celltypes, type, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes){
+  getSigs <- function(celltypes, type, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, weight_genes){
 
     # Remove dependent cell types
     not_dep_celltypes <- celltypes[!celltypes %in% c(type, unname(unlist(dep_list[[type]])))]
-
-    # Weight cell types by correlation
-    type_weights <- cor_mat[type, not_dep_celltypes]
 
     # Signature parameters
     param.df <- expand.grid("diff_vals" = diff_vals, "probs" = probs)
@@ -164,10 +161,19 @@ createSignatures <- function(ref, labels, dep_list, quantiles_matrix, probs, cor
         get(type, quantiles_matrix)[lower_prob,] > get(x, quantiles_matrix)[upper_prob,] + diff
       })
 
-      # Score genes using weights
-      gene_scores <- apply(diff_genes.mat, 1, function(x){
-        sum(type_weights[which(x)])
-      })
+
+      if(weight_genes){
+        # Score genes using weights
+        type_weights <- cor_mat[type, not_dep_celltypes]
+        gene_scores <- apply(diff_genes.mat, 1, function(x){
+          sum(type_weights[which(x)])
+        })
+      }else{
+        gene_scores <- apply(diff_genes.mat, 1, function(x){
+          sum(x)
+        })
+      }
+
 
       gene_passed <- gene_scores[gene_scores > 0]
 
@@ -179,7 +185,7 @@ createSignatures <- function(ref, labels, dep_list, quantiles_matrix, probs, cor
       # Save signatures
       gene_passed <- sort(gene_passed, decreasing = TRUE)
       gaps <- seq(0, 1, length.out = 40)
-      n_sig_genes <- round(min_genes + (gaps ^ 2) * (max_genes - min_genes))
+      n_sig_genes <- unique(round(min_genes + (gaps ^ 2) * (max_genes - min_genes)))
       for (n_genes in n_sig_genes) {
 
         if (length(gene_passed) < n_genes) {
@@ -202,7 +208,7 @@ createSignatures <- function(ref, labels, dep_list, quantiles_matrix, probs, cor
   celltypes <- unique(labels[,2])
 
   all_sigs <- pbapply::pblapply(celltypes, function(type){
-    getSigs(celltypes, type, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes)
+    getSigs(celltypes, type, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, weight_genes)
   })
   all_sigs <- unlist(all_sigs)
 
@@ -704,7 +710,7 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, mixture_fra
   message("Calculating quantiles...")
   quantiles_matrix <- makeQuantiles(ref, labels, probs, dep_list, include_descendants = FALSE)
   message("Generating signatures...")
-  signatures_collection <- createSignatures(ref, labels, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes)
+  signatures_collection <- createSignatures(ref, labels, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, weight_genes = FALSE)
 
   if (return_unfiltered_signatures) {
     out <- list("ref" = ref, "labels" = labels, "sigs" = signatures_collection, "cor_mat" = cor_mat, "dep_list" = dep_list, "pure_ct_mat" = pure_ct_mat)
