@@ -56,9 +56,8 @@ xCell2Analysis <- function(bulk, xcell2sigs, min_genes_overlap = 0.8, spillover_
     shift_value <- filter(xcell2sigs@transformation_parameters, celltype == ctoi)$shift_value
     shifted_scores <- scores - shift_value
 
-    scaling_value <- filter(xcell2sigs@transformation_parameters, celltype == ctoi)$scaling_value
     transformation_model <- filter(xcell2sigs@transformation_parameters, celltype == ctoi)$model[[1]]
-    transformed_scores <- round(predict(transformation_model, newdata = data.frame("shifted_score" = shifted_scores)) * scaling_value, 2)
+    transformed_scores <- round(predict(transformation_model, newdata = data.frame("shifted_score" = shifted_scores), type = "response"), 2)
 
     return(transformed_scores)
   }
@@ -69,6 +68,7 @@ xCell2Analysis <- function(bulk, xcell2sigs, min_genes_overlap = 0.8, spillover_
 
   # Score and transform
   sigs_celltypes <- unique(unlist(lapply(names(xcell2sigs@filtered_signatures), function(x){strsplit(x, "#")[[1]][1]})))
+
   scores_transformed <- xcell2sigs@labels %>%
     as_tibble() %>%
     select(label = 2) %>%
