@@ -4,7 +4,12 @@
 \alias{xCell2Analysis}
 \title{xCell2Analysis function}
 \usage{
-xCell2Analysis(bulk, xcell2sigs)
+xCell2Analysis(
+  bulk,
+  xcell2sigs,
+  min_genes_overlap = 0.8,
+  spillover_alpha = 0.5
+)
 }
 \arguments{
 \item{bulk}{A matrix containing gene expression data.}
