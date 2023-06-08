@@ -640,7 +640,7 @@ filterSignatures <- function(ref, labels, mixture_fractions, dep_list, cor_mat, 
       return(.)
   }
 
-  sim_list <- makeSimulations(ref, labels, mixture_fractions, dep_list, n_ct_sim = 50, add_noise = FALSE)
+  sim_list <- makeSimulations(ref, labels, mixture_fractions, dep_list, n_ct_sim = 10, add_noise = FALSE)
   scores_list <- scoreCTOISimulations(signatures = signatures_filtered, sim_list)
 
   scores_all_sims_tidy <- enframe(scores_list, name = "celltype") %>%
