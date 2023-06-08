@@ -1,3 +1,28 @@
+library(tidyverse)
+
+# Bulk reference
+labels <- readRDS("/bigdata/almogangel/xCell2/dev_data/sref_blood_labels_bulk.rds")
+ref <- readRDS("/bigdata/almogangel/xCell2/dev_data/sref_blood_data_bulk.rds")
+
+# Use only a subset of the reference - for development
+celltype2use <- names(sort(table(labels$label), decreasing = T)[1:20])
+celltype2use <- celltype2use[celltype2use != "classical monocyte"]
+labels <- labels %>%
+  as_tibble() %>%
+  filter(label %in% celltype2use) %>%
+  group_by(label) %>%
+  sample_frac(0.2) %>%
+  as.data.frame()
+ref <- ref[,colnames(ref) %in% labels$sample]
+
+
+# data_type = "rnaseq"
+# data_type = "sc"
+lineage_file = NULL; mixture_fractions = c(0, 0.001, 0.05, seq(0.01, 0.25, 0.03))
+probs = seq(0.25, 0.5, 0.05); diff_vals = c(0, 0.25, 0.5, 1, 1.5, 2, 3, 4, 5, 10, 12, 15, 17)
+min_genes = 2; max_genes = 200
+
+
 validateInputs <- function(ref, labels, data_type){
   if (!any(class(ref) %in% c("matrix", "dgCMatrix", "Matrix"))) {
     stop("ref should be as matrix.")
@@ -223,142 +248,6 @@ createSignatures <- function(ref, labels, dep_list, quantiles_matrix, probs, cor
 
   return(signatures_collection)
 }
-getDependencies <- function(lineage_file_checked){
-  ont <- read_tsv(lineage_file_checked, show_col_types = FALSE) %>%
-    mutate_all(as.character)
-
-  celltypes <- pull(ont[,2])
-  celltypes <- gsub("_", "-", celltypes)
-  dep_list <- vector(mode = "list", length = length(celltypes))
-  names(dep_list) <- celltypes
-
-  for (i in 1:nrow(ont)) {
-    descendants <-  gsub("_", "-", strsplit(pull(ont[i,3]), ";")[[1]])
-    descendants <- descendants[!is.na(descendants)]
-
-    ancestors <-  gsub("_", "-", strsplit(pull(ont[i,4]), ";")[[1]])
-    ancestors <- ancestors[!is.na(ancestors)]
-
-    dep_list[[i]] <- list("descendants" = descendants, "ancestors" = ancestors)
-
-  }
-
-  return(dep_list)
-}
-makeQuantiles <- function(ref, labels, probs, dep_list, include_descendants){
-
-  celltypes <- unique(labels[,2])
-
-  quantiles_matrix <-  pbapply::pblapply(celltypes, function(type){
-
-    # Include all the descendants of the cell type in the quantiles calculations
-    if (include_descendants) {
-      descen_cells <- dep_list[[type]]$descendants
-      type_samples <- labels[,2] == type | labels[,2] %in% descen_cells
-    }else{
-      type_samples <- labels[,2] == type
-    }
-
-    # If there is one sample for this cell type -> duplicate the sample to make a data frame
-    if (sum(type_samples) == 1) {
-      type.df <- cbind(ref[,type_samples], ref[,type_samples])
-    }else{
-      type.df <- ref[,type_samples]
-    }
-
-    # Calculate quantiles
-    quantiles_matrix <- apply(type.df, 1, function(x) quantile(x, unique(c(probs, rev(1-probs))), na.rm=TRUE))
-  })
-  names(quantiles_matrix) <- celltypes
-
-  return(quantiles_matrix)
-}
-createSignatures <- function(ref, labels, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, weight_genes){
-
-
-  getSigs <- function(celltypes, type, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, weight_genes){
-
-    # Remove dependent cell types
-    not_dep_celltypes <- celltypes[!celltypes %in% c(type, unname(unlist(dep_list[[type]])))]
-
-    # Signature parameters
-    param.df <- expand.grid("diff_vals" = diff_vals, "probs" = probs)
-
-    # Generate signatures
-    type_sigs <- list()
-    for(i in 1:nrow(param.df)){
-
-      # Get a Boolean matrices with genes that pass the quantiles criteria
-      diff <- param.df[i, ]$diff_vals # diffrence criteria
-      lower_prob <- which(probs == param.df[i, ]$probs) # lower quantile criteria
-      upper_prob <- nrow(quantiles_matrix[[1]])-lower_prob+1 # upper quantile criteria
-
-      diff_genes.mat <- sapply(not_dep_celltypes, function(x){
-        get(type, quantiles_matrix)[lower_prob,] > get(x, quantiles_matrix)[upper_prob,] + diff
-      })
-
-
-      if(weight_genes){
-        # Score genes using weights
-        type_weights <- cor_mat[type, not_dep_celltypes]
-        gene_scores <- apply(diff_genes.mat, 1, function(x){
-          sum(type_weights[which(x)])
-        })
-      }else{
-        gene_scores <- apply(diff_genes.mat, 1, function(x){
-          sum(x)
-        })
-      }
-
-
-      gene_passed <- gene_scores[gene_scores > 0]
-
-      # If less than min_genes passed move to next parameters
-      if (length(gene_passed) < min_genes) {
-        next
-      }
-
-      # Save signatures
-      gene_passed <- sort(gene_passed, decreasing = TRUE)
-      gaps <- seq(0, 1, length.out = 40)
-      n_sig_genes <- unique(round(min_genes + (gaps ^ 2) * (max_genes - min_genes)))
-      for (n_genes in n_sig_genes) {
-
-        if (length(gene_passed) < n_genes) {
-          break
-        }
-
-        sig_name <-  paste(paste0(type, "#"), param.df[i, ]$probs, diff, n_genes, sep = "_")
-        type_sigs[[sig_name]] <- GSEABase::GeneSet(names(gene_passed[1:n_genes]), setName = sig_name)
-      }
-
-    }
-
-    if (length(type_sigs) == 0) {
-      warning(paste0("No signatures found for ", type))
-    }
-
-    return(type_sigs)
-  }
-
-  celltypes <- unique(labels[,2])
-
-  all_sigs <- pbapply::pblapply(celltypes, function(type){
-    getSigs(celltypes, type, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, weight_genes)
-  })
-  all_sigs <- unlist(all_sigs)
-
-
-  if (length(all_sigs) == 0) {
-    warning("No signatures found for reference!")
-  }
-
-  # Make GeneSetCollection object
-  signatures_collection <- GSEABase::GeneSetCollection(all_sigs)
-
-
-  return(signatures_collection)
-}
 filterSignatures <- function(ref, labels, mixture_fractions, dep_list, cor_mat, pure_ct_mat, signatures_collection){
 
   # Make mixture matrix (from pure_ct_mat) for the first filtering criteria
@@ -384,9 +273,9 @@ filterSignatures <- function(ref, labels, mixture_fractions, dep_list, cor_mat, 
     colnames(mix_mat) <- mix_names
 
     # In case there is one control for all other cell types -> make a second controls matrix just for him
-    controls_abundance <- sort(table(controls), decreasing = TRUE)
-    if(controls_abundance[1] == length(celltypes)-1){
-      abundant_control <- names(controls_abundance[1])
+    if(length(unique(controls)) == 2){
+      abundant_control <- names(sort(table(controls))[2])
+
       controls2 <- unname(sapply(celltypes, function(ctoi){
         dep_cts <- unname(unlist(dep_list[[ctoi]]))
         not_dep_cts <- celltypes[!celltypes %in% dep_cts]
@@ -640,7 +529,7 @@ filterSignatures <- function(ref, labels, mixture_fractions, dep_list, cor_mat, 
       return(.)
   }
 
-  sim_list <- makeSimulations(ref, labels, mixture_fractions, dep_list, n_ct_sim = 10, add_noise = FALSE)
+  sim_list <- makeSimulations(ref, labels, mixture_fractions, dep_list, n_ct_sim = 50, add_noise = FALSE)
   scores_list <- scoreCTOISimulations(signatures = signatures_filtered, sim_list)
 
   scores_all_sims_tidy <- enframe(scores_list, name = "celltype") %>%
@@ -691,14 +580,14 @@ getTranformationModels <- function(simulations){
     final_model <- suppressWarnings(glm(fraction ~ poly(shifted_score, best_degree), data = df, family = binomial(link = "logit")))
 
 
-    # # Create a sequence of x values for the prediction
-    # x_pred <- seq(min(df$shifted_score), max(df$shifted_score), length.out = 100)
-    # # Predict y values using the model
-    # y_pred <- predict(model, newdata = data.frame(shifted_score = x_pred), type="response")
-    # # Plot the original data
-    # plot(df$shifted_score, df$fraction, main = paste0("Polynomial Regression ", best_degree ," degree(s) - ", celltype), xlab = "shifted_score", ylab = "fraction", pch = 19)
-    # # Add the fitted line
-    # lines(x_pred, y_pred, col = "red", lwd = 2)
+    # Create a sequence of x values for the prediction
+    x_pred <- seq(min(df$shifted_score), max(df$shifted_score), length.out = 100)
+    # Predict y values using the model
+    y_pred <- predict(model, newdata = data.frame(shifted_score = x_pred), type="response")
+    # Plot the original data
+    plot(df$shifted_score, df$fraction, main = paste0("Polynomial Regression ", best_degree ," degree(s) - ", celltype), xlab = "shifted_score", ylab = "fraction", pch = 19)
+    # Add the fitted line
+    lines(x_pred, y_pred, col = "red", lwd = 2)
 
 
     return(final_model)
@@ -750,9 +639,9 @@ getSpillOverMat <- function(mixtures, signatures_filtered, dep_list, trans_param
       select(sig_celltype, mix_ctoi, transformed_score) %>%
       pivot_wider(names_from = mix_ctoi, values_from = transformed_score)
 
-    # mutate(transformed_score = round(predict(model, newdata = data.frame("shifted_score" = shifted_score)) * scaling_value, 2)) %>%
-    # select(sig_celltype, mix_ctoi, transformed_score) %>%
-    # pivot_wider(names_from = mix_ctoi, values_from = transformed_score)
+      # mutate(transformed_score = round(predict(model, newdata = data.frame("shifted_score" = shifted_score)) * scaling_value, 2)) %>%
+      # select(sig_celltype, mix_ctoi, transformed_score) %>%
+      # pivot_wider(names_from = mix_ctoi, values_from = transformed_score)
 
     # TODO: Inset
 
@@ -850,14 +739,14 @@ setClass("xCell2Signatures", slots = list(
 #' @param diff_vals A vector of delta values to be used for generating signatures.
 #' @param min_genes The minimum number of genes to include in the signature.
 #' @param max_genes The maximum number of genes to include in the signature.
-#' @param return_unfiltered_signatures for development (remove)!
 #' @return An S4 object containing the signatures, cell type labels, and cell type dependencies.
 #' @export
-xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, mixture_fractions = c(0.001, 0.005, seq(0.01, 0.25, 0.02)),
+xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, mixture_fractions = c(0, 0.001, 0.05, seq(0.01, 0.25, 0.03)),
                         probs = seq(0.25, 0.5, 0.05), diff_vals = c(0, 0.25, 0.5, 1, 1.5, 2, 3, 4, 5, 10, 12, 15, 17),
                         min_genes = 2, max_genes = 200){
 
 
+  print("I am new")
   # Validate inputs
   inputs_validated <- validateInputs(ref, labels, data_type)
   ref <- inputs_validated$ref
@@ -908,3 +797,8 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, mixture_fra
   return(xCell2Ref.S4)
 
 }
+
+
+# saveRDS(signatures_collection, "/bigdata/almogangel/xCell2/dev_data/signatures_collection160323.rds")
+# signatures_collection <- readRDS("/bigdata/almogangel/xCell2/dev_data/signatures_collection160323.rds")
+# signatures_collection <- jobs_results$signatures_collection
