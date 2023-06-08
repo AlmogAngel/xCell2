@@ -467,7 +467,7 @@ filterSignatures <- function(ref, labels, mixture_fractions, dep_list, cor_mat, 
     top_frac(n=0.2, wt=delta_score) %>%
     pull(signature)
 
-  # If a cell types lost in this filtering step because of controls
+  # If a cell types lost in this filtering step because it is the control of all others
   if(!is.null(mix_list$mix2)){
 
     celltypes <- unique(labels$label)
@@ -493,14 +493,19 @@ filterSignatures <- function(ref, labels, mixture_fractions, dep_list, cor_mat, 
     sigsPassed <- c(sigsPassed, sigsPassed_lost_ct)
   }
 
-
-
+  # If a cell types lost in this filtering step because every other cell types in dependencies
+  celltypes <- unique(labels$label)
+  lost_ct <- celltypes[!celltypes %in% gsub("#.*", "", sigsPassed)]
+  if(length(lost_ct) > 0){
+    lost_sigs <- names(signatures_collection)[startsWith(names(signatures_collection), paste0(lost_ct, "#"))]
+    sigsPassed <- c(sigsPassed, lost_sigs)
+  }
 
   # Second filtering - Top Spearman correlation with simulations
   signatures_filtered <- signatures_collection[names(signatures_collection) %in% sigsPassed]
 
   # Make simulations
-  makeSimulations <- function(ref, labels, mixture_fractions, dep_list, n_ct_sim, add_noise, seed = 123){
+  makeSimulations <- function(ref, labels, mixture_fractions, dep_list, cor_mat, n_ct_sim, add_noise, seed = 123){
 
     set.seed(seed)
 
@@ -550,10 +555,7 @@ filterSignatures <- function(ref, labels, mixture_fractions, dep_list, cor_mat, 
     }
 
 
-    celltypes <- unique(labels[,2])
     sim_list <- pbapply::pblapply(celltypes, function(ctoi){
-
-
       # Sort CTOI samples to be homogeneous by datasets
       ctoi_samples_pool <- c()
       while(!all(labels[labels$label == ctoi,]$sample %in% ctoi_samples_pool)) {
@@ -582,7 +584,12 @@ filterSignatures <- function(ref, labels, mixture_fractions, dep_list, cor_mat, 
         ctoi_samples_pool <- c(ctoi_samples_pool[!ctoi_samples_pool %in% ctoi_samples2use], ctoi_samples2use) # Move ctoi_samples2use to be last
 
         # Make Controls fraction matrix
-        control_ct <- names(sort(cor_mat[ctoi, !colnames(cor_mat) %in% dep_cts])[1])
+        if(sum(!colnames(cor_mat) %in% dep_cts) == 1){
+          control_ct <- colnames(cor_mat)[!colnames(cor_mat) %in% dep_cts]
+        }else{
+          control_ct <- names(sort(cor_mat[ctoi, !colnames(cor_mat) %in% dep_cts])[1])
+        }
+
         controls_frac_mat <- makeFractionMatrixControls(ref, labels, mixture_fractions, control_ct)
 
         # Combine CTOI and controls fractions matrix
@@ -646,7 +653,7 @@ filterSignatures <- function(ref, labels, mixture_fractions, dep_list, cor_mat, 
       return(.)
   }
 
-  sim_list <- makeSimulations(ref, labels, mixture_fractions, dep_list, n_ct_sim = 10, add_noise = FALSE)
+  sim_list <- makeSimulations(ref, labels, mixture_fractions, dep_list, cor_mat, n_ct_sim = 10, add_noise = FALSE)
   scores_list <- scoreCTOISimulations(signatures = signatures_filtered, sim_list)
 
   scores_all_sims_tidy <- enframe(scores_list, name = "celltype") %>%
