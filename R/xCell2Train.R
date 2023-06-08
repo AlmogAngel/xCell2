@@ -301,6 +301,8 @@ createSignatures <- function(ref, labels, dep_list, quantiles_matrix, probs, cor
       if(weight_genes){
         # Score genes using weights
         type_weights <- cor_mat[type, not_dep_celltypes]
+        type_weights[type_weights < 0.001] <- 0.001 # Minimum correlation to fix zero and negative correlations
+
         gene_scores <- apply(diff_genes.mat, 1, function(x){
           sum(type_weights[which(x)])
         })
