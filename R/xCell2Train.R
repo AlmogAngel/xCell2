@@ -223,6 +223,142 @@ createSignatures <- function(ref, labels, dep_list, quantiles_matrix, probs, cor
 
   return(signatures_collection)
 }
+getDependencies <- function(lineage_file_checked){
+  ont <- read_tsv(lineage_file_checked, show_col_types = FALSE) %>%
+    mutate_all(as.character)
+
+  celltypes <- pull(ont[,2])
+  celltypes <- gsub("_", "-", celltypes)
+  dep_list <- vector(mode = "list", length = length(celltypes))
+  names(dep_list) <- celltypes
+
+  for (i in 1:nrow(ont)) {
+    descendants <-  gsub("_", "-", strsplit(pull(ont[i,3]), ";")[[1]])
+    descendants <- descendants[!is.na(descendants)]
+
+    ancestors <-  gsub("_", "-", strsplit(pull(ont[i,4]), ";")[[1]])
+    ancestors <- ancestors[!is.na(ancestors)]
+
+    dep_list[[i]] <- list("descendants" = descendants, "ancestors" = ancestors)
+
+  }
+
+  return(dep_list)
+}
+makeQuantiles <- function(ref, labels, probs, dep_list, include_descendants){
+
+  celltypes <- unique(labels[,2])
+
+  quantiles_matrix <-  pbapply::pblapply(celltypes, function(type){
+
+    # Include all the descendants of the cell type in the quantiles calculations
+    if (include_descendants) {
+      descen_cells <- dep_list[[type]]$descendants
+      type_samples <- labels[,2] == type | labels[,2] %in% descen_cells
+    }else{
+      type_samples <- labels[,2] == type
+    }
+
+    # If there is one sample for this cell type -> duplicate the sample to make a data frame
+    if (sum(type_samples) == 1) {
+      type.df <- cbind(ref[,type_samples], ref[,type_samples])
+    }else{
+      type.df <- ref[,type_samples]
+    }
+
+    # Calculate quantiles
+    quantiles_matrix <- apply(type.df, 1, function(x) quantile(x, unique(c(probs, rev(1-probs))), na.rm=TRUE))
+  })
+  names(quantiles_matrix) <- celltypes
+
+  return(quantiles_matrix)
+}
+createSignatures <- function(ref, labels, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, weight_genes){
+
+
+  getSigs <- function(celltypes, type, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, weight_genes){
+
+    # Remove dependent cell types
+    not_dep_celltypes <- celltypes[!celltypes %in% c(type, unname(unlist(dep_list[[type]])))]
+
+    # Signature parameters
+    param.df <- expand.grid("diff_vals" = diff_vals, "probs" = probs)
+
+    # Generate signatures
+    type_sigs <- list()
+    for(i in 1:nrow(param.df)){
+
+      # Get a Boolean matrices with genes that pass the quantiles criteria
+      diff <- param.df[i, ]$diff_vals # diffrence criteria
+      lower_prob <- which(probs == param.df[i, ]$probs) # lower quantile criteria
+      upper_prob <- nrow(quantiles_matrix[[1]])-lower_prob+1 # upper quantile criteria
+
+      diff_genes.mat <- sapply(not_dep_celltypes, function(x){
+        get(type, quantiles_matrix)[lower_prob,] > get(x, quantiles_matrix)[upper_prob,] + diff
+      })
+
+
+      if(weight_genes){
+        # Score genes using weights
+        type_weights <- cor_mat[type, not_dep_celltypes]
+        gene_scores <- apply(diff_genes.mat, 1, function(x){
+          sum(type_weights[which(x)])
+        })
+      }else{
+        gene_scores <- apply(diff_genes.mat, 1, function(x){
+          sum(x)
+        })
+      }
+
+
+      gene_passed <- gene_scores[gene_scores > 0]
+
+      # If less than min_genes passed move to next parameters
+      if (length(gene_passed) < min_genes) {
+        next
+      }
+
+      # Save signatures
+      gene_passed <- sort(gene_passed, decreasing = TRUE)
+      gaps <- seq(0, 1, length.out = 40)
+      n_sig_genes <- unique(round(min_genes + (gaps ^ 2) * (max_genes - min_genes)))
+      for (n_genes in n_sig_genes) {
+
+        if (length(gene_passed) < n_genes) {
+          break
+        }
+
+        sig_name <-  paste(paste0(type, "#"), param.df[i, ]$probs, diff, n_genes, sep = "_")
+        type_sigs[[sig_name]] <- GSEABase::GeneSet(names(gene_passed[1:n_genes]), setName = sig_name)
+      }
+
+    }
+
+    if (length(type_sigs) == 0) {
+      warning(paste0("No signatures found for ", type))
+    }
+
+    return(type_sigs)
+  }
+
+  celltypes <- unique(labels[,2])
+
+  all_sigs <- pbapply::pblapply(celltypes, function(type){
+    getSigs(celltypes, type, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, weight_genes)
+  })
+  all_sigs <- unlist(all_sigs)
+
+
+  if (length(all_sigs) == 0) {
+    warning("No signatures found for reference!")
+  }
+
+  # Make GeneSetCollection object
+  signatures_collection <- GSEABase::GeneSetCollection(all_sigs)
+
+
+  return(signatures_collection)
+}
 filterSignatures <- function(ref, labels, mixture_fractions, dep_list, cor_mat, pure_ct_mat, signatures_collection){
 
   # Make mixture matrix (from pure_ct_mat) for the first filtering criteria
