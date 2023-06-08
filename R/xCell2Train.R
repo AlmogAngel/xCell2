@@ -1,4 +1,8 @@
 validateInputs <- function(ref, labels, data_type){
+  if (length(unique(labels$label)) < 3) {
+    stop("Reference must have at least 3 different cell types")
+  }
+
   if (!any(class(ref) %in% c("matrix", "dgCMatrix", "Matrix"))) {
     stop("ref should be as matrix.")
   }
