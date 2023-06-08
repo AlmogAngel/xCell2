@@ -554,6 +554,17 @@ getTranformationModels <- function(simulations){
     #final_model <- lm(fraction ~ poly(shifted_score, best_degree), data = df)
     final_model <- suppressWarnings(glm(fraction ~ poly(shifted_score, best_degree), data = df, family = binomial(link = "logit")))
 
+
+    # # Create a sequence of x values for the prediction
+    # x_pred <- seq(min(df$shifted_score), max(df$shifted_score), length.out = 100)
+    # # Predict y values using the model
+    # y_pred <- predict(model, newdata = data.frame(shifted_score = x_pred), type="response")
+    # # Plot the original data
+    # plot(df$shifted_score, df$fraction, main = paste0("Polynomial Regression ", best_degree ," degree(s) - ", celltype), xlab = "shifted_score", ylab = "fraction", pch = 19)
+    # # Add the fitted line
+    # lines(x_pred, y_pred, col = "red", lwd = 2)
+
+
     return(final_model)
   }
 
@@ -657,6 +668,7 @@ getSpillOverMat <- function(mixtures, signatures_filtered, dep_list, trans_param
   return(spill_mat)
 
 }
+
 #' @slot labels ...
 #' @slot dependencies ...
 #' @slot all_signatures ...
