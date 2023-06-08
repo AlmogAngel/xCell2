@@ -1,4 +1,36 @@
 library(tidyverse)
+library(xCell2)
+data("ts_labels_with_ontology")
+
+# Run single-cell validation results for xCell2 -----
+allData <- list.files("/bigdata/almogangel/twelve_years_decon_paper/analysis/data/sim/")
+
+xcell2.out.list <- lapply(allData, function(data){
+
+  data.in <- readRDS(paste0("/bigdata/almogangel/twelve_years_decon_paper/analysis/data/sim/", data))
+  ref <- data.in$singleCellExpr
+  labels <- tibble(ont = "NA",
+                   label = data.in$singleCellLabels,
+                   sample = colnames(ref),
+                   dataset = data.in$singleCellSubjects)
+
+  # Get ontology
+  labels <- labels %>%
+    mutate(ont = plyr::mapvalues(sample, ts_labels_with_ontology$sample, ts_labels_with_ontology$ont.fine, warn_missing = FALSE))
+  labels <- as.data.frame(labels)
+
+  # Run xCell2.0
+  xcell2Sigs <- xCell2Train(ref = ref, labels = labels, data_type = "sc")
+  xcell2.out.mat <- xCell2Analysis(bulk = data.in$bulk, xcell2sigs = xcell2Sigs)
+
+  # Calculate correlation
+  truth <- data.in$bulkRatio
+  celltypes <- rownames(truth)
+  sapply(celltypes, function(x){
+    cor(xcell2.out.mat[x,], truth[x,], method = "spearman")
+  })
+})
+
 
 # Load single-cell validation results for all other methods -----
 allRes <- list.files("/bigdata/almogangel/twelve_years_decon_paper/analysis/results/accuracy/")
