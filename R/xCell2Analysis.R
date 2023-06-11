@@ -18,7 +18,7 @@ xCell2Analysis <- function(bulk, xcell2sigs, min_genes_overlap = 0.8, spillover_
   # score ranked bulk gene expression matrix
   scoreBulk <- function(ctoi, bulk_ranked, xcell2sigs, genes_overlap = min_genes_overlap){
 
-    signatures_ctoi <- xcell2sigs@filtered_signatures[startsWith(names(xcell2sigs@filtered_signatures), paste0(ctoi, "#"))]
+    signatures_ctoi <- xcell2sigs@ignatures[startsWith(names(xcell2sigs@signatures), paste0(ctoi, "#"))]
 
     # Filter signatures by genes_overlap
     sig2remove <- c()
