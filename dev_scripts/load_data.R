@@ -76,10 +76,10 @@ all(colnames(blood_ref) == blood_labels[!is.na(blood_labels$Blood_model_annot),]
 blood_labels <- blood_labels %>%
   mutate(label = plyr::mapvalues(Blood_model_annot, celltype_conversion_long$all_labels, celltype_conversion_long$xCell2_labels, warn_missing = FALSE)) %>%
   mutate(ont = plyr::mapvalues(label, celltype_conversion_long$xCell2_labels, celltype_conversion_long$ont, warn_missing = FALSE)) %>%
-  dplyr::select(ont, label)
+  dplyr::select(ont, label, Sample, Dataset)
 
 # Add lab data
-laboratory_data_expressions <- read_tsv("../xCell2.0/Kassandara_data/laboratory_data_expressions.tsv")
+laboratory_data_expressions <- read_tsv("/bigdata/almogangel/kassandra_data/sorted_cells/laboratory_data_expressions.tsv")
 laboratory_data_expressions <- data.frame(laboratory_data_expressions[,-1], row.names = laboratory_data_expressions$Gene, check.names = F)
 laboratory_data_annotation <- read_tsv("/bigdata/almogangel/kassandra_data/sorted_cells/laboratory_data_annotation.tsv")
 colnames(laboratory_data_annotation)[1] <- "Sample"
@@ -90,19 +90,28 @@ all(colnames(laboratory_data_expressions) == laboratory_data_annotation$Sample)
 lab_labels <- laboratory_data_annotation %>%
   mutate(label = plyr::mapvalues(Cell_type, celltype_conversion_long$all_labels, celltype_conversion_long$xCell2_labels, warn_missing = FALSE)) %>%
   mutate(ont = plyr::mapvalues(label, celltype_conversion_long$xCell2_labels, celltype_conversion_long$ont, warn_missing = FALSE)) %>%
-  dplyr::select(ont, label)
+  mutate(Dataset = "Kassandra_lab") %>%
+  dplyr::select(ont, label, Sample, Dataset)
 
 blood_labels <- rbind(blood_labels, lab_labels)
 blood_ref <- cbind(blood_ref, laboratory_data_expressions)
+all(blood_labels$Sample == colnames(blood_ref))
+colnames(blood_labels)[3:4] <- c("sample", "dataset")
 # saveRDS(blood_labels, "Data/kass_blood_labels_with_lab.rds")
 
-ontology_file_checked <- "../xCell2.0/kass_blood_dependencies_checked.tsv"
+ontology_file_checked <- "/xCell2.0/kass_blood_dependencies_checked.tsv"
 
 ref <- as.matrix(blood_ref)
 labels <- as.data.frame(blood_labels)
-dim(ref)
-dim(labels)
 
+# Subset data
+sort(table(labels$label), decreasing = T)
+celltypes2use <- c("CD4-positive, alpha-beta T cell", "CD8-positive, alpha-beta T cell", "monocyte", "natural killer cell",
+                   "neutrophil", "T cell", "B cell", "myeloid cell", "plasmacytoid dendritic cell, human", "granulocyte", "conventional dendritic cell", "plasma cell")
+labels <- labels[labels$label %in% celltypes2use,]
+ref <- ref[,labels$sample]
+
+all(labels$sample == colnames(ref))
 
 
 
