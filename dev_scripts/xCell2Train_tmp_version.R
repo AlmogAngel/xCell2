@@ -827,19 +827,15 @@ getSpillOverMat <- function(mixtures, signatures_filtered, dep_list, trans_param
 
 }
 
-#' @slot labels ...
+#' @slot signatures ...
 #' @slot dependencies ...
-#' @slot all_signatures ...
-#' @slot filtered_signatures ...
 #' @slot transformation_parameters ...
 #' @slot spill_mat ...
 #' @importFrom methods new
 # Create S4 object for the new reference
 setClass("xCell2Signatures", slots = list(
-  labels = "data.frame",
+  signatures = "GeneSetCollection",
   dependencies = "list",
-  all_signatures = "GeneSetCollection",
-  filtered_signatures = "GeneSetCollection",
   transformation_parameters = "data.frame",
   spill_mat = "matrix"
 ))
@@ -923,11 +919,13 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, mixture_fra
   # Get spillover matrix
   spill_mat <- getSpillOverMat(mixtures, signatures_filtered, dep_list, trans_parameters)
 
-  xCell2Ref.S4 <- new("xCell2Signatures", labels = labels, dependencies = dep_list,
-                      all_signatures = signatures_collection, filtered_signatures = signatures_filtered,
-                      transformation_parameters = trans_parameters, spill_mat = spill_mat)
+  xCell2Sigs.S4 <- new("xCell2Signatures",
+                       signatures = signatures_filtered,
+                       dependencies = dep_list,
+                       transformation_parameters = trans_parameters,
+                       spill_mat = spill_mat)
 
-  return(xCell2Ref.S4)
+  return(xCell2Sigs.S4)
 
 }
 
