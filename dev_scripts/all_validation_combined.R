@@ -1,8 +1,9 @@
 library(tidyverse)
 library(xCell2)
-data("ts_labels_with_ontology")
 
 # -------------- Single-cell validation --------------
+data("ts_labels_with_ontology")
+
 # Run single-cell validation results for xCell2 -----
 allData <- list.files("/bigdata/almogangel/twelve_years_decon_paper/analysis/data/sim/")
 allData <- allData[allData != "Liver.rds"] # Because contain only two cell types
@@ -237,16 +238,16 @@ rbind(allCors.tidy, CBRx.allCors.tidy) %>%
 
 # -------------- Sorted-cells validation --------------
 
-celltype_conversion_long <- read_tsv("/bigdata/almogangel/xCell2/dev_data/celltype_conversion_with_ontology.txt") %>%
+celltype_conversion_long <- read_tsv("/bigdata/almogangel/xCell2_data/dev_data/celltype_conversion_with_ontology.txt") %>%
   rowwise() %>%
   mutate(all_labels = str_split(all_labels, ";")) %>%
   unnest(cols = c(all_labels))
 
 # Choose reference
-kass_blood_ref <- readRDS("/bigdata/almogangel/xCell2/dev_data/kass_blood_ref.rds")
+kass_blood_ref <- readRDS("/bigdata/almogangel/xCell2_data/dev_data/kass_blood_ref.rds")
 ref <- kass_blood_ref$ref
 labels <- kass_blood_ref$labels
-lineage_file <- "/bigdata/almogangel/xCell2/dev_data/kass_blood_dependencies_checked.tsv"
+lineage_file <- "/bigdata/almogangel/xCell2_data/dev_data/kass_blood_dependencies_checked.tsv"
 
 # Choose validation mixtures
 val_dir <- "/bigdata/almogangel/kassandra_data/24_validation_datasets/expressions/"
@@ -257,14 +258,16 @@ truths_dir <- "/bigdata/almogangel/kassandra_data/24_validation_datasets/cell_va
 
 # Run xCell2 -----
 # xcell2Sigs <- xCell2Train(ref, labels, data_type = "rnaseq", lineage_file = lineage_file)
-# saveRDS(xcell2Sigs, "/bigdata/almogangel/xCell2_data/kass_blood_sigs_110523.rds")
-xcell2Sigs <- readRDS("/bigdata/almogangel/xCell2_data/kass_blood_sigs_110523.rds")
+# saveRDS(xcell2Sigs, "/bigdata/almogangel/xCell2_data/data/kass_blood_sigs_110523.rds")
+xcell2Sigs <- readRDS("/bigdata/almogangel/xCell2_data/data/kass_blood_sigs_110523.rds")
+
 
 xcell2.out.list <- lapply(blood_val, function(val){
 
+  print(val)
   mix <- as.matrix(read.table(paste0(val_dir, val, "_expressions.tsv"), check.names = FALSE, row.names = 1, header = TRUE))
   xcell2.out.mat <- xCell2Analysis(bulk = mix, xcell2sigs = xcell2Sigs)
-  rownames(xcell2.out.mat) <- gsub("-", "_", rownames(xcell2.out.mat))
+  #rownames(xcell2.out.mat) <- gsub("-", "_", rownames(xcell2.out.mat))
 
   # Calculate correlation
   truth <- as.matrix(read.table(paste0(truths_dir, val, ".tsv"), header = TRUE, check.names = FALSE, sep = "\t", row.names = 1))
