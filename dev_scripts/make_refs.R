@@ -181,27 +181,12 @@ bp_labels <- bp_labels %>%
 x <- read_tsv("/bigdata/almogangel/xCell2_data/dev_data/bp_dependencies_checked.tsv")
 x
 
+all(bp_labels$sample == colnames(bp_ref))
+
 bp_ref <- list(ref = as.matrix(bp_ref),
                        labels = as.data.frame(bp_labels),
                        lineage_file = "/bigdata/almogangel/xCell2_data/dev_data/bp_dependencies_checked.tsv")
 saveRDS(bp_ref, "/bigdata/almogangel/xCell2_data/dev_data/bp_ref.rds")
-
-
-
-# xCell2GetLineage(bp_labels[,1:2], out_file = "/home/almogangel/xCell2_git/Data/bp_dependencies.tsv")
-ontology_file_checked <- "/home/almogangel/xCell2_git/Data/bp_dependencies_checked.tsv"
-
-all(colnames(bp_ref) == bp_labels$sample)
-
-demo_data <- list(reference = as.matrix(bp_ref), labels = as.data.frame(bp_labels))
-#saveRDS(demo_data, "/home/almogangel/xCell2_git/Data/bp_demo_data.list")
-
-
-
-
-
-ref <- demo_data$reference
-labels <- demo_data$labels
 
 
 
