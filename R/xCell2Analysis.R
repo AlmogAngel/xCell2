@@ -65,7 +65,6 @@ xCell2Analysis <- function(bulk, xcell2sigs, min_genes_overlap = 0.8, spillover_
   # Rank bulk gene expression matrix
   bulk_ranked <- singscore::rankGenes(bulk)
 
-
   # Score and transform
   sigs_celltypes <- unique(unlist(lapply(names(xcell2sigs@signatures), function(x){strsplit(x, "#")[[1]][1]})))
 

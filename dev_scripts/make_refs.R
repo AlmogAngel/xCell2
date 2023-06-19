@@ -4,7 +4,7 @@ setwd("/bigdata/almogangel/xCell2/")
 source("R/xCell2Train.R")
 source("R/xCell2GetLineage.R")
 
-celltype_conversion_long <- read_tsv("/bigdata/almogangel/xCell2/dev_data/celltype_conversion_with_ontology.txt") %>%
+celltype_conversion_long <- read_tsv("/bigdata/almogangel/xCell2_data/dev_data/celltype_conversion_with_ontology.txt") %>%
   rowwise() %>%
   mutate(all_labels = str_split(all_labels, ";")) %>%
   unnest(cols = c(all_labels))
@@ -21,14 +21,30 @@ ref <- ts_ref
 labels <- ts_labels[,c(1,2,5,6)]
 colnames(labels)[1:2] <- c("ont", "label")
 
-xCell2GetLineage(labels = labels[,1:2], out_file = "Data/ts_human_dependencies.tsv")
+xCell2GetLineage(labels = labels[,1:2], out_file = "/bigdata/almogangel/xCell2_data/dev_data/ts_human_dependencies.tsv")
 
-View(read.table("Data/ts_human_dependencies.tsv", sep = "\t", header = TRUE))
-lineage_file_checked <- "Data/ts_human_dependencies.tsv"
+View(read.table("/bigdata/almogangel/xCell2_data/dev_data/ts_human_dependencies.tsv", sep = "\t", header = TRUE))
 
-xcell2_sigs <- xCell2Train(ref, labels, data_type = "sc", lineage_file_checked = lineage_file_checked)
-# xcell2_sigs <- xCell2Ref.S4
-# saveRDS(xcell2_sigs, "/home/almogangel/xCell2_git/Data/benchmarking_data/xcell2ref_ts_main.rds")
+ts_main_ref <- list(ref = as.matrix(ref),
+                       labels = as.data.frame(labels),
+                       lineage_file = "/bigdata/almogangel/xCell2_data/dev_data/ts_human_dependencies.tsv")
+saveRDS(ts_main_ref, "/bigdata/almogangel/xCell2_data/dev_data/ts_main_ref.rds")
+
+# Main labels
+# TODO: Subsample (data too big)
+ref <- ts_ref
+labels <- ts_labels[,c(1,2,5,6)]
+colnames(labels)[1:2] <- c("ont", "label")
+
+xCell2GetLineage(labels = labels[,1:2], out_file = "/bigdata/almogangel/xCell2_data/dev_data/ts_fine_human_dependencies.tsv")
+
+View(read.table("/bigdata/almogangel/xCell2_data/dev_data/ts_fine_human_dependencies.tsv", sep = "\t", header = TRUE))
+
+ts_fine_ref <- list(ref = as.matrix(ref),
+                    labels = as.data.frame(labels),
+                    lineage_file = "/bigdata/almogangel/xCell2_data/dev_data/ts_fine_human_dependencies.tsv")
+saveRDS(ts_fine_ref, "/bigdata/almogangel/xCell2_data/dev_data/ts_fine_ref.rds")
+
 
 
 
@@ -53,7 +69,24 @@ tumor_labels <- tumor_labels %>%
   dplyr::select(ont, label, sample = Sample, dataset = Dataset)
 
 
-ontology_file_checked <- "Data/kass_tumor_dependencies_checked.tsv"
+ontology_file_checked <- "/bigdata/almogangel/xCell2_data/dev_data/kass_tumor_dependencies_checked.tsv"
+
+x <- read_tsv(ontology_file_checked)
+
+unique(tumor_labels$label[which(!tumor_labels$label %in% x$label)])
+tumor_labels[tumor_labels$label == "Non plasma B-cells",]$label <- "Non plasma B cell"
+tumor_labels[tumor_labels$label == "CD8+ T-cells PD1 low",]$label <- "CD8+ T cell PD1 low"
+tumor_labels[tumor_labels$label == "CD8+ T-cells PD1 high",]$label <- "CD8+ T cell PD1 high"
+unique(x$label[which(!x$label %in% tumor_labels$label)])
+
+
+
+
+kass_tumor_ref <- list(ref = as.matrix(tumor_ref),
+     labels = as.data.frame(tumor_labels),
+     lineage_file = "/bigdata/almogangel/xCell2_data/dev_data/kass_tumor_dependencies_checked.tsv")
+kass_tumor_ref <- saveRDS(kass_tumor_ref, "/bigdata/almogangel/xCell2_data/dev_data/kass_tumor_ref.rds")
+
 
 ref <- as.matrix(tumor_ref)
 labels <- as.data.frame(tumor_labels)
@@ -99,7 +132,19 @@ all(blood_labels$Sample == colnames(blood_ref))
 colnames(blood_labels)[3:4] <- c("sample", "dataset")
 # saveRDS(blood_labels, "Data/kass_blood_labels_with_lab.rds")
 
-ontology_file_checked <- "/xCell2.0/kass_blood_dependencies_checked.tsv"
+x <- read_tsv("/bigdata/almogangel/xCell2_data/dev_data/kass_blood_dependencies_checked.tsv")
+View(x)
+
+
+
+# ontology_file_checked <- "/xCell2.0/kass_blood_dependencies_checked.tsv"
+
+kass_blood_ref <- list(ref = as.matrix(blood_ref),
+               labels = as.data.frame(blood_labels),
+               lineage_file = "/bigdata/almogangel/xCell2_data/dev_data/kass_blood_dependencies_checked.tsv")
+saveRDS(kass_blood_ref, "/bigdata/almogangel/xCell2_data/dev_data/kass_blood_ref.rds")
+
+
 
 ref <- as.matrix(blood_ref)
 labels <- as.data.frame(blood_labels)
@@ -133,6 +178,16 @@ bp_labels <- bp_labels %>%
   select(ont, label, sample, dataset)
 
 
+x <- read_tsv("/bigdata/almogangel/xCell2_data/dev_data/bp_dependencies_checked.tsv")
+x
+
+bp_ref <- list(ref = as.matrix(bp_ref),
+                       labels = as.data.frame(bp_labels),
+                       lineage_file = "/bigdata/almogangel/xCell2_data/dev_data/bp_dependencies_checked.tsv")
+saveRDS(bp_ref, "/bigdata/almogangel/xCell2_data/dev_data/bp_ref.rds")
+
+
+
 # xCell2GetLineage(bp_labels[,1:2], out_file = "/home/almogangel/xCell2_git/Data/bp_dependencies.tsv")
 ontology_file_checked <- "/home/almogangel/xCell2_git/Data/bp_dependencies_checked.tsv"
 
@@ -153,7 +208,7 @@ labels <- demo_data$labels
 
 # Super reference -----
 
-sref.labels <- readRDS("/bigdata/almogangel/xCell2/data/sref_labels.rds")
+sref.labels <- readRDS("/bigdata/almogangel/xCell2_data/data/sref_labels.rds")
 sref.data <- readRDS("/bigdata/almogangel/xCell2/data/sref_data.rds")
 
 sref.metadata <- readxl::read_excel("/bigdata/almogangel/xCell2/data/sref_cell_types_metadata.xlsx") %>%
@@ -189,30 +244,45 @@ saveRDS(ref, "/bigdata/almogangel/xCell2/dev_data/sref_blood_data_bulk.rds")
 ############# Human ---------------------------------------
 # LM222 -----------
 
-lm22_ref <- read.table("../xCell2.0/LM22_source_GEPs.txt", header = TRUE, check.names = FALSE, row.names = 1, sep = "\t")
 
-lm22_labels <- data.frame(sample = colnames(lm22_ref), dataset = rep("LM22", ncol(lm22_ref)))
+lm22 <- readRDS("/bigdata/almogangel/xCell2_data/dev_data/lm22.rds")
+lm22.labels <- lm22$labels
 
-
-lm22_labels$label <- plyr::mapvalues(lm22_labels$sample, celltype_conversion_long$all_labels, celltype_conversion_long$xCell2_labels, warn_missing = FALSE)
-# T cells CD4 memory resting + T cells CD4 memory activated => CD4+ memory T-cells
-lm22_labels[lm22_labels$label %in% c("T cells CD4 memory resting", "T cells CD4 memory activated"), ]$label <- "CD4+ memory T-cells"
-# NK cells resting + NK cells activated = > NK cells
-lm22_labels[lm22_labels$label %in% c("NK cells resting", "NK cells activated"), ]$label <- "NK cells"
-# Dendritic cells resting + Dendritic cells activated => DC
-lm22_labels[lm22_labels$label %in% c("Dendritic cells resting", "Dendritic cells activated"), ]$label <- "DC"
-# Mast cells resting + Mast cells activated => Mast cells
-lm22_labels[lm22_labels$label %in% c("Mast cells resting", "Mast cells activated"), ]$label <- "Mast cells"
-lm22_labels$ont <- plyr::mapvalues(lm22_labels$label, celltype_conversion_long$xCell2_labels, celltype_conversion_long$ont, warn_missing = FALSE)
+x <- read_tsv("/bigdata/almogangel/xCell2_data/dev_data/LM22.txt")
+x <- colnames(x)[-1]
+missing_cts <- unique(x[!x %in% lm22.labels])
 
 
-"B-cells" = lm22_labels[lm22_labels$label %in% c("naive B-cells", "Memory B-cells", "Plasma cells"),]
-"CD4+ T-cells" = cbrx_lm22.out[c("CD4+ naive T-cells", "T cells CD4 memory resting", "CD4+ memory T-cells"),]),
-"Macrophages" = cbrx_lm22.out[c("Macrophages M0", "Macrophages M1", "Macrophages M2"),]),
-"T-cells" = cbrx_lm22.out[c("CD8+ T-cells", "CD4+ naive T-cells", "T cells CD4 memory resting", "CD4+ memory T-cells",
-                                    "Follicular T-helper", "Tregs", "Tgd cells"),]), check.names = FALSE))
+lm22.labels2 <- plyr::mapvalues(lm22.labels, celltype_conversion_long$all_labels, celltype_conversion_long$xCell2_labels)
+unique(lm22.labels2[lm22.labels2 %in% lm22.labels])
 
 
-lm22_labels <- lm22_labels[,c(4,3,1,2)]
+lm22.labels <- lm22.labels2
+lm22.samples <- colnames(lm22$expr)
 
-xCell2GetLineage(labels = lm22_labels[,1:2], out_file = "../xCell2.0/lm22_dependencies.tsv")
+lm22.dataset <- gsub(".CEL", "", lm22.samples)
+lm22.dataset <- gsub("_.*", "", lm22.dataset)
+
+
+x <- read_tsv("/bigdata/almogangel/xCell2_data/dev_data/lm22_datasets.txt")
+
+x$`Sample ID`[!x$`Sample ID` %in% lm22.dataset]
+
+unique(x$`Data set`[!x$`Data set` %in% lm22.dataset])
+
+which(startsWith(lm22.samples, "GSE4527"))
+
+lm22_labels <- tibble(ont = NA, label = lm22.labels, sample = lm22.samples, dataset = lm22.dataset)
+lm22_labels$ont <- plyr::mapvalues(lm22_labels$label, celltype_conversion_long$xCell2_labels, celltype_conversion_long$ont)
+lm22_labels[!lm22_labels$ont %in% celltype_conversion_long$ont,]$ont <- NA
+
+all(lm22_labels$sample == colnames(lm22$expr))
+
+
+xCell2GetLineage(lm22_labels, out_file = "/bigdata/almogangel/xCell2_data/dev_data/lm22_dependencies.tsv")
+
+lm22_ref <- list(ref = as.matrix(lm22$expr),
+                       labels = as.data.frame(lm22_labels),
+                       lineage_file = "/bigdata/almogangel/xCell2_data/dev_data/lm22_dependencies.tsv")
+saveRDS(lm22_ref, "/bigdata/almogangel/xCell2_data/dev_data/lm22_ref.rds")
+

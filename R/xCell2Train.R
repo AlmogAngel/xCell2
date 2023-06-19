@@ -839,6 +839,7 @@ setClass("xCell2Signatures", slots = list(
 #' @import dplyr
 #' @import tibble
 #' @import tidyr
+#' @import readr
 #' @import Seurat
 #' @import Rfast
 #' @import pbapply
