@@ -7,7 +7,7 @@
 xCell2Analysis(
   bulk,
   xcell2sigs,
-  min_genes_overlap = 0.8,
+  min_genes_overlap = 0.5,
   spillover_alpha = 0.5
 )
 }
