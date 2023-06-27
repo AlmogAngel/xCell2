@@ -15,10 +15,15 @@ validateInputs <- function(ref, labels, data_type){
     stop("data_type should be rnaseq, array or scrnaseq.")
   }
 
-  if (sum(grepl("_", labels$label)) != 0 | sum(grepl("_", rownames(ref))) != 0) {
-    message("Changing underscores to dashes in genes / cell-types labels!")
+  # if (sum(grepl("_", labels$label)) != 0 | sum(grepl("_", rownames(ref))) != 0) {
+  #   message("Changing underscores to dashes in genes / cell-types labels!")
+  #   labels$label <- gsub("_", "-", labels$label)
+  #   rownames(ref) <- gsub("_", "-", rownames(ref))
+  # }
+
+  if (sum(grepl("_", labels$label)) != 0) {
+    message("Changing underscores to dashes in cell-types labels!")
     labels$label <- gsub("_", "-", labels$label)
-    rownames(ref) <- gsub("_", "-", rownames(ref))
   }
 
   out <- list(ref = ref,
@@ -26,7 +31,7 @@ validateInputs <- function(ref, labels, data_type){
   return(out)
 
 }
-getTopVariableGenes <- function(ref, min_genes){
+getTopVariableGenes <- function(ref, max_genes){
 
   ref.srt <- Seurat::CreateSeuratObject(counts = ref)
   ref.srt <- Seurat::FindVariableFeatures(ref.srt, selection.method = "vst")
@@ -34,12 +39,10 @@ getTopVariableGenes <- function(ref, min_genes){
   genesVar <- plot1$data$variance.standardized
   names(genesVar) <- rownames(plot1$data)
   genesVar <- sort(genesVar, decreasing = TRUE)
+  genesVar <- genesVar[genesVar > 0]
+  genes <- names(genesVar[1:max_genes])
 
-  if (length(genesVar) < min_genes) {
-    genesVar <- names(genesVar[1:min_genes])
-  }
-
-  return(genesVar)
+  return(genes)
 }
 makePureCTMat <- function(ref, labels){
 
@@ -876,7 +879,9 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, mixture_fra
   # Use only most variable genes for single-cell data
   if (data_type == "sc") {
     message("Looking for most variable genes with Seurat...")
-    topVarGenes <- getTopVariableGenes(ref, min_genes = 10000)
+    topVarGenes <- getTopVariableGenes(ref, max_genes = 1000)
+    tmp <- topVarGenes[!topVarGenes %in% rownames(ref)]
+    topVarGenes <- c(topVarGenes, gsub("-", "_", tmp)) # Because Seurat change genes names from "_" to "-"
     ref <- ref[rownames(ref) %in% topVarGenes,]
   }
 

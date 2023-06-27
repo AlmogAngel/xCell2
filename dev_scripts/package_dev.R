@@ -1,6 +1,5 @@
 devtools::install_github("AlmogAngel/xCell2", force = TRUE, dep = FALSE)
 
-
 library(xCell2)
 
 setwd("/bigdata/almogangel/xCell2/")
@@ -21,4 +20,3 @@ usethis::use_data(ts_labels_with_ontology)
 
 # license
 usethis::use_mit_license()
-
