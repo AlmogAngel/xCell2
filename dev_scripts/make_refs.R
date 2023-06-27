@@ -13,39 +13,69 @@ celltype_conversion_long <- read_tsv("/bigdata/almogangel/xCell2_data/dev_data/c
 ######################## Single-cell RNA-seq references ---------------------------------------
 ############# Human (Tabula Sapiens)---------------------------------------
 
-ts_labels <- readRDS("/bigdata/almogangel/super_ref_for_xcell2/ts_labels.rds")
-ts_ref <- readRDS("/bigdata/almogangel/super_ref_for_xcell2/ts_data.rds")
+ts <- readRDS("/bigdata/almogangel/TabulaSapiens/tabula_sapiens.rds")
+ts_ref <- ts@assays$RNA@counts
+rownames(ts_ref) <- ts@assays$RNA@meta.features$feature_name
 
-# Main labels
-ref <- ts_ref
-labels <- ts_labels[,c(1,2,5,6)]
-colnames(labels)[1:2] <- c("ont", "label")
+ts_labels <- ts@meta.data
+ts_labels <- tibble(ts@meta.data) %>%
+  mutate(sample = rownames(ts_labels)) %>%
+  filter(assay == "10x 3' v3") %>%
+  select(ont = cell_type_ontology_term_id, label = cell_type, sample, dataset = donor, tissue)
 
-xCell2GetLineage(labels = labels[,1:2], out_file = "/bigdata/almogangel/xCell2_data/dev_data/ts_human_dependencies.tsv")
+ts_ref <- ts_ref[,ts_labels$sample]
 
-View(read.table("/bigdata/almogangel/xCell2_data/dev_data/ts_human_dependencies.tsv", sep = "\t", header = TRUE))
 
-ts_main_ref <- list(ref = as.matrix(ref),
+###### Human (Tabula Sapiens) - blood -----------
+
+# cytoVals - from run_validation.R
+val_celltypes <- unique(unname(unlist(sapply(cytoVals$truth$blood, rownames))))
+
+
+# Subset blood related samples
+ts_labels <- ts_labels[ts_labels$tissue %in% c("blood", "lymph node", "spleen", "thymus", "bone marrow", "inguinal lymph node"),]
+
+
+# Use only shared cell types
+shared <- intersect(val_celltypes, ts_labels$label)
+
+
+# Subset cells
+set.seed(123)
+
+ts_labels_blood <- tibble(ts_labels) %>%
+  filter(label %in% shared) %>%
+  group_by(label, dataset) %>%
+  sample_n(min(200, n())) %>%
+  select(-tissue) %>%
+  group_by(label) %>%
+  filter(n() > 100) %>%
+
+sort(table(ts_labels_blood$label), decreasing = T)
+
+ts_labels_blood_main <- tibble(ts_labels) %>%
+  filter(!sample %in% ts_labels_blood_fine$sample) %>%
+  filter(label.main %in% shared_main) %>%
+  group_by(label.main, dataset) %>%
+  sample_n(min(50, n()))
+
+
+labels <- data.frame(ont = c(ts_labels_blood_main$ont.main, ts_labels_blood_fine$ont.fine),
+                        label = c(ts_labels_blood_main$label.main, ts_labels_blood_fine$label.fine),
+                        sample = c(ts_labels_blood_main$sample, ts_labels_blood_fine$sample),
+                        dataset = c(ts_labels_blood_main$dataset, ts_labels_blood_fine$dataset))
+
+ref <- ts_ref[,ts_labels$sample]
+
+
+xCell2GetLineage(labels = labels[,1:2], out_file = "/bigdata/almogangel/xCell2_data/dev_data/ts_human_blood_dependencies.tsv")
+
+View(read.table("/bigdata/almogangel/xCell2_data/dev_data/ts_human_blood_dependencies.tsv", sep = "\t", header = TRUE))
+
+ts_blood_ref <- list(ref = ref,
                        labels = as.data.frame(labels),
-                       lineage_file = "/bigdata/almogangel/xCell2_data/dev_data/ts_human_dependencies.tsv")
-saveRDS(ts_main_ref, "/bigdata/almogangel/xCell2_data/dev_data/ts_main_ref.rds")
-
-# Main labels
-# TODO: Subsample (data too big)
-ref <- ts_ref
-labels <- ts_labels[,c(1,2,5,6)]
-colnames(labels)[1:2] <- c("ont", "label")
-
-xCell2GetLineage(labels = labels[,1:2], out_file = "/bigdata/almogangel/xCell2_data/dev_data/ts_fine_human_dependencies.tsv")
-
-View(read.table("/bigdata/almogangel/xCell2_data/dev_data/ts_fine_human_dependencies.tsv", sep = "\t", header = TRUE))
-
-ts_fine_ref <- list(ref = as.matrix(ref),
-                    labels = as.data.frame(labels),
-                    lineage_file = "/bigdata/almogangel/xCell2_data/dev_data/ts_fine_human_dependencies.tsv")
-saveRDS(ts_fine_ref, "/bigdata/almogangel/xCell2_data/dev_data/ts_fine_ref.rds")
-
-
+                       lineage_file = "/bigdata/almogangel/xCell2_data/dev_data/ts_human_blood_dependencies.tsv")
+saveRDS(ts_blood_ref, "/bigdata/almogangel/xCell2_data/benchmarking_data/references/ts_blood_ref.rds")
 
 
 ########################  Bulk RNA-seq sorted cells references ---------------------------------------
