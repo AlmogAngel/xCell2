@@ -44,6 +44,9 @@ makeCIBERSORTxSigMat <- function(ref, labels, lineage_file, refName, single_cell
 
   # Make reference file
   tmp <- ref
+  if (single_cell) {
+    tmp <- as.matrix(tmp)
+  }
   colnames(tmp) <- labels$label
   tmp <- cbind("genes" = rownames(tmp), tmp)
   all(colnames(tmp)[-1] == colnames(pheno.df)[-1])
@@ -67,7 +70,7 @@ makeCIBERSORTxSigMat <- function(ref, labels, lineage_file, refName, single_cell
 
 
   cmd <- paste0("docker run -v ", dir, ":/src/data -v ", results_dir, ":/src/outdir cibersortx/fractions --username almog.angel@campus.technion.ac.il --token ",
-                token, " --refsample ", refsample_file, " --phenoclasses ", pheno_file, " --single_cell ", single_cell, " --QN ", QN, " --rmbatchBmode TRUE --verbose TRUE 1> ",
+                token, " --refsample ", refsample_file, " --phenoclasses ", pheno_file, " --single_cell ", single_cell, " --QN ", QN, " --rmbatchBmode ", !single_cell, " --rmbatchSmode ", single_cell, " --verbose TRUE 1> ",
                 results_dir, "/cibersortx.stdout 2> ", results_dir, "/cibersortx.stderr")
 
   # Run Docker via shell
@@ -76,6 +79,11 @@ makeCIBERSORTxSigMat <- function(ref, labels, lineage_file, refName, single_cell
   # Save signature matrix for future use:
   sigmat_file <- paste0(dir, "/", refName, "_sigmat.txt")
   file.copy(from = paste0(results_dir, "/CIBERSORTx_", refName, "_pheno.CIBERSORTx_", refName, "_ref.bm.K999.txt"), to = sigmat_file, overwrite = TRUE)
+
+  # Save GEP for future use:
+  gep_file <- paste0(dir, "/", refName, "_gep.txt")
+  file.copy(from = paste0(results_dir, "/CIBERSORTx_cell_type_sourceGEP.txt"), to = gep_file, overwrite = TRUE)
+
 
   print("Done")
 
@@ -111,4 +119,8 @@ print("Done")
 
 
 # scRNA-seq references
-# TODO: Add Tabula Sapiens reference
+print("Tabula Sapiens Blood Reference")
+ts_blood_ref <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/references/ts_blood_ref.rds")
+makeCIBERSORTxSigMat(ref = ts_blood_ref$ref, labels = ts_blood_ref$labels, lineage_file = ts_blood_ref$lineage_file, refName = "ts_blood", single_cell = TRUE, QN = FALSE)
+print("Done")
+

@@ -11,7 +11,7 @@ celltype_conversion_long <- read_tsv("/bigdata/almogangel/xCell2_data/dev_data/c
 
 
 ######################## Single-cell RNA-seq references ---------------------------------------
-############# Human (Tabula Sapiens)---------------------------------------
+############# Tabula Sapiens ---------------------------------------
 
 ts <- readRDS("/bigdata/almogangel/TabulaSapiens/tabula_sapiens.rds")
 ts_ref <- ts@assays$RNA@counts
@@ -24,6 +24,8 @@ ts_labels <- tibble(ts@meta.data) %>%
   select(ont = cell_type_ontology_term_id, label = cell_type, sample, dataset = donor, tissue)
 
 ts_ref <- ts_ref[,ts_labels$sample]
+
+rm(ts)
 
 
 ###### Human (Tabula Sapiens) - blood -----------
@@ -39,6 +41,8 @@ ts_labels <- ts_labels[ts_labels$tissue %in% c("blood", "lymph node", "spleen", 
 # Use only shared cell types
 shared <- intersect(val_celltypes, ts_labels$label)
 
+# Use only cell type with at least 200 cells
+shared <- names(which(sort(table(ts_labels[ts_labels$label %in% shared,]$label), decreasing = T) > 200))
 
 # Subset cells
 set.seed(123)
@@ -48,35 +52,78 @@ ts_labels_blood <- tibble(ts_labels) %>%
   group_by(label, dataset) %>%
   sample_n(min(200, n())) %>%
   select(-tissue) %>%
-  group_by(label) %>%
-  filter(n() > 100) %>%
+  ungroup() %>%
+  mutate(ont = as.character(ont),
+         label = as.character(label),
+         dataset = as.character(dataset))
 
-sort(table(ts_labels_blood$label), decreasing = T)
-
-ts_labels_blood_main <- tibble(ts_labels) %>%
-  filter(!sample %in% ts_labels_blood_fine$sample) %>%
-  filter(label.main %in% shared_main) %>%
-  group_by(label.main, dataset) %>%
-  sample_n(min(50, n()))
+labels <- data.frame(ts_labels_blood)
+ref <- ts_ref[,labels$sample]
+ref <- ref[Matrix::rowSums(ref) > 0,]
 
 
-labels <- data.frame(ont = c(ts_labels_blood_main$ont.main, ts_labels_blood_fine$ont.fine),
-                        label = c(ts_labels_blood_main$label.main, ts_labels_blood_fine$label.fine),
-                        sample = c(ts_labels_blood_main$sample, ts_labels_blood_fine$sample),
-                        dataset = c(ts_labels_blood_main$dataset, ts_labels_blood_fine$dataset))
-
-ref <- ts_ref[,ts_labels$sample]
-
-
-xCell2GetLineage(labels = labels[,1:2], out_file = "/bigdata/almogangel/xCell2_data/dev_data/ts_human_blood_dependencies.tsv")
+xCell2GetLineage(labels = labels, out_file = "/bigdata/almogangel/xCell2_data/dev_data/ts_human_blood_dependencies.tsv")
 
 View(read.table("/bigdata/almogangel/xCell2_data/dev_data/ts_human_blood_dependencies.tsv", sep = "\t", header = TRUE))
 
 ts_blood_ref <- list(ref = ref,
-                       labels = as.data.frame(labels),
+                       labels = labels,
                        lineage_file = "/bigdata/almogangel/xCell2_data/dev_data/ts_human_blood_dependencies.tsv")
 saveRDS(ts_blood_ref, "/bigdata/almogangel/xCell2_data/benchmarking_data/references/ts_blood_ref.rds")
 
+
+
+############# Tumor ccRCCs ---------------------------------------
+
+# cytoVals - from run_validation.R
+val_celltypes <- unique(c(rownames(cytoVals$truth$tumor$`ccRCC_cytof_CD45+`), rownames(cytoVals$truth$tumor$NSCLC_cytof)))
+
+
+meta <- readRDS("/bigdata/almogangel/pan_cancer_ref/harmonized_results_matrix_and_metadata_all_patients_all_cells.RDS")
+
+table(meta$scATOMIC_pred)
+
+
+pancancer <- readRDS("/bigdata/almogangel/pan_cancer_ref/training_files_for_scATOMIC_core/reference_datasets/training_reference_matrices/training_matrix_layer_1_biopsies_with_PBMC.RDS")
+pancancer.meta <- readRDS("/bigdata/almogangel/pan_cancer_ref/training_files_for_scATOMIC_core/reference_datasets/training_reference_metadata/training_metadata_layer_1_biopsies_with_PBMC.RDS")
+
+
+
+
+
+ccrcc.srt <- readRDS("/bigdata/almogangel/ccRCC_dataset/aggregated_matrix_seurat.rds")
+
+
+ccrcc.srt <- FindNeighbors(ccrcc.srt, dims = 1:25)
+ccrcc.srt <- FindClusters(ccrcc.srt, resolution = 90)
+singler_ref <- celldex::BlueprintEncodeData()
+
+singler_results <- SingleR::SingleR(test = GetAssayData(ccrcc.srt, assay = 'RNA', slot = 'data'),
+                           ref = singler_ref,
+                           labels = singler_ref@colData@listData$label.main,
+                           clusters = ccrcc.srt@meta.data$new.clust)
+x <- data.frame(row.names = rownames(singler_results), labels=singler_results$labels)
+ccrcc.srt = AddMetaData(ccrcc.srt, metadata=x[ccrcc.srt$new.clust, 1], col.name = "cell_type_singler")
+dittoSeq::dittoDimPlot(ccrcc.srt, reduction.use = "umap", "cell_type_singler")
+
+
+
+
+
+
+
+ccrcc_labels <- read_tsv("/bigdata/almogangel/ccRCC_dataset/GSE224630_overall_metadata.tsv")
+ccrcc_labels <- ccrcc_labels[ccrcc_labels$state == "Tumor",]
+table(ccrcc_labels$dataset)
+table(ccrcc_labels$patient)
+table(ccrcc_labels$all.cell.association)
+table(ccrcc_labels$state)
+
+
+ccrcc_labels %>%
+  mutate(dataset = paste0(dataset, patient),
+         ont = NA) %>%
+  select(ont, label = )
 
 ########################  Bulk RNA-seq sorted cells references ---------------------------------------
 ############# Human ---------------------------------------
