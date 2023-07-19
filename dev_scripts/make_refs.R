@@ -1,4 +1,5 @@
 library(tidyverse)
+library(Matrix)
 
 setwd("/bigdata/almogangel/xCell2/")
 source("R/xCell2Train.R")
@@ -13,25 +14,60 @@ celltype_conversion_long <- read_tsv("/bigdata/almogangel/xCell2_data/dev_data/c
 ######################## Single-cell RNA-seq references ---------------------------------------
 ############# Tabula Sapiens ---------------------------------------
 
+# Load TS
 ts <- readRDS("/bigdata/almogangel/TabulaSapiens/tabula_sapiens.rds")
 ts_ref <- ts@assays$RNA@counts
 rownames(ts_ref) <- ts@assays$RNA@meta.features$feature_name
 
-ts_labels <- ts@meta.data
-ts_labels <- tibble(ts@meta.data) %>%
-  mutate(sample = rownames(ts_labels)) %>%
+# Only 10X data
+ts_labels <- as_tibble(ts@meta.data, rownames = "sample") %>%
   filter(assay == "10x 3' v3") %>%
-  select(ont = cell_type_ontology_term_id, label = cell_type, sample, dataset = donor, tissue)
+  select(ont = cell_type_ontology_term_id, label = cell_type, sample, dataset = donor, tissue = tissue_in_publication)
 
 ts_ref <- ts_ref[,ts_labels$sample]
-
 rm(ts)
+gc()
+
+# Nest by organ/tissue
+ts_labels.nested <- tibble(ts_labels) %>%
+  mutate_if(is.factor, as.character) %>%
+  group_by(tissue) %>%
+  nest() %>%
+  rowwise() %>%
+  mutate(n_celltypes = length(unique(data$label)),
+         celltypes = list(unique(data$label)))
+
+# data = ts_labels.nested[3,]$data[[1]]
+# tissue = ts_labels.nested[3,]$tissue[[1]]
+makeRef <- function(data, tissue, ts_ref){
+  print(tissue)
+
+  xCell2GetLineage(data, out_file = paste0("/bigdata/almogangel/xCell2_data/dev_data/ts_", tissue, "_dependencies.tsv"))
+  # View(read.table(paste0("/bigdata/almogangel/xCell2_data/dev_data/ts_", tissue, "_dependencies.tsv"), sep = "\t", header = TRUE))
+
+  ref_tmp <- ts_ref[,data$sample]
+  ref_tmp <- ref_tmp[Matrix::rowSums(ref_tmp) > 0,]
+
+  ts_tissue_ref <- list(ref = ref_tmp,
+                        labels = as.data.frame(data),
+                        lineage_file = paste0("/bigdata/almogangel/xCell2_data/dev_data/ts_", tissue, "_dependencies.tsv"))
+
+  ref_path <- paste0("/bigdata/almogangel/xCell2_data/benchmarking_data/references/ts_", tissue, "_ref.rds")
+  saveRDS(ts_tissue_ref, ref_path)
+
+  return(ref_path)
+}
+
+# Generate references
+ts_labels.nested %>%
+  rowwise() %>%
+  mutate(ref_path = makeRef(data, tissue, ts_ref))
 
 
 ###### Human (Tabula Sapiens) - blood -----------
 
 # cytoVals - from run_validation.R
-val_celltypes <- unique(unname(unlist(sapply(cytoVals$truth$blood, rownames))))
+# val_celltypes <- unique(unname(unlist(sapply(cytoVals$truth$blood, rownames))))
 
 
 # Subset blood related samples
@@ -73,57 +109,127 @@ saveRDS(ts_blood_ref, "/bigdata/almogangel/xCell2_data/benchmarking_data/referen
 
 
 
-############# Tumor ccRCCs ---------------------------------------
+############# Pan-cancer ---------------------------------------
 
-# cytoVals - from run_validation.R
-val_celltypes <- unique(c(rownames(cytoVals$truth$tumor$`ccRCC_cytof_CD45+`), rownames(cytoVals$truth$tumor$NSCLC_cytof)))
+# Load counts matrix data
+ref.mat.files <- list.files("/bigdata/almogangel/pan_cancer_ref/split_by_patient_matrices/", pattern = ".*RDS", full.names = T)
+ref.mat.list <- lapply(ref.mat.files, function(path){
+  ref.in <- readRDS(path)
+  # Load only references with gene symbols:
+  if ("CCDC7" %in% rownames(ref.in)) {
+    ref.in
+  }else{
+    NA
+  }
+})
+
+# Convert all matrices to dgCMatrix
+ref.mat.list <- lapply(ref.mat.list, function(x){
+  if ("matrix" %in% class(x)) {
+    as(x, "dgCMatrix")
+  }else{
+    x
+  }
+})
+ref.mat.list <- ref.mat.list[unlist(lapply(ref.mat.list, function(x){ncol(x) > 0}))]
+ref.mat.list <- ref.mat.list[unlist(lapply(ref.mat.list, function(x){class(x) != "numeric"}))]
 
 
+# Load metadata
 meta <- readRDS("/bigdata/almogangel/pan_cancer_ref/harmonized_results_matrix_and_metadata_all_patients_all_cells.RDS")
 
-table(meta$scATOMIC_pred)
+# Define 10X datasets (using supplemantry table - 41467_2023_37353_MOESM11_ESM)
+chromium10x_data <- c("Bi", "Chen", "Couterier", "Dong", "Gao", "Kim", "leader", "Lee", "Ma", "Peng", "Qian", "Slyper", "Wu", "Young")
+
+meta.10x.confident <- meta %>%
+  as_tibble() %>%
+  # Remove non-10X data
+  filter(dataset %in% chromium10x_data) %>%
+  dplyr::select(cell_names, dataset, disease, primary_met, layer_1:layer_6, classification_confidence, scATOMIC_pred) %>%
+  # Only cells with confident annotation
+  filter(classification_confidence == "confident") %>%
+  dplyr::select(-classification_confidence)
+
+# Filter labels
+labels2remove <- c("Tissue_Cell_Normal_or_Cancer", "unclassified_any_cell", "T_or_NK_lymphocyte", "macrophage_or_dendritic_cell", "unclassified_blood_cell",
+                   "unclassified_normal_or_cancer_tissue", "NK or CD8 T cell", "Non GI Epithelial Cell", "unclassified_T_or_NK_cell", "unclassified_macrophage_or_DC",
+                   "unclassified_B_cell_or_plasmablast", "GI Epithelial Cell", "Soft Tissue or Neuro Cancer Cell", "Ovarian/Endometrial/Kidney Cell", "unclassified_non_GI_epithelial_cell",
+                   "unclassified_GI_epithelial_cell", "Breast/Lung/Prostate Cell", "Unclassified Soft Tissue or Neuro Cancer Cell", "Brain/Neuroblastoma Cancer Cell", "Any Cell",
+                   "CD4 or CD8 T cell", "Non Stromal Cell", "Macrophage or Monocyte", "CD8 T or NK cell", "Ovarian/Endometrial/Kidney", "Normal Tissue Cell",
+                   "B cell or Plasmablast", "Macrophage or Dendritic Cell", "Tfh/Th1 helper CD4+ T cells", "T or NK Cell", "Non Blood Cell",
+                   "Biliary/Hepatic Cancer Cell", "Colorectal/Esophageal/Gastric Cell", "GI Tract Cell", "Breast/Lung/Prostate")
+
+meta.10x.confident.filt <- meta.10x.confident %>%
+  pivot_longer(c(layer_1:scATOMIC_pred), names_to = "layer", values_to = "label") %>%
+  dplyr::select(-layer) %>%
+  # Remove abritrary labels
+  filter(!label %in% labels2remove) %>%
+  unique() %>%
+  mutate(label = plyr::mapvalues(label, from = celltype_conversion_long$all_labels, to = celltype_conversion_long$xCell2_labels, warn_missing = FALSE)) %>%
+  group_by(label) %>%
+  # Minimum 50 cells per label
+  filter(n() >= 50) %>%
+  ungroup()
+
+# Subset and balance cells
+set.seed(123)
+
+meta.10x.confident.filt.sub <- meta.10x.confident.filt %>%
+  group_by(label, dataset, disease, primary_met) %>%
+  sample_n(min(1000, n())) %>%
+  group_by(label, dataset, disease) %>%
+  sample_n(min(1000, n())) %>%
+  group_by(label, dataset) %>%
+  sample_n(min(1000, n())) %>%
+  group_by(label) %>%
+  sample_n(min(1000, n()))
+
+table(meta.10x.confident.filt.sub$label)
+nrow(meta.10x.confident.filt.sub)
+length(unique(meta.10x.confident.filt.sub$cell_names))
+
+# Subset cells from reference data
+
+ref.mat.list <- lapply(ref.mat.list, function(x){x[,colnames(x) %in% meta.10x.confident.filt.sub$cell_names]})
+ref.mat.list <- ref.mat.list[unlist(lapply(ref.mat.list, function(x){class(x) != "numeric"}))]
+ref.mat.list <- ref.mat.list[unlist(lapply(ref.mat.list, function(x){ncol(x) > 0}))]
 
 
-pancancer <- readRDS("/bigdata/almogangel/pan_cancer_ref/training_files_for_scATOMIC_core/reference_datasets/training_reference_matrices/training_matrix_layer_1_biopsies_with_PBMC.RDS")
-pancancer.meta <- readRDS("/bigdata/almogangel/pan_cancer_ref/training_files_for_scATOMIC_core/reference_datasets/training_reference_metadata/training_metadata_layer_1_biopsies_with_PBMC.RDS")
+# Combine references and make sure they share the same genes
+shared_rownames <- Reduce(intersect, lapply(ref.mat.list, rownames))
+ref.mat <- lapply(ref.mat.list, function(x) x[shared_rownames, ]) %>%
+  do.call(cbind, .)
+
+# Make sure every cell exist both in ref.mat and in the metadata
+meta.10x.confident.filt.sub <- meta.10x.confident.filt.sub %>%
+  filter(cell_names %in% colnames(ref.mat))
+all(meta.10x.confident.filt.sub$cell_names %in% colnames(ref.mat))
+table(meta.10x.confident.filt.sub$label)
+
+ref.mat <- ref.mat[,meta.10x.confident.filt.sub$cell_names]
+all(meta.10x.confident.filt.sub$cell_names == colnames(ref.mat))
+meta.10x.confident.filt.sub$cell_names <- make.unique(meta.10x.confident.filt.sub$cell_names)
+colnames(ref.mat) <- meta.10x.confident.filt.sub$cell_names
+
+# Get dependencies
+labels <- meta.10x.confident.filt.sub %>%
+  mutate(ont = plyr::mapvalues(label, from = celltype_conversion_long$xCell2_labels, to = celltype_conversion_long$ont, warn_missing = FALSE)) %>%
+  dplyr::select(ont,  label, sample = cell_names, dataset)
+
+xCell2GetLineage(labels = labels, out_file = "/bigdata/almogangel/xCell2_data/dev_data/sc_pan_cancer_dependencies.tsv")
+lineage.file <- read.table("/bigdata/almogangel/xCell2_data/dev_data/sc_pan_cancer_dependencies.tsv", sep = "\t", header = TRUE)
+lineage.file[lineage.file$label == "Exhausted CD8+ T cells",]$ancestors <- "CD8-positive, alpha-beta T cell"
+lineage.file[lineage.file$label == "CD8-positive, alpha-beta T cell",]$descendants <- paste0(lineage.file[lineage.file$label == "CD8-positive, alpha-beta T cell",]$descendants, ";",
+                                                                                             "Exhausted CD8+ T cells")
+write.table(lineage.file, "/bigdata/almogangel/xCell2_data/dev_data/sc_pan_cancer_dependencies.tsv", sep = "\t", quote = F, row.names = F)
 
 
 
+sc_pan_cancer_ref <- list(ref = ref.mat,
+                          labels = as.data.frame(labels),
+                          lineage_file = "/bigdata/almogangel/xCell2_data/dev_data/sc_pan_cancer_dependencies.tsv")
+saveRDS(sc_pan_cancer_ref, "/bigdata/almogangel/xCell2_data/benchmarking_data/references/sc_pan_cancer_ref.rds")
 
-
-ccrcc.srt <- readRDS("/bigdata/almogangel/ccRCC_dataset/aggregated_matrix_seurat.rds")
-
-
-ccrcc.srt <- FindNeighbors(ccrcc.srt, dims = 1:25)
-ccrcc.srt <- FindClusters(ccrcc.srt, resolution = 90)
-singler_ref <- celldex::BlueprintEncodeData()
-
-singler_results <- SingleR::SingleR(test = GetAssayData(ccrcc.srt, assay = 'RNA', slot = 'data'),
-                           ref = singler_ref,
-                           labels = singler_ref@colData@listData$label.main,
-                           clusters = ccrcc.srt@meta.data$new.clust)
-x <- data.frame(row.names = rownames(singler_results), labels=singler_results$labels)
-ccrcc.srt = AddMetaData(ccrcc.srt, metadata=x[ccrcc.srt$new.clust, 1], col.name = "cell_type_singler")
-dittoSeq::dittoDimPlot(ccrcc.srt, reduction.use = "umap", "cell_type_singler")
-
-
-
-
-
-
-
-ccrcc_labels <- read_tsv("/bigdata/almogangel/ccRCC_dataset/GSE224630_overall_metadata.tsv")
-ccrcc_labels <- ccrcc_labels[ccrcc_labels$state == "Tumor",]
-table(ccrcc_labels$dataset)
-table(ccrcc_labels$patient)
-table(ccrcc_labels$all.cell.association)
-table(ccrcc_labels$state)
-
-
-ccrcc_labels %>%
-  mutate(dataset = paste0(dataset, patient),
-         ont = NA) %>%
-  select(ont, label = )
 
 ########################  Bulk RNA-seq sorted cells references ---------------------------------------
 ############# Human ---------------------------------------
@@ -307,44 +413,72 @@ saveRDS(ref, "/bigdata/almogangel/xCell2/dev_data/sref_blood_data_bulk.rds")
 # LM222 -----------
 
 
-lm22 <- readRDS("/bigdata/almogangel/xCell2_data/dev_data/lm22.rds")
-lm22.labels <- lm22$labels
-
-x <- read_tsv("/bigdata/almogangel/xCell2_data/dev_data/LM22.txt")
-x <- colnames(x)[-1]
-missing_cts <- unique(x[!x %in% lm22.labels])
+lm22.ref <- read.table("/bigdata/almogangel/xCell2_data/dev_data/LM22-ref-sample.txt", sep = "\t", header = TRUE, row.names = 1, check.names = FALSE)
+lm22.pheno <- read.table("/bigdata/almogangel/xCell2_data/dev_data/LM22-classes.txt", sep = "\t", header = FALSE, row.names = 1)
+colnames(lm22.pheno) <- colnames(lm22.ref)
+rownames(lm22.pheno) <- plyr::mapvalues(rownames(lm22.pheno), celltype_conversion_long$all_labels, celltype_conversion_long$xCell2_labels)
 
 
-lm22.labels2 <- plyr::mapvalues(lm22.labels, celltype_conversion_long$all_labels, celltype_conversion_long$xCell2_labels)
-unique(lm22.labels2[lm22.labels2 %in% lm22.labels])
+lm22.labels <- sapply(rownames(lm22.pheno), function(label){
+  colnames(lm22.pheno)[which(lm22.pheno[label, ] == 1)]
+}) %>%
+  enframe(value = "sample", name = "label") %>%
+  unnest(sample) %>%
+  mutate(ont = NA, .before = everything()) %>%
+  mutate(dataset = "LM22")
 
+lm22.labels$ont <- plyr::mapvalues(lm22.labels$label, celltype_conversion_long$xCell2_labels, celltype_conversion_long$ont)
 
-lm22.labels <- lm22.labels2
-lm22.samples <- colnames(lm22$expr)
+lm22.ref <- lm22.ref[,lm22.labels$sample]
 
-lm22.dataset <- gsub(".CEL", "", lm22.samples)
-lm22.dataset <- gsub("_.*", "", lm22.dataset)
+lm22.labels <- as.data.frame(lm22.labels)
+xCell2GetLineage(lm22.labels, out_file = "/bigdata/almogangel/xCell2_data/dev_data/lm22_dependencies.tsv")
 
-
-x <- read_tsv("/bigdata/almogangel/xCell2_data/dev_data/lm22_datasets.txt")
-
-x$`Sample ID`[!x$`Sample ID` %in% lm22.dataset]
-
-unique(x$`Data set`[!x$`Data set` %in% lm22.dataset])
-
-which(startsWith(lm22.samples, "GSE4527"))
-
-lm22_labels <- tibble(ont = NA, label = lm22.labels, sample = lm22.samples, dataset = lm22.dataset)
-lm22_labels$ont <- plyr::mapvalues(lm22_labels$label, celltype_conversion_long$xCell2_labels, celltype_conversion_long$ont)
-lm22_labels[!lm22_labels$ont %in% celltype_conversion_long$ont,]$ont <- NA
-
-all(lm22_labels$sample == colnames(lm22$expr))
-
-
-xCell2GetLineage(lm22_labels, out_file = "/bigdata/almogangel/xCell2_data/dev_data/lm22_dependencies.tsv")
-
-lm22_ref <- list(ref = as.matrix(lm22$expr),
-                       labels = as.data.frame(lm22_labels),
+lm22_ref <- list(ref = as.matrix(lm22.ref),
+                       labels = lm22.labels,
                        lineage_file = "/bigdata/almogangel/xCell2_data/dev_data/lm22_dependencies.tsv")
 saveRDS(lm22_ref, "/bigdata/almogangel/xCell2_data/dev_data/lm22_ref.rds")
+
+
+# old
+# lm22 <- readRDS("/bigdata/almogangel/xCell2_data/dev_data/lm22.rds")
+# lm22.labels <- lm22$labels
+#
+# x <- read_tsv("/bigdata/almogangel/xCell2_data/dev_data/LM22.txt")
+# x <- colnames(x)[-1]
+# missing_cts <- unique(x[!x %in% lm22.labels])
+#
+#
+# lm22.labels2 <- plyr::mapvalues(lm22.labels, celltype_conversion_long$all_labels, celltype_conversion_long$xCell2_labels)
+# unique(lm22.labels2[lm22.labels2 %in% lm22.labels])
+#
+#
+# lm22.labels <- lm22.labels2
+# lm22.samples <- colnames(lm22$expr)
+#
+# lm22.dataset <- gsub(".CEL", "", lm22.samples)
+# lm22.dataset <- gsub("_.*", "", lm22.dataset)
+#
+#
+# x <- read_tsv("/bigdata/almogangel/xCell2_data/dev_data/lm22_datasets.txt")
+#
+# x$`Sample ID`[!x$`Sample ID` %in% lm22.dataset]
+#
+# unique(x$`Data set`[!x$`Data set` %in% lm22.dataset])
+#
+# which(startsWith(lm22.samples, "GSE4527"))
+#
+# lm22_labels <- tibble(ont = NA, label = lm22.labels, sample = lm22.samples, dataset = lm22.dataset)
+# lm22_labels$ont <- plyr::mapvalues(lm22_labels$label, celltype_conversion_long$xCell2_labels, celltype_conversion_long$ont)
+# lm22_labels[!lm22_labels$ont %in% celltype_conversion_long$ont,]$ont <- NA
+#
+# all(lm22_labels$sample == colnames(lm22$expr))
+#
+#
+# xCell2GetLineage(lm22_labels, out_file = "/bigdata/almogangel/xCell2_data/dev_data/lm22_dependencies.tsv")
+#
+# lm22_ref <- list(ref = as.matrix(lm22$expr),
+#                        labels = as.data.frame(lm22_labels),
+#                        lineage_file = "/bigdata/almogangel/xCell2_data/dev_data/lm22_dependencies.tsv")
+# saveRDS(lm22_ref, "/bigdata/almogangel/xCell2_data/dev_data/lm22_ref.rds")
 

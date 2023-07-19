@@ -1,12 +1,14 @@
-library(tidyverse)
-
-# data_type = "rnaseq"
+# # Load parameters
+# ref.in <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/references/ts_blood_ref.rds")
+# ref = ref.in$ref
+# labels = ref.in$labels
 # data_type = "sc"
-lineage_file = NULL;
-mixture_fractions = c(0, 0.001, 0.005, seq(0.01, 0.25, 0.03))
-probs = seq(0.25, 0.5, 0.05); diff_vals = c(0, 0.25, 0.5, 1, 1.5, 2, 3, 4, 5, 10, 12, 15, 17)
-min_genes = 2; max_genes = 200
-
+# lineage_file = ref.in$lineage_file
+# mixture_fractions = c(0, 0.001, 0.005, seq(0.01, 0.25, 0.03))
+# probs = seq(0.25, 0.5, 0.05)
+# diff_vals = c(0, 0.25, 0.5, 1, 1.5, 2, 3, 4, 5, 10, 12, 15, 17)
+# min_genes = 2
+# max_genes = 200
 
 validateInputs <- function(ref, labels, data_type){
   if (length(unique(labels$label)) < 3) {
@@ -25,10 +27,15 @@ validateInputs <- function(ref, labels, data_type){
     stop("data_type should be rnaseq, array or scrnaseq.")
   }
 
-  if (sum(grepl("_", labels$label)) != 0 | sum(grepl("_", rownames(ref))) != 0) {
-    message("Changing underscores to dashes in genes / cell-types labels!")
+  # if (sum(grepl("_", labels$label)) != 0 | sum(grepl("_", rownames(ref))) != 0) {
+  #   message("Changing underscores to dashes in genes / cell-types labels!")
+  #   labels$label <- gsub("_", "-", labels$label)
+  #   rownames(ref) <- gsub("_", "-", rownames(ref))
+  # }
+
+  if (sum(grepl("_", labels$label)) != 0) {
+    message("Changing underscores to dashes in cell-types labels!")
     labels$label <- gsub("_", "-", labels$label)
-    rownames(ref) <- gsub("_", "-", rownames(ref))
   }
 
   out <- list(ref = ref,
@@ -36,7 +43,7 @@ validateInputs <- function(ref, labels, data_type){
   return(out)
 
 }
-getTopVariableGenes <- function(ref, min_genes){
+getTopVariableGenes <- function(ref, max_genes){
 
   ref.srt <- Seurat::CreateSeuratObject(counts = ref)
   ref.srt <- Seurat::FindVariableFeatures(ref.srt, selection.method = "vst")
@@ -44,14 +51,12 @@ getTopVariableGenes <- function(ref, min_genes){
   genesVar <- plot1$data$variance.standardized
   names(genesVar) <- rownames(plot1$data)
   genesVar <- sort(genesVar, decreasing = TRUE)
+  genesVar <- genesVar[genesVar > 0]
+  genes <- names(genesVar[1:max_genes])
 
-  if (length(genesVar) < min_genes) {
-    genesVar <- names(genesVar[1:min_genes])
-  }
-
-  return(genesVar)
+  return(genes)
 }
-makePureCTMat <- function(ref, labels){
+makePureCTMat <- function(ref, labels, use_median){
 
   celltypes <- unique(labels$label)
 
@@ -60,7 +65,11 @@ makePureCTMat <- function(ref, labels){
     if (sum(type_samples) == 1) {
       type_vec <- as.vector(ref[,type_samples])
     }else{
-      type_vec <- if("matrix" %in% class(ref)) Rfast::rowMedians(ref[,type_samples]) else sparseMatrixStats::rowMedians(ref[,type_samples])
+      if(use_median){
+        type_vec <- if("matrix" %in% class(ref)) Rfast::rowMedians(ref[,type_samples]) else sparseMatrixStats::rowMedians(ref[,type_samples])
+      }else{
+        type_vec <- if("matrix" %in% class(ref)) Rfast::rowmeans(ref[,type_samples]) else Matrix::rowMeans(ref[,type_samples])
+      }
     }
   })
   rownames(pure_ct_mat) <- rownames(ref)
@@ -239,7 +248,7 @@ createSignatures <- function(ref, labels, dep_list, quantiles_matrix, probs, cor
 
   return(signatures_collection)
 }
-filterSignatures <- function(ref, labels, mixture_fractions, dep_list, cor_mat, pure_ct_mat, signatures_collection){
+filterSignatures <- function(ref, labels, mixture_fractions, dep_list, cor_mat, pure_ct_mat, signatures_collection, use_median, data_type){
 
   # Make mixture matrix (from pure_ct_mat) for the first filtering criteria
   makeMixture <- function(pure_ct_mat, cor_mat, dep_list, mix_frac){
@@ -379,14 +388,17 @@ filterSignatures <- function(ref, labels, mixture_fractions, dep_list, cor_mat, 
   signatures_filtered <- signatures_collection[names(signatures_collection) %in% sigsPassed]
 
   # Make simulations
-  makeSimulations <- function(ref, labels, mixture_fractions, dep_list, cor_mat, n_ct_sim, add_noise, seed = 123){
+  makeSimulations <- function(ref, labels, mixture_fractions, dep_list, cor_mat, n_ct_sim, add_noise, use_median = FALSE, seed = 123){
 
     set.seed(seed)
 
-    makeFractionMatrixCTOI <- function(ref, mixture_fractions, ctoi_samples2use){
+    makeFractionMatrixCTOI <- function(ref, mixture_fractions, ctoi_samples2use, use_median){
 
-
-      ctoi_median_expression <- Rfast::rowMedians(ref[,ctoi_samples2use])
+      if (use_median) {
+        ctoi_median_expression <- if("matrix" %in% class(ref)) Rfast::rowMedians(ref[,ctoi_samples2use]) else sparseMatrixStats::rowMedians(ref[,ctoi_samples2use])
+      }else{
+        ctoi_median_expression <- if("matrix" %in% class(ref)) Rfast::rowmeans(ref[,ctoi_samples2use]) else Matrix::rowMeans(ref[,ctoi_samples2use])
+      }
       ctoi_frac_mat <- matrix(rep(ctoi_median_expression, length(mixture_fractions)), byrow = FALSE, ncol = length(mixture_fractions)) %*% diag(mixture_fractions)
       rownames(ctoi_frac_mat) <- rownames(ref)
 
@@ -400,19 +412,23 @@ filterSignatures <- function(ref, labels, mixture_fractions, dep_list, cor_mat, 
 
       return(ctoi_frac_mat)
     }
-    makeFractionMatrixControls <- function(ref, labels, mixture_fractions, control_cts){
+    makeFractionMatrixControls <- function(ref, labels, mixture_fractions, control_ct, use_median){
 
 
       # Pick control samples
       control_samples <- labels %>%
-        filter(label == control_cts) %>%
+        filter(label == control_ct) %>%
         slice_sample(n=length(mixture_fractions)) %>%
         pull(sample)
 
       if (length(control_samples) == 1) {
         controls_median_expression <- ref[,control_samples]
       }else{
-        controls_median_expression <- Rfast::rowMedians(ref[,control_samples])
+        if (use_median) {
+          controls_median_expression <- if("matrix" %in% class(ref)) Rfast::rowMedians(ref[,control_samples]) else sparseMatrixStats::rowMedians(ref[,control_samples])
+        }else{
+          controls_median_expression <- if("matrix" %in% class(ref)) Rfast::rowmeans(ref[,control_samples]) else Matrix::rowMeans(ref[,control_samples])
+        }
       }
 
       controls_mat <- matrix(rep(controls_median_expression, length(mixture_fractions)), byrow = FALSE, ncol = length(mixture_fractions)) %*% diag(1-mixture_fractions)
@@ -454,7 +470,7 @@ filterSignatures <- function(ref, labels, mixture_fractions, dep_list, cor_mat, 
       ctoi_sim_list <- lapply(1:n_ct_sim, function(i){
 
         ctoi_samples2use <- ctoi_samples_pool[1:length(mixture_fractions)] # Choose the first samples (homogeneous by datasets)
-        ctoi_frac_mat <- makeFractionMatrixCTOI(ref, mixture_fractions, ctoi_samples2use)
+        ctoi_frac_mat <- makeFractionMatrixCTOI(ref, mixture_fractions, ctoi_samples2use, use_median)
         ctoi_samples_pool <- c(ctoi_samples_pool[!ctoi_samples_pool %in% ctoi_samples2use], ctoi_samples2use) # Move ctoi_samples2use to be last
 
         # Make Controls fraction matrix
@@ -464,7 +480,7 @@ filterSignatures <- function(ref, labels, mixture_fractions, dep_list, cor_mat, 
           control_ct <- names(sort(cor_mat[ctoi, !colnames(cor_mat) %in% dep_cts])[1])
         }
 
-        controls_frac_mat <- makeFractionMatrixControls(ref, labels, mixture_fractions, control_ct)
+        controls_frac_mat <- makeFractionMatrixControls(ref, labels, mixture_fractions, control_ct, use_median)
 
         # Combine CTOI and controls fractions matrix
         simulation <- ctoi_frac_mat + controls_frac_mat
@@ -527,7 +543,8 @@ filterSignatures <- function(ref, labels, mixture_fractions, dep_list, cor_mat, 
       return(.)
   }
 
-  sim_list <- makeSimulations(ref, labels, mixture_fractions, dep_list, cor_mat, n_ct_sim = 10, add_noise = FALSE)
+  noise <- ifelse(data_type == "sc", TRUE, FALSE)
+  sim_list <- makeSimulations(ref, labels, mixture_fractions, dep_list, cor_mat, n_ct_sim = 10, add_noise = noise)
   scores_list <- scoreCTOISimulations(signatures = signatures_filtered, sim_list)
 
   scores_all_sims_tidy <- enframe(scores_list, name = "celltype") %>%
@@ -578,14 +595,14 @@ getTranformationModels <- function(simulations){
     final_model <- suppressWarnings(glm(fraction ~ poly(shifted_score, best_degree), data = df, family = binomial(link = "logit")))
 
 
-    # # Create a sequence of x values for the prediction
-    # x_pred <- seq(min(df$shifted_score), max(df$shifted_score), length.out = 100)
-    # # Predict y values using the model
-    # y_pred <- predict(model, newdata = data.frame(shifted_score = x_pred), type="response")
-    # # Plot the original data
-    # plot(df$shifted_score, df$fraction, main = paste0("Polynomial Regression ", best_degree ," degree(s) - ", celltype), xlab = "shifted_score", ylab = "fraction", pch = 19)
-    # # Add the fitted line
-    # lines(x_pred, y_pred, col = "red", lwd = 2)
+    # Create a sequence of x values for the prediction
+    x_pred <- seq(min(df$shifted_score), max(df$shifted_score), length.out = 100)
+    # Predict y values using the model
+    y_pred <- predict(model, newdata = data.frame(shifted_score = x_pred), type="response")
+    # Plot the original data
+    plot(df$shifted_score, df$fraction, main = paste0("Polynomial Regression ", best_degree ," degree(s) - ", celltype), xlab = "shifted_score", ylab = "fraction", pch = 19)
+    # Add the fitted line
+    lines(x_pred, y_pred, col = "red", lwd = 2)
 
 
     return(final_model)
@@ -713,10 +730,13 @@ setClass("xCell2Signatures", slots = list(
 #' @import dplyr
 #' @import tibble
 #' @import tidyr
+#' @import readr
 #' @import Seurat
-#' @import Rfast
+#' @importFrom Rfast rowMedians
+#' @importFrom Rfast rowmeans
 #' @import pbapply
-#' @import sparseMatrixStats
+#' @importFrom sparseMatrixStats rowMedians
+#' @importFrom Matrix rowMeans
 #' @importFrom  GSEABase GeneSetCollection
 #' @importFrom  GSEABase GeneSet
 #' @import singscore
@@ -733,14 +753,14 @@ setClass("xCell2Signatures", slots = list(
 #' @param diff_vals A vector of delta values to be used for generating signatures.
 #' @param min_genes The minimum number of genes to include in the signature.
 #' @param max_genes The maximum number of genes to include in the signature.
+#' @param return_unfiltered_signatures for development (remove)!
 #' @return An S4 object containing the signatures, cell type labels, and cell type dependencies.
 #' @export
-xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, mixture_fractions = c(0, 0.001, 0.005, seq(0.01, 0.25, 0.03)),
+xCell2Train_tmp <- function(ref, labels, data_type, lineage_file = NULL, mixture_fractions = c(0, 0.001, 0.005, seq(0.01, 0.25, 0.03)),
                         probs = seq(0.25, 0.5, 0.05), diff_vals = c(0, 0.25, 0.5, 1, 1.5, 2, 3, 4, 5, 10, 12, 15, 17),
                         min_genes = 2, max_genes = 200){
 
 
-  print("I am tmp")
   # Validate inputs
   inputs_validated <- validateInputs(ref, labels, data_type)
   ref <- inputs_validated$ref
@@ -749,13 +769,15 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, mixture_fra
   # Use only most variable genes for single-cell data
   if (data_type == "sc") {
     message("Looking for most variable genes with Seurat...")
-    topVarGenes <- getTopVariableGenes(ref, min_genes = 10000)
+    topVarGenes <- getTopVariableGenes(ref, max_genes = nrow(ref))
+    tmp <- topVarGenes[!topVarGenes %in% rownames(ref)]
+    topVarGenes <- c(topVarGenes, gsub("-", "_", tmp)) # Because Seurat change genes names from "_" to "-"
     ref <- ref[rownames(ref) %in% topVarGenes,]
   }
 
   # Build cell types correlation matrix
   message("Calculating cell-type correlation matrix...")
-  pure_ct_mat <- makePureCTMat(ref, labels)
+  pure_ct_mat <- makePureCTMat(ref, labels, use_median = TRUE)
   cor_mat <- getCellTypeCorrelation(pure_ct_mat, data_type)
 
   # Get cell type dependencies list
@@ -774,7 +796,7 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, mixture_fra
 
   # Filter signatures
   message("Filtering signatures...")
-  filterSignatures.out <- filterSignatures(ref, labels, mixture_fractions, dep_list, cor_mat, pure_ct_mat, signatures_collection)
+  filterSignatures.out <- filterSignatures(ref, labels, mixture_fractions, dep_list, cor_mat, pure_ct_mat, signatures_collection, use_median = FALSE, data_type)
   signatures_filtered <- signatures_collection[names(signatures_collection) %in% filterSignatures.out$simulations$signature]
   mixtures <- filterSignatures.out$mixtures$mix1
 
@@ -793,4 +815,3 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, mixture_fra
   return(xCell2Sigs.S4)
 
 }
-

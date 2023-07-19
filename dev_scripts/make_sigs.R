@@ -37,3 +37,9 @@ ts_blood_ref <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/refer
 ts_blood_sigs <- xCell2Train(ref = ts_blood_ref$ref, labels = ts_blood_ref$labels, data_type = "sc", lineage_file = ts_blood_ref$lineage_file)
 saveRDS(ts_blood_sigs, "/bigdata/almogangel/xCell2_data/benchmarking_data/references/xcell2_sigs/ts_blood_sigs.rds")
 print("Done")
+
+print("Pan Cancer Reference")
+pan_cancer_ref <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/references/sc_pan_cancer_ref.rds")
+pan_cancer_sigs <- xCell2Train(ref = pan_cancer_ref$ref, labels = pan_cancer_ref$labels, data_type = "sc", lineage_file = pan_cancer_ref$lineage_file)
+saveRDS(pan_cancer_sigs, "/bigdata/almogangel/xCell2_data/benchmarking_data/references/xcell2_sigs/sc_pan_cancer_sigs.rds")
+print("Done")

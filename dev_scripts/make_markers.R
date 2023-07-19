@@ -1,14 +1,14 @@
-library(tidyverse
-        )
+library(tidyverse)
+
 dir <- "/bigdata/almogangel/xCell2_data/benchmarking_data/references/"
 
 
 # ref_files <- list.files(dir, pattern = "*_ref.rds")
-ref_files_bulk <- c("bp_ref.rds", "kass_blood_ref.rds", "kass_tumor_ref.rds", "lm22_ref.rds")
-ref_files_sc <- c("ts_blood_ref.rds")
+ref_files <- list("bulk" = c("bp_ref.rds", "kass_blood_ref.rds", "kass_tumor_ref.rds", "lm22_ref.rds"), "sc" = c("ts_blood_ref.rds", "sc_pan_cancer_ref.rds"))
 
+ref_files <- list("sc" = c("ts_blood_ref.rds", "sc_pan_cancer_ref.rds"))
 
-# Make markers from bulk references using method from dtangle/ABIS papers: ------------
+# Make markers from bulk references using method from dtangle/ABIS  ------------
 # Credit: https://github.com/gjhunt/dtangle
 find_markers <- function(Y, references = NULL, pure_samples = NULL, data_type = NULL,
                          gamma = NULL, marker_method = "ratio") {
@@ -145,84 +145,95 @@ find_markers <- function(Y, references = NULL, pure_samples = NULL, data_type = 
   return(list(L = L, V = V, M = M, sM = sM))
 }
 
-gma <- dtangle:::gma$rna_se
-lapply(ref_files_bulk, function(ref_file){
+lapply(names(ref_files), function(ref_type){
+  markerMethod <- ifelse(ref_type == "bulk", "p.value", "ratio")
 
-  ref.name <- gsub("_ref.rds", "", ref_file)
-  print(ref.name)
+  lapply(ref_files[[ref_type]], function(ref_file){
+
+    ref.name <- gsub("_ref.rds", "", ref_file)
+    print(ref.name)
 
 
-  ref.in <- readRDS(paste0(dir, ref_file))
-  ref <- ref.in$ref
-  colnames(ref) <- ref.in$labels$label
+    ref.in <- readRDS(paste0(dir, ref_file))
+    ref <- ref.in$ref
+    colnames(ref) <- ref.in$labels$label
+    ref <- as.matrix(ref)
 
-  celltypes <- unique(colnames(ref))
-  pure_samples_list <- sapply(celltypes, function(ct){
-    which(colnames(ref) == ct)
-  })
-
-  # Remove cell types with a single sample -  cannot use p.value method
-  if (any(lengths(pure_samples_list) == 1)) {
-    single_sample_celltypes <- names(which(lengths(pure_samples_list) == 1))
-    ref <- ref[,!colnames(ref) %in% single_sample_celltypes]
     celltypes <- unique(colnames(ref))
     pure_samples_list <- sapply(celltypes, function(ct){
       which(colnames(ref) == ct)
     })
-  }
 
-  markers.out <- find_markers(Y = t(ref), pure_samples = pure_samples_list, marker_method = "p.value", gamma = gma)
-  markers.df <- data.frame(label = markers.out$M$Cell.Type, marker = rownames(markers.out$M))
-  write.table(markers.df,
-        paste0("/bigdata/almogangel/xCell2_data/benchmarking_data/references/markers/", ref.name, "_markers.txt"),
-        row.names = F, quote = F, sep = "\t", col.names = T)
+    # Remove cell types with a single sample -  cannot use p.value method
+    if (any(lengths(pure_samples_list) == 1)) {
+      single_sample_celltypes <- names(which(lengths(pure_samples_list) == 1))
+      ref <- ref[,!colnames(ref) %in% single_sample_celltypes]
+      celltypes <- unique(colnames(ref))
+      pure_samples_list <- sapply(celltypes, function(ct){
+        which(colnames(ref) == ct)
+      })
+    }
+
+    gma <- ifelse(ref.name == "lm22", dtangle:::gma$ma_gene, dtangle:::gma$rna_seq)
+
+    markers.out <- find_markers(Y = t(ref), pure_samples = pure_samples_list, marker_method = markerMethod, gamma = gma)
+    markers.df <- data.frame(label = markers.out$M$Cell.Type, marker = rownames(markers.out$M))
+    write.table(markers.df,
+                paste0("/bigdata/almogangel/xCell2_data/benchmarking_data/references/markers/", ref.name, "_markers.txt"),
+                row.names = F, quote = F, sep = "\t", col.names = T)
+  })
+
+
+
 })
 
 
 
-# Make markers from bulk references using method from BayesPrism: ------------
-# Credit: https://github.com/Danko-Lab/BayesPrism
-lapply(ref_files_sc, function(ref_file){
 
-  ref.name <- gsub("_ref.rds", "", ref_file)
-  print(ref.name)
-
-
-  ref.in <- readRDS(paste0(dir, ref_file))
-  ref.raw <- as.matrix(t(ref.in$ref))
-
-  ref.filtered <- cleanup.genes(input=ref.raw,
-                                input.type="count.matrix",
-                                species="hs",
-                                gene.group=c("Rb","Mrp","other_Rb","chrM","MALAT1","chrX","chrY"))
-
-
-  ref.filtered.pc <-  select.gene.type(ref.filtered,
-                                       gene.type = "protein_coding")
-
-  labels <- ref.in$labels$label
-
-  diff.exp.stat <- get.exp.stat(sc.dat=ref.raw[,colSums(ref.raw>0)>3],# filter genes to reduce memory use
-                                  cell.type.labels=labels,
-                                  cell.state.labels=labels,
-                                  psuedo.count=0.1, #a numeric value used for log2 transformation. =0.1 for 10x data, =10 for smart-seq. Default=0.1.
-                                  cell.count.cutoff=50, # a numeric value to exclude cell state with number of cells fewer than this value for t test. Default=50.
-                                  n.cores=30) #number of threads
-
-
-  markers.tbl <- enframe(diff.exp.stat, name = "label") %>%
-    unnest_longer(value, indices_to = "marker") %>%
-    group_by(label)
-
-
-  markers.df <- markers.tbl %>%
-    filter(value$pval.up.min <= 0.01 & value$min.lfc >= 0.1) %>%
-    select(label, marker) %>%
-    as.data.frame()
-
-  write.table(markers.df,
-              paste0("/bigdata/almogangel/xCell2_data/benchmarking_data/references/markers/", ref.name, "_markers.txt"),
-              row.names = F, quote = F, sep = "\t", col.names = T)
-})
+# # Make markers from bulk references using method from BayesPrism: ------------
+# # Credit: https://github.com/Danko-Lab/BayesPrism
+# library(BayesPrism)
+# lapply(ref_files_sc, function(ref_file){
+#
+#   ref.name <- gsub("_ref.rds", "", ref_file)
+#   print(ref.name)
+#
+#
+#   ref.in <- readRDS(paste0(dir, ref_file))
+#   ref.raw <- t(as.matrix(ref.in$ref))
+#
+#   ref.filtered <- cleanup.genes(input=ref.raw,
+#                                 input.type="count.matrix",
+#                                 species="hs",
+#                                 gene.group=c("Rb","Mrp","other_Rb","chrM","MALAT1","chrX","chrY"))
+#
+#
+#   ref.filtered.pc <-  select.gene.type(ref.filtered,
+#                                        gene.type = "protein_coding")
+#
+#   labels <- ref.in$labels$label
+#
+#   diff.exp.stat <- get.exp.stat(sc.dat=ref.raw[,colSums(ref.raw>0)>3],# filter genes to reduce memory use
+#                                   cell.type.labels=labels,
+#                                   cell.state.labels=labels,
+#                                   psuedo.count=0.1, #a numeric value used for log2 transformation. =0.1 for 10x data, =10 for smart-seq. Default=0.1.
+#                                   cell.count.cutoff=50, # a numeric value to exclude cell state with number of cells fewer than this value for t test. Default=50.
+#                                   n.cores=30) #number of threads
+#
+#
+#   markers.tbl <- enframe(diff.exp.stat, name = "label") %>%
+#     unnest_longer(value, indices_to = "marker") %>%
+#     group_by(label)
+#
+#
+#   markers.df <- markers.tbl %>%
+#     filter(value$pval.up.min <= 0.01 & value$min.lfc >= 0.1) %>%
+#     select(label, marker) %>%
+#     as.data.frame()
+#
+#   write.table(markers.df,
+#               paste0("/bigdata/almogangel/xCell2_data/benchmarking_data/references/markers/", ref.name, "_markers.txt"),
+#               row.names = F, quote = F, sep = "\t", col.names = T)
+# })
 
 

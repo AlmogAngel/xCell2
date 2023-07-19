@@ -113,14 +113,30 @@ print("Done")
 # Array references
 print("LM22 Reference")
 lm22_ref <- readRDS("/bigdata/almogangel/xCell2_data/dev_data/lm22_ref.rds")
-makeCIBERSORTxSigMat(lm22_ref$ref, lm22_ref$labels, lm22_ref$lineage_file, refName = "lm22_adjusted", single_cell = FALSE, QN = TRUE)
+makeCIBERSORTxSigMat(lm22_ref$ref, lm22_ref$labels, lm22_ref$lineage_file, refName = "lm22", single_cell = FALSE, QN = TRUE)
 print("Done")
 
 
 
 # scRNA-seq references
-print("Tabula Sapiens Blood Reference")
-ts_blood_ref <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/references/ts_blood_ref.rds")
-makeCIBERSORTxSigMat(ref = ts_blood_ref$ref, labels = ts_blood_ref$labels, lineage_file = ts_blood_ref$lineage_file, refName = "ts_blood", single_cell = TRUE, QN = FALSE)
+
+print("Pan Cancer References")
+
+sc_pan_cancer_ref <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/references/sc_pan_cancer_ref.rds")
+makeCIBERSORTxSigMat(ref = sc_pan_cancer_ref$ref, labels = sc_pan_cancer_ref$labels, lineage_file = sc_pan_cancer_ref$lineage_file, refName = "sc_pan_cancer", single_cell = TRUE, QN = FALSE)
 print("Done")
+
+
+
+print("Tabula Sapiens References")
+
+ts_refs_files <- list.files("/bigdata/almogangel/xCell2_data/benchmarking_data/references/", pattern = "ts_")
+ts_refs_files <- ts_refs_files[ts_refs_files != "ts_blood_ref.rds"]
+
+for (ref_file in ts_refs_files) {
+  ref_name <- gsub("_ref.rds", "", ref_file)
+  print(ref_name)
+  ts_ref_in <- readRDS(paste0("/bigdata/almogangel/xCell2_data/benchmarking_data/references/", ref_file))
+  makeCIBERSORTxSigMat(ref = ts_ref_in$ref, labels = ts_ref_in$labels, lineage_file = ts_ref_in$lineage_file, refName = ref_name, single_cell = TRUE, QN = FALSE)
+}
 
