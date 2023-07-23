@@ -21,6 +21,12 @@ validateInputs <- function(ref, labels, data_type){
     labels$label <- gsub("_", "-", labels$label)
   }
 
+  if(max(ref) < 50){
+    message("Reference is assumed to be in a log-space (maximum expression value is <50).")
+    message("Using ^2 to anti-log all expression values!")
+    ref <- (2^(ref))-1
+  }
+
   out <- list(ref = ref,
               labels = labels)
   return(out)
@@ -164,7 +170,7 @@ createSignatures <- function(ref, labels, dep_list, quantiles_matrix, probs, cor
       upper_prob <- nrow(quantiles_matrix[[1]])-lower_prob+1 # upper quantile criteria
 
       diff_genes.mat <- sapply(not_dep_celltypes, function(x){
-        log(get(type, quantiles_matrix)[lower_prob,]) > log(get(x, quantiles_matrix)[upper_prob,]) + diff
+        log2(get(type, quantiles_matrix)[lower_prob,]+1) > log2(get(x, quantiles_matrix)[upper_prob,]+1) + diff
       })
 
 
@@ -186,21 +192,18 @@ createSignatures <- function(ref, labels, dep_list, quantiles_matrix, probs, cor
       }
 
 
-      gene_passed <- gene_scores[gene_scores > 0]
+      gene_passed <- sort(gene_scores[gene_scores > 0], decreasing = TRUE)
 
       # If less than min_genes passed move to next parameters
       if (length(gene_passed) < min_genes) {
         next
       }
 
-      # If more than max_genes passed move to next parameters
-      if (length(gene_passed) > max_genes) {
-        next
-      }
 
       # Save signatures
-      gene_passed <- sort(gene_passed, decreasing = TRUE)
-      top_scores <- sort(unique(round(gene_passed)), decreasing = TRUE)
+      top_scores <- sort(unique(round(gene_passed-0.5)), decreasing = TRUE)
+      n_top <- ifelse(length(top_scores) > 5, 5, length(top_scores))
+      top_scores <- top_scores[1:n_top]
 
       for (score in top_scores) {
 
@@ -210,11 +213,20 @@ createSignatures <- function(ref, labels, dep_list, quantiles_matrix, probs, cor
           next
         }
 
+        if (n_genes > max_genes) {
+          break
+        }
+
         sig_name <-  paste(paste0(type, "#"), param.df[i, ]$probs, diff, n_genes, sep = "_")
         type_sigs[[sig_name]] <- names(which(gene_passed >= score))
       }
 
     }
+
+    if (length(type_sigs) == 0) {
+      warning(paste0("No signatures found for ", type))
+    }
+
 
     # Remove duplicate signatures
     type_sigs_sorted <- lapply(type_sigs, function(x) sort(x))
@@ -222,9 +234,6 @@ createSignatures <- function(ref, labels, dep_list, quantiles_matrix, probs, cor
     duplicated_sigs <- duplicated(type_sigs_sorted_collapsed)
     type_sigs <- type_sigs[!duplicated_sigs]
 
-    if (length(type_sigs) == 0) {
-      warning(paste0("No signatures found for ", type))
-    }
 
     return(type_sigs)
   }
@@ -241,9 +250,8 @@ createSignatures <- function(ref, labels, dep_list, quantiles_matrix, probs, cor
     warning("No signatures found for reference!")
   }
 
-  signatures_collection <- all_sigs
 
-  return(signatures_collection)
+  return(all_sigs)
 }
 filterSignatures <- function(ref, labels, mixture_fractions, dep_list, cor_mat, pure_ct_mat, signatures_collection, use_median, data_type){
 
@@ -750,7 +758,7 @@ setClass("xCell2Signatures", slots = list(
 #' @return An S4 object containing the signatures, cell type labels, and cell type dependencies.
 #' @export
 xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, mixture_fractions = c(0, 0.001, 0.005, seq(0.01, 0.25, 0.03)),
-                        probs = c(0.01, 0.05, 0.1, 0.25, 0.333), diff_vals = c(0, 0.1, 0.585, 1, 1.585, 2, 3, 4, 5),
+                        probs = c(0.01, 0.05, 0.1, 0.25, 0.333, 0.49), diff_vals = c(0, 0.1, 0.585, 1, 1.585, 2, 3, 4, 5),
                         min_genes = 2, max_genes = 200, filter_sigs = TRUE){
 
 
