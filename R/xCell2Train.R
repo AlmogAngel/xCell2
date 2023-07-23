@@ -1,25 +1,20 @@
 validateInputs <- function(ref, labels, data_type){
   if (length(unique(labels$label)) < 3) {
-    stop("Reference must have at least 3 different cell types")
+    stop("Reference must have at least 3 cell types")
   }
 
   if (!any(class(ref) %in% c("matrix", "dgCMatrix", "Matrix"))) {
-    stop("ref should be as matrix.")
+    stop("ref must be one of those classes: matrix, dgCMatrix, Matrix")
   }
 
   if (!"data.frame" %in% class(labels)) {
-    stop("labels should be as dataframe.")
+    stop("labels must be a dataframe.")
   }
 
   if (!data_type %in% c("rnaseq", "array", "sc")) {
     stop("data_type should be rnaseq, array or scrnaseq.")
   }
 
-  # if (sum(grepl("_", labels$label)) != 0 | sum(grepl("_", rownames(ref))) != 0) {
-  #   message("Changing underscores to dashes in genes / cell-types labels!")
-  #   labels$label <- gsub("_", "-", labels$label)
-  #   rownames(ref) <- gsub("_", "-", rownames(ref))
-  # }
 
   if (sum(grepl("_", labels$label)) != 0) {
     message("Changing underscores to dashes in cell-types labels!")
@@ -164,27 +159,30 @@ createSignatures <- function(ref, labels, dep_list, quantiles_matrix, probs, cor
     for(i in 1:nrow(param.df)){
 
       # Get a Boolean matrices with genes that pass the quantiles criteria
-      diff <- param.df[i, ]$diff_vals # diffrence criteria
+      diff <- param.df[i, ]$diff_vals # difference criteria
       lower_prob <- which(probs == param.df[i, ]$probs) # lower quantile criteria
       upper_prob <- nrow(quantiles_matrix[[1]])-lower_prob+1 # upper quantile criteria
 
       diff_genes.mat <- sapply(not_dep_celltypes, function(x){
-        get(type, quantiles_matrix)[lower_prob,] > get(x, quantiles_matrix)[upper_prob,] + diff
+        log(get(type, quantiles_matrix)[lower_prob,]) > log(get(x, quantiles_matrix)[upper_prob,]) + diff
       })
 
 
       if(weight_genes){
+
         # Score genes using weights
         type_weights <- cor_mat[type, not_dep_celltypes]
         type_weights[type_weights < 0.001] <- 0.001 # Minimum correlation to fix zero and negative correlations
-
         gene_scores <- apply(diff_genes.mat, 1, function(x){
           sum(type_weights[which(x)])
         })
+
       }else{
+
         gene_scores <- apply(diff_genes.mat, 1, function(x){
           sum(x)
         })
+
       }
 
 
@@ -195,21 +193,34 @@ createSignatures <- function(ref, labels, dep_list, quantiles_matrix, probs, cor
         next
       }
 
+      # If more than max_genes passed move to next parameters
+      if (length(gene_passed) > max_genes) {
+        next
+      }
+
       # Save signatures
       gene_passed <- sort(gene_passed, decreasing = TRUE)
-      gaps <- seq(0, 1, length.out = 40)
-      n_sig_genes <- unique(round(min_genes + (gaps ^ 2) * (max_genes - min_genes)))
-      for (n_genes in n_sig_genes) {
+      top_scores <- sort(unique(round(gene_passed)), decreasing = TRUE)
 
-        if (length(gene_passed) < n_genes) {
-          break
+      for (score in top_scores) {
+
+        n_genes <- sum(gene_passed >= score)
+
+        if (n_genes < min_genes) {
+          next
         }
 
         sig_name <-  paste(paste0(type, "#"), param.df[i, ]$probs, diff, n_genes, sep = "_")
-        type_sigs[[sig_name]] <- GSEABase::GeneSet(names(gene_passed[1:n_genes]), setName = sig_name)
+        type_sigs[[sig_name]] <- names(which(gene_passed >= score))
       }
 
     }
+
+    # Remove duplicate signatures
+    type_sigs_sorted <- lapply(type_sigs, function(x) sort(x))
+    type_sigs_sorted_collapsed <- sapply(type_sigs_sorted, paste, collapse = ",")
+    duplicated_sigs <- duplicated(type_sigs_sorted_collapsed)
+    type_sigs <- type_sigs[!duplicated_sigs]
 
     if (length(type_sigs) == 0) {
       warning(paste0("No signatures found for ", type))
@@ -223,16 +234,14 @@ createSignatures <- function(ref, labels, dep_list, quantiles_matrix, probs, cor
   all_sigs <- pbapply::pblapply(celltypes, function(type){
     getSigs(celltypes, type, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, weight_genes)
   })
-  all_sigs <- unlist(all_sigs)
+  all_sigs <- unlist(all_sigs, recursive = FALSE)
 
 
   if (length(all_sigs) == 0) {
     warning("No signatures found for reference!")
   }
 
-  # Make GeneSetCollection object
-  signatures_collection <- GSEABase::GeneSetCollection(all_sigs)
-
+  signatures_collection <- all_sigs
 
   return(signatures_collection)
 }
@@ -719,34 +728,31 @@ setClass("xCell2Signatures", slots = list(
 #' @import tibble
 #' @import tidyr
 #' @import readr
-#' @import Seurat
-#' @importFrom Rfast rowMedians
-#' @importFrom Rfast rowmeans
-#' @import pbapply
+#' @importFrom Seurat CreateSeuratObject FindVariableFeatures VariableFeaturePlot
+#' @importFrom Rfast rowMedians rowmeans
+#' @importFrom pbapply pblapply pbsapply
 #' @importFrom sparseMatrixStats rowMedians
 #' @importFrom Matrix rowMeans
-#' @importFrom  GSEABase GeneSetCollection
-#' @importFrom  GSEABase GeneSet
-#' @import singscore
+#' importFrom GSEABase GeneSetCollection GeneSet
+#' @importFrom singscore rankGenes simpleScore
 #' @param ref A reference gene expression matrix.
 #' @param labels A data frame in which the rows correspond to samples in the ref. The data frame must have four columns:
-#'   "ont": the cell type ontology as a character (i.e., "CL:0000545").
+#'   "ont": the cell type ontology as a character (i.e., "CL:0000545" or NA if there is no ontology).
 #'   "label": the cell type name as a character (i.e., "T-helper 1 cell").
 #'   "sample": the cell type sample should match the column name in ref.
 #'   "dataset": the cell type sample dataset or subject (for single-cell) as a character.
 #' @param data_type Gene expression data type: "rnaseq", "array", or "sc".
-#' @param lineage_file (Optional) Path to the cell type lineage file generated with `xCell2GetLineage` function.
-#' @param mixture_fractions A vector of mixture fractions to be used in signature filtering.
-#' @param probs A vector of probability thresholds to be used for generating signatures.
-#' @param diff_vals A vector of delta values to be used for generating signatures.
-#' @param min_genes The minimum number of genes to include in the signature.
-#' @param max_genes The maximum number of genes to include in the signature.
-#' @param return_unfiltered_signatures for development (remove)!
+#' @param lineage_file Path to the cell type lineage file generated with `xCell2GetLineage` function (optional) .
+#' @param mixture_fractions A vector of mixture fractions to be used in signature filtering (optional).
+#' @param probs A vector of probability thresholds to be used for generating signatures (optional).
+#' @param diff_vals A vector of delta values to be used for generating signatures (optional).
+#' @param min_genes The minimum number of genes to include in the signature (optional).
+#' @param max_genes The maximum number of genes to include in the signature (optional).
 #' @return An S4 object containing the signatures, cell type labels, and cell type dependencies.
 #' @export
 xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, mixture_fractions = c(0, 0.001, 0.005, seq(0.01, 0.25, 0.03)),
-                        probs = seq(0.25, 0.5, 0.05), diff_vals = c(0, 0.25, 0.5, 1, 1.5, 2, 3, 4, 5, 10, 12, 15, 17),
-                        min_genes = 2, max_genes = 200){
+                        probs = c(0.01, 0.05, 0.1, 0.25, 0.333), diff_vals = c(0, 0.1, 0.585, 1, 1.585, 2, 3, 4, 5),
+                        min_genes = 2, max_genes = 200, filter_sigs = TRUE){
 
 
   # Validate inputs
@@ -782,10 +788,15 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, mixture_fra
   message("Generating signatures...")
   signatures_collection <- createSignatures(ref, labels, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, weight_genes = TRUE)
 
+  if (!filter_sigs) {
+    return(signatures_collection)
+  }
+
   # Filter signatures
   message("Filtering signatures...")
   filterSignatures.out <- filterSignatures(ref, labels, mixture_fractions, dep_list, cor_mat, pure_ct_mat, signatures_collection, use_median = FALSE, data_type)
   signatures_filtered <- signatures_collection[names(signatures_collection) %in% filterSignatures.out$simulations$signature]
+
   mixtures <- filterSignatures.out$mixtures$mix1
 
   # Get transformation models
