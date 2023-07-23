@@ -5,7 +5,6 @@
 #' @importFrom singscore rankGenes simpleScore
 #' @import dplyr
 #' @import tibble
-#' importFrom GSEABase geneIds
 #' @import purrr
 #' @importFrom  pracma lsqlincon
 #' @param bulk A matrix containing gene expression data.
@@ -24,7 +23,6 @@ xCell2Analysis <- function(bulk, xcell2sigs, min_genes_overlap = 0.5, spillover_
     sig2remove <- c()
     for (i in 1:length(signatures_ctoi)) {
       sig <- signatures_ctoi[[i]]
-      # sig_genes <- GSEABase::geneIds(sig)
 
       shared_genes <- intersect(sig_genes, rownames(bulk_ranked))
 

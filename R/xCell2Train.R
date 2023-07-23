@@ -733,7 +733,6 @@ setClass("xCell2Signatures", slots = list(
 #' @importFrom pbapply pblapply pbsapply
 #' @importFrom sparseMatrixStats rowMedians
 #' @importFrom Matrix rowMeans
-#' importFrom GSEABase GeneSetCollection GeneSet
 #' @importFrom singscore rankGenes simpleScore
 #' @param ref A reference gene expression matrix.
 #' @param labels A data frame in which the rows correspond to samples in the ref. The data frame must have four columns:
