@@ -758,7 +758,7 @@ getSpillOverMat <- function(mixtures, signatures_filtered, dep_list, trans_param
 #' @importFrom methods new
 # Create S4 object for the new reference
 setClass("xCell2Signatures", slots = list(
-  signatures = "GeneSetCollection",
+  signatures = "list",
   dependencies = "list",
   transformation_models = "data.frame",
   spill_mat = "matrix"
