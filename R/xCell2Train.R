@@ -307,53 +307,82 @@ filterSignatures <- function(ref, labels, mixture_fractions, dep_list, cor_mat, 
   }
   scoreMixture <- function(mix, signatures_collection, dep_list){
 
-    # Score
+    # Rank mixture
     mix_ranked <- singscore::rankGenes(mix)
-    scores <- sapply(signatures_collection, simplify = TRUE, function(sig){
-      singscore::simpleScore(mix_ranked, upSet = sig, centerScore = FALSE)$TotalScore
-    })
-    rownames(scores) <- colnames(mix)
-    colnames(scores) <- names(signatures_collection)
 
-    # Make tidy
-    scores_tidy <- as_tibble(scores, rownames = "cts_sims") %>%
-      pivot_longer(cols = -cts_sims, names_to = "signature", values_to = "score") %>%
-      separate(cts_sims, into = c("mix_celltype", "mix_control"), sep = "%%") %>%
+    # Generate null distribution for p-values
+    sigs_genes <- unique(unlist(signatures_collection))
+    non_sigs_genes <- rownames(mix_ranked)[!rownames(mix_ranked) %in% sigs_genes]
+    sigs_lengths <- unique(lengths(signatures_collection))
+    all_lengths_null_scores <- pbapply::pblapply(sigs_lengths, function(len){
+      tmp_genes <- sample(non_sigs_genes, len)
+      singscore::generateNull(
+        upSet = tmp_genes,
+        rankData = mix_ranked,
+        subSamples = 1:ncol(mix_ranked),
+        centerScore = FALSE,
+        B = 1000,
+        ncores = 40,
+        seed = 1)
+    })
+    names(all_lengths_null_scores) <- sigs_lengths
+
+
+    sigs_scores_pvals <- pbapply::pblapply(signatures_collection, function(sig){
+      sig_len <- length(sig)
+      scoredf <- singscore::simpleScore(mix_ranked, upSet = sig, centerScore = FALSE)
+      pvals <- singscore::getPvals(all_lengths_null_scores[[as.character(sig_len)]], scoredf)
+      tibble("mix_name" = names(pvals), "score" = scoredf$TotalScore, "pval" = pvals)
+    })
+    names(sigs_scores_pvals) <- names(signatures_collection)
+
+    sigs_scores_pvals_tidy <- enframe(sigs_scores_pvals, name = "signature") %>%
+      unnest(value) %>%
+      separate(mix_name, into = c("mix_celltype", "mix_control"), sep = "%%") %>%
       separate(signature, into = "sig_celltype", sep = "#", extra = "drop", remove = FALSE)
 
+
     # Clean scores
-    scores_tidy_clean <- scores_tidy %>%
+    sigs_scores_pvals_tidy_clean <- sigs_scores_pvals_tidy %>%
       filter(sig_celltype != mix_control) %>% # Signature cell type cannot be the same as the control
       rowwise() %>%
       filter(!mix_celltype %in% unname(unlist(dep_list[[sig_celltype]])) & !mix_control %in% unname(unlist(dep_list[[sig_celltype]])))  # Simulation CTOI/control cannot be dependent on signature cell type
 
-    return(scores_tidy_clean)
+    return(sigs_scores_pvals_tidy_clean)
 
   }
 
-
-  # (1) First filtering - Top of delta score between CTOI and median score (of all other cell types)
 
   mix_frac <- mixture_fractions[length(mixture_fractions)] # Use the highest fraction
   mix_list <- makeMixture(pure_ct_mat, cor_mat, dep_list, mix_frac)
   mix_scores_tidy_clean <- scoreMixture(mix_list$mix1$mix_mat, signatures_collection, dep_list)
 
-  median_sig_score <- mix_scores_tidy_clean %>%
-    ungroup() %>%
-    filter(sig_celltype != mix_celltype) %>%
-    group_by(signature) %>%
-    summarise(median_score = median(score))
-
+  # (1) First filtering - scores p-values
   sigsPassed <- mix_scores_tidy_clean %>%
     ungroup() %>%
+    mutate(logpVal = -log(pval)) %>%
     filter(sig_celltype == mix_celltype) %>%
-    left_join(median_sig_score, by = "signature") %>%
-    drop_na() %>%  # Some CTOI might not have scores with other cell types (because of controls)
-    ungroup() %>%
-    mutate(delta_score = score - median_score) %>%
     group_by(sig_celltype) %>%
-    top_frac(n=0.2, wt=delta_score) %>%
+    top_frac(n=0.2, wt=logpVal) %>%
     pull(signature)
+
+
+  # median_sig_score <- mix_scores_tidy_clean %>%
+  #   ungroup() %>%
+  #   filter(sig_celltype != mix_celltype) %>%
+  #   group_by(signature) %>%
+  #   summarise(median_score = median(score))
+  #
+  # sigsPassed <- mix_scores_tidy_clean %>%
+  #   ungroup() %>%
+  #   filter(sig_celltype == mix_celltype) %>%
+  #   left_join(median_sig_score, by = "signature") %>%
+  #   drop_na() %>%  # Some CTOI might not have scores with other cell types (because of controls)
+  #   ungroup() %>%
+  #   mutate(delta_score = score - median_score) %>%
+  #   group_by(sig_celltype) %>%
+  #   top_frac(n=0.2, wt=delta_score) %>%
+  #   pull(signature)
 
   # If a cell types lost in this filtering step because it is the control of all others
   if(!is.null(mix_list$mix2)){
@@ -363,19 +392,27 @@ filterSignatures <- function(ref, labels, mixture_fractions, dep_list, cor_mat, 
 
     mix_scores_tidy_clean_lost_ct <- scoreMixture(mix_list$mix2, signatures_collection[startsWith(names(signatures_collection), paste0(lost_ct, "#"))], dep_list)
 
-    median_sig_score_lost_ct <- mix_scores_tidy_clean_lost_ct %>%
-      ungroup() %>%
-      filter(sig_celltype != mix_celltype) %>%
-      group_by(signature) %>%
-      summarise(median_score = median(score))
+    # median_sig_score_lost_ct <- mix_scores_tidy_clean_lost_ct %>%
+    #   ungroup() %>%
+    #   filter(sig_celltype != mix_celltype) %>%
+    #   group_by(signature) %>%
+    #   summarise(median_score = median(score))
+    #
+    # sigsPassed_lost_ct <- mix_scores_tidy_clean_lost_ct %>%
+    #   ungroup() %>%
+    #   filter(sig_celltype == mix_celltype) %>%
+    #   left_join(median_sig_score_lost_ct, by = "signature") %>%
+    #   mutate(delta_score = score - median_score) %>%
+    #   group_by(sig_celltype) %>%
+    #   top_frac(n=0.2, wt=delta_score) %>%
+    #   pull(signature)
 
     sigsPassed_lost_ct <- mix_scores_tidy_clean_lost_ct %>%
       ungroup() %>%
+      mutate(logpVal = -log(pval)) %>%
       filter(sig_celltype == mix_celltype) %>%
-      left_join(median_sig_score_lost_ct, by = "signature") %>%
-      mutate(delta_score = score - median_score) %>%
       group_by(sig_celltype) %>%
-      top_frac(n=0.2, wt=delta_score) %>%
+      top_frac(n=0.2, wt=logpVal) %>%
       pull(signature)
 
     sigsPassed <- c(sigsPassed, sigsPassed_lost_ct)
@@ -449,7 +486,7 @@ filterSignatures <- function(ref, labels, mixture_fractions, dep_list, cor_mat, 
 
     }
 
-
+    celltypes <- unique(labels$label)
     sim_list <- pbapply::pblapply(celltypes, function(ctoi){
       # Sort CTOI samples to be homogeneous by datasets
       ctoi_samples_pool <- c()
