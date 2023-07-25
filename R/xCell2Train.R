@@ -21,13 +21,6 @@ validateInputs <- function(ref, labels, data_type){
     labels$label <- gsub("_", "-", labels$label)
   }
 
-  if(max(ref) < 50){
-    message("Reference is assumed to be in a log-space (maximum expression value is <50).")
-    message("Using ^2 to anti-log all expression values!")
-    ref <- 2^ref
-    ref <- ref-1
-  }
-
   out <- list(ref = ref,
               labels = labels)
   return(out)
@@ -171,7 +164,7 @@ createSignatures <- function(ref, labels, dep_list, quantiles_matrix, probs, cor
       upper_prob <- nrow(quantiles_matrix[[1]])-lower_prob+1 # upper quantile criteria
 
       diff_genes.mat <- sapply(not_dep_celltypes, function(x){
-        log2(get(type, quantiles_matrix)[lower_prob,]+1) > log2(get(x, quantiles_matrix)[upper_prob,]+1) + diff
+        get(type, quantiles_matrix)[lower_prob,] > get(x, quantiles_matrix)[upper_prob,] + diff
       })
 
 
@@ -806,9 +799,7 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, mixture_fra
   ref <- inputs_validated$ref
   labels <- inputs_validated$labels
 
-  # For single-cell RNA-seq reference
-  # (1) Use only most variable genes for single-cell data
-  # (2) Transform to CPM
+  #
   if (data_type == "sc") {
     message("Looking for most variable genes with Seurat...")
     topVarGenes <- getTopVariableGenes(ref, max_genes = nrow(ref))
@@ -816,12 +807,17 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, mixture_fra
     topVarGenes <- c(topVarGenes, gsub("-", "_", tmp)) # Because Seurat change genes names from "_" to "-"
     ref <- ref[rownames(ref) %in% topVarGenes,]
 
-    # Normalize
+    # Normalize and transform to log space
     seurat_object <- Seurat::CreateSeuratObject(counts = ref)
     seurat_object <- Seurat::NormalizeData(seurat_object, normalization.method = "LogNormalize", scale.factor = 10000)
-    ref.cpm <- seurat_object@assays$RNA@data
-    colnames(ref.cpm) <- colnames(ref)
-    ref <- ref.cpm
+    ref.norm <- seurat_object@assays$RNA@data
+    colnames(ref.norm) <- colnames(ref)
+    ref <- ref.norm
+  }else{
+    if(max(ref) >= 50){
+      message("Transforming reference to log-space (maximum expression value  >= 50).")
+      ref <- log2(ref+1)
+    }
   }
 
   # Build cell types correlation matrix
@@ -840,6 +836,7 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, mixture_fra
   # Generate signatures for each cell type
   message("Calculating quantiles...")
   quantiles_matrix <- makeQuantiles(ref, labels, probs, dep_list, include_descendants = FALSE)
+
   message("Generating signatures...")
   signatures_collection <- createSignatures(ref, labels, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, weight_genes = TRUE)
 
