@@ -51,23 +51,18 @@ NormalizeRef <- function(ref, data_type){
     # topVarGenes <- c(topVarGenes, gsub("-", "_", tmp)) # Because Seurat change genes names from "_" to "-"
     # ref <- ref[rownames(ref) %in% topVarGenes,]
 
-    ref <- ref.norm
+    return(ref.norm)
 
   }else{
 
     if(max(ref) >= 50){
       message("Transforming reference to log2-space (maximum expression value >= 50).")
-      ref <- log2(ref+1)
+      ref.norm <- log2(ref+1)
     }
 
-    return(ref)
+    return(ref.norm)
   }
 
-
-
-
-
-  return(genes)
 }
 makePureCTMat <- function(ref, labels, use_median){
 
