@@ -24,7 +24,8 @@ validateInputs <- function(ref, labels, data_type){
   if(max(ref) < 50){
     message("Reference is assumed to be in a log-space (maximum expression value is <50).")
     message("Using ^2 to anti-log all expression values!")
-    ref <- (2^(ref))-1
+    ref <- 2^ref
+    ref <- ref-1
   }
 
   out <- list(ref = ref,
@@ -237,6 +238,7 @@ createSignatures <- function(ref, labels, dep_list, quantiles_matrix, probs, cor
 
     return(type_sigs)
   }
+
 
   celltypes <- unique(labels[,2])
 
@@ -804,13 +806,22 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, mixture_fra
   ref <- inputs_validated$ref
   labels <- inputs_validated$labels
 
-  # Use only most variable genes for single-cell data
+  # For single-cell RNA-seq reference
+  # (1) Use only most variable genes for single-cell data
+  # (2) Transform to CPM
   if (data_type == "sc") {
     message("Looking for most variable genes with Seurat...")
     topVarGenes <- getTopVariableGenes(ref, max_genes = nrow(ref))
     tmp <- topVarGenes[!topVarGenes %in% rownames(ref)]
     topVarGenes <- c(topVarGenes, gsub("-", "_", tmp)) # Because Seurat change genes names from "_" to "-"
     ref <- ref[rownames(ref) %in% topVarGenes,]
+
+    # Normalize
+    seurat_object <- Seurat::CreateSeuratObject(counts = ref)
+    seurat_object <- Seurat::NormalizeData(seurat_object, normalization.method = "LogNormalize", scale.factor = 10000)
+    ref.cpm <- seurat_object@assays$RNA@data
+    colnames(ref.cpm) <- colnames(ref)
+    ref <- ref.cpm
   }
 
   # Build cell types correlation matrix
