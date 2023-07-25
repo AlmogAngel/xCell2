@@ -26,16 +26,46 @@ validateInputs <- function(ref, labels, data_type){
   return(out)
 
 }
-getTopVariableGenes <- function(ref, max_genes){
+NormalizeRef <- function(ref, data_type){
 
-  ref.srt <- Seurat::CreateSeuratObject(counts = ref)
-  ref.srt <- Seurat::FindVariableFeatures(ref.srt, selection.method = "vst")
-  plot1 <- Seurat::VariableFeaturePlot(ref.srt)
-  genesVar <- plot1$data$variance.standardized
-  names(genesVar) <- rownames(plot1$data)
-  genesVar <- sort(genesVar, decreasing = TRUE)
-  genesVar <- genesVar[genesVar > 0]
-  genes <- names(genesVar[1:max_genes])
+  if (data_type == "sc") {
+
+    # Log-Normalize
+    message("Normalizing and transforming reference to log1p-space.")
+
+    # TODO: Change log1p to log2(x+1)
+    genes_names <- rownames(ref)
+    ref.srt <- Seurat::CreateSeuratObject(counts = ref)
+    ref.srt <- Seurat::NormalizeData(ref.srt, normalization.method = "LogNormalize", scale.factor = 10000, verbose = FALSE)
+    ref.norm <-  ref.srt@assays$RNA@data
+    rownames(ref.norm) <- genes_names # Because Seurat change genes names from "_" to "-"
+
+    # ref.srt <- Seurat::FindVariableFeatures(ref.srt, selection.method = "vst", verbose = FALSE)
+    # plot1 <- Seurat::VariableFeaturePlot(ref.srt)
+    # genesVar <- plot1$data$variance.standardized
+    # names(genesVar) <- rownames(plot1$data)
+    # genesVar <- sort(genesVar, decreasing = TRUE)
+    # genesVar <- genesVar[genesVar > 0]
+    # topVarGenes <- names(genesVar[1:max_genes])
+    # tmp <- topVarGenes[!topVarGenes %in% rownames(ref)]
+    # topVarGenes <- c(topVarGenes, gsub("-", "_", tmp)) # Because Seurat change genes names from "_" to "-"
+    # ref <- ref[rownames(ref) %in% topVarGenes,]
+
+    ref <- ref.norm
+
+  }else{
+
+    if(max(ref) >= 50){
+      message("Transforming reference to log2-space (maximum expression value >= 50).")
+      ref <- log2(ref+1)
+    }
+
+    return(ref)
+  }
+
+
+
+
 
   return(genes)
 }
@@ -768,7 +798,7 @@ setClass("xCell2Signatures", slots = list(
 #' @import tibble
 #' @import tidyr
 #' @import readr
-#' @importFrom Seurat CreateSeuratObject FindVariableFeatures VariableFeaturePlot
+#' @import Seurat CreateSeuratObject NormalizeData
 #' @importFrom Rfast rowMedians rowmeans
 #' @importFrom pbapply pblapply pbsapply
 #' @importFrom sparseMatrixStats rowMedians
@@ -799,26 +829,9 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, mixture_fra
   ref <- inputs_validated$ref
   labels <- inputs_validated$labels
 
-  #
-  if (data_type == "sc") {
-    message("Looking for most variable genes with Seurat...")
-    topVarGenes <- getTopVariableGenes(ref, max_genes = nrow(ref))
-    tmp <- topVarGenes[!topVarGenes %in% rownames(ref)]
-    topVarGenes <- c(topVarGenes, gsub("-", "_", tmp)) # Because Seurat change genes names from "_" to "-"
-    ref <- ref[rownames(ref) %in% topVarGenes,]
+  # Normalize Reference
+  ref <- NormalizeRef(ref, data_type)
 
-    # Normalize and transform to log space
-    seurat_object <- Seurat::CreateSeuratObject(counts = ref)
-    seurat_object <- Seurat::NormalizeData(seurat_object, normalization.method = "LogNormalize", scale.factor = 10000)
-    ref.norm <- seurat_object@assays$RNA@data
-    colnames(ref.norm) <- colnames(ref)
-    ref <- ref.norm
-  }else{
-    if(max(ref) >= 50){
-      message("Transforming reference to log-space (maximum expression value  >= 50).")
-      ref <- log2(ref+1)
-    }
-  }
 
   # Build cell types correlation matrix
   message("Calculating cell-type correlation matrix...")
@@ -847,7 +860,10 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, mixture_fra
   # Filter signatures
   message("Filtering signatures...")
   filterSignatures.out <- filterSignatures(ref, labels, mixture_fractions, dep_list, cor_mat, pure_ct_mat, signatures_collection, use_median = FALSE, data_type)
-  signatures_filtered <- signatures_collection[names(signatures_collection) %in% filterSignatures.out$simulations$signature]
+
+  # Remove (!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!):
+  #signatures_filtered <- signatures_collection[names(signatures_collection) %in% filterSignatures.out$simulations$signature]
+  signatures_filtered <- signatures_collection
 
   mixtures <- filterSignatures.out$mixtures$mix1
 
@@ -855,7 +871,7 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, mixture_fra
   trans_models <- getTranformationModels(simulations = filterSignatures.out$simulations)
 
   # Get spillover matrix
-  spill_mat <- getSpillOverMat(mixtures, signatures_filtered, dep_list, trans_models)
+  spill_mat <- getSpillOverMat(mixtures, signatures_filtered, dep_list, trans_parameters = trans_models)
 
   xCell2Sigs.S4 <- new("xCell2Signatures",
                       signatures = signatures_filtered,
