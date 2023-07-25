@@ -22,7 +22,7 @@ xCell2Analysis <- function(bulk, xcell2sigs, min_genes_overlap = 0.5, spillover_
     # Filter signatures by genes_overlap
     sig2remove <- c()
     for (i in 1:length(signatures_ctoi)) {
-      sig <- signatures_ctoi[[i]]
+      sig_genes <- signatures_ctoi[[i]]
 
       shared_genes <- intersect(sig_genes, rownames(bulk_ranked))
 
