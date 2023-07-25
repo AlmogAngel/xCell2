@@ -58,9 +58,11 @@ NormalizeRef <- function(ref, data_type){
     if(max(ref) >= 50){
       message("Transforming reference to log2-space (maximum expression value >= 50).")
       ref.norm <- log2(ref+1)
+      return(ref.norm)
+    }else{
+      return(ref)
     }
 
-    return(ref.norm)
   }
 
 }
