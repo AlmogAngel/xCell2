@@ -35,8 +35,8 @@ NormalizeRef <- function(ref, data_type){
 
     # TODO: Change log1p to log2(x+1)
     genes_names <- rownames(ref)
-    ref.srt <- Seurat::CreateSeuratObject(counts = ref)
-    ref.srt <- Seurat::NormalizeData(ref.srt, normalization.method = "LogNormalize", scale.factor = 10000, verbose = FALSE)
+    ref.srt <- CreateSeuratObject(counts = ref)
+    ref.srt <- NormalizeData(ref.srt, normalization.method = "LogNormalize", scale.factor = 10000, verbose = FALSE)
     ref.norm <-  ref.srt@assays$RNA@data
     rownames(ref.norm) <- genes_names # Because Seurat change genes names from "_" to "-"
 
@@ -798,7 +798,7 @@ setClass("xCell2Signatures", slots = list(
 #' @import tibble
 #' @import tidyr
 #' @import readr
-#' @import Seurat CreateSeuratObject NormalizeData
+#' @importFrom Seurat CreateSeuratObject NormalizeData
 #' @importFrom Rfast rowMedians rowmeans
 #' @importFrom pbapply pblapply pbsapply
 #' @importFrom sparseMatrixStats rowMedians
