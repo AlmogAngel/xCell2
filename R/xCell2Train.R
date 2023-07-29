@@ -829,6 +829,7 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, mixture_fra
   # Normalize Reference
   ref <- NormalizeRef(ref, data_type)
 
+  # TODO: Remove gene like in BayesPrism?
 
   # Build cell types correlation matrix
   message("Calculating cell-type correlation matrix...")
@@ -858,7 +859,7 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, mixture_fra
   message("Filtering signatures...")
   filterSignatures.out <- filterSignatures(ref, labels, mixture_fractions, dep_list, cor_mat, pure_ct_mat, signatures_collection, use_median = FALSE, data_type)
 
-  # Remove (!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!):
+  # TODO: Remove (!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!):
   #signatures_filtered <- signatures_collection[names(signatures_collection) %in% filterSignatures.out$simulations$signature]
   signatures_filtered <- signatures_collection
 
