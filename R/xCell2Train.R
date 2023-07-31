@@ -12,9 +12,8 @@ validateInputs <- function(ref, labels, data_type){
   }
 
   if (!data_type %in% c("rnaseq", "array", "sc")) {
-    stop("data_type should be rnaseq, array or scrnaseq.")
+    stop("data_type should be 'rnaseq', 'array' or 'sc'.")
   }
-
 
   if (sum(grepl("_", labels$label)) != 0) {
     message("Changing underscores to dashes in cell-types labels!")
@@ -26,12 +25,24 @@ validateInputs <- function(ref, labels, data_type){
   return(out)
 
 }
+cleanGenes <- function(ref, gene_groups){
+  gene.list <- hs.genelist
+  if (all(startsWith(rownames(ref), "ENSG"))) {
+    message("Cleaning genes from reference (assuming genes are in Ensembl ID)...")
+    ref <- ref[!rownames(ref) %in% gene.list[gene.list$gene_group %in% gene_groups, 2],]
+    return(ref)
+  }else{
+    message("Cleaning genes from reference (assuming genes are in symbol ID)...")
+    ref <- ref[!rownames(ref) %in% gene.list[gene.list$gene_group %in% gene_groups, 3],]
+    return(ref)
+  }
+}
 NormalizeRef <- function(ref, data_type){
 
   if (data_type == "sc") {
 
     # Log-Normalize
-    message("Normalizing and transforming reference to log1p-space.")
+    message("Normalizing and transforming scRNA-Seq reference to log1p-space.")
 
     # TODO: Change log1p to log2(x+1)
     genes_names <- rownames(ref)
@@ -39,17 +50,6 @@ NormalizeRef <- function(ref, data_type){
     ref.srt <- NormalizeData(ref.srt, normalization.method = "LogNormalize", scale.factor = 10000, verbose = FALSE)
     ref.norm <-  ref.srt@assays$RNA@data
     rownames(ref.norm) <- genes_names # Because Seurat change genes names from "_" to "-"
-
-    # ref.srt <- Seurat::FindVariableFeatures(ref.srt, selection.method = "vst", verbose = FALSE)
-    # plot1 <- Seurat::VariableFeaturePlot(ref.srt)
-    # genesVar <- plot1$data$variance.standardized
-    # names(genesVar) <- rownames(plot1$data)
-    # genesVar <- sort(genesVar, decreasing = TRUE)
-    # genesVar <- genesVar[genesVar > 0]
-    # topVarGenes <- names(genesVar[1:max_genes])
-    # tmp <- topVarGenes[!topVarGenes %in% rownames(ref)]
-    # topVarGenes <- c(topVarGenes, gsub("-", "_", tmp)) # Because Seurat change genes names from "_" to "-"
-    # ref <- ref[rownames(ref) %in% topVarGenes,]
 
     return(ref.norm)
 
@@ -60,6 +60,7 @@ NormalizeRef <- function(ref, data_type){
       ref.norm <- log2(ref+1)
       return(ref.norm)
     }else{
+      message("Assuming reference is already in log2-space (maximum expression value < 50).")
       return(ref)
     }
 
@@ -98,6 +99,7 @@ getCellTypeCorrelation <- function(pure_ct_mat, data_type){
     pure_ct_mat <- pure_ct_mat[genes_var > most_var_genes_cutoff,]
 
   }else{
+
     # Use top 1% most variable genes
     genes_var <- apply(pure_ct_mat, 1, var)
     most_var_genes_cutoff <- quantile(genes_var, 0.99, na.rm=TRUE)
@@ -146,29 +148,31 @@ makeQuantiles <- function(ref, labels, probs, dep_list, include_descendants){
 
   celltypes <- unique(labels[,2])
 
-  quantiles_matrix <-  pbapply::pblapply(celltypes, function(type){
+  quantiles_mat_list <-  pbapply::pblapply(celltypes, function(type){
 
-    # Include all the descendants of the cell type in the quantiles calculations
     if (include_descendants) {
+      # Include all the descendants of the cell type for quantiles calculations
       descen_cells <- dep_list[[type]]$descendants
       type_samples <- labels[,2] == type | labels[,2] %in% descen_cells
     }else{
       type_samples <- labels[,2] == type
     }
 
-    # If there is one sample for this cell type -> duplicate the sample to make a data frame
+
     if (sum(type_samples) == 1) {
+      # If there is one sample for this cell type -> duplicate the sample to make a data frame
       type.df <- cbind(ref[,type_samples], ref[,type_samples])
     }else{
       type.df <- ref[,type_samples]
     }
 
     # Calculate quantiles
-    quantiles_matrix <- apply(type.df, 1, function(x) quantile(x, unique(c(probs, rev(1-probs))), na.rm=TRUE))
+    # TODO: Balance quantiles by dataset
+    type_quantiles_matrix <- apply(type.df, 1, function(x) quantile(x, unique(c(probs, rev(1-probs))), na.rm=TRUE))
   })
-  names(quantiles_matrix) <- celltypes
+  names(quantiles_mat_list) <- celltypes
 
-  return(quantiles_matrix)
+  return(quantiles_mat_list)
 }
 createSignatures <- function(ref, labels, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, weight_genes){
 
@@ -178,7 +182,7 @@ createSignatures <- function(ref, labels, dep_list, quantiles_matrix, probs, cor
     # Remove dependent cell types
     not_dep_celltypes <- celltypes[!celltypes %in% c(type, unname(unlist(dep_list[[type]])))]
 
-    # Signature parameters
+    # Set signature parameters
     param.df <- expand.grid("diff_vals" = diff_vals, "probs" = probs)
 
     # Generate signatures
@@ -189,23 +193,21 @@ createSignatures <- function(ref, labels, dep_list, quantiles_matrix, probs, cor
       diff <- param.df[i, ]$diff_vals # difference criteria
       lower_prob <- which(probs == param.df[i, ]$probs) # lower quantile criteria
       upper_prob <- nrow(quantiles_matrix[[1]])-lower_prob+1 # upper quantile criteria
-
       diff_genes.mat <- sapply(not_dep_celltypes, function(x){
         get(type, quantiles_matrix)[lower_prob,] > get(x, quantiles_matrix)[upper_prob,] + diff
       })
 
 
       if(weight_genes){
-
-        # Score genes using weights
+        # Score genes using cell types correlations as weights
         type_weights <- cor_mat[type, not_dep_celltypes]
-        type_weights[type_weights < 0.001] <- 0.001 # Minimum correlation to fix zero and negative correlations
+        type_weights[type_weights < 0.001] <- 0.001 # Fix minimum correlation to avoid zero and negative correlations
         gene_scores <- apply(diff_genes.mat, 1, function(x){
           sum(type_weights[which(x)])
         })
 
       }else{
-
+        # All cell types scores are the same
         gene_scores <- apply(diff_genes.mat, 1, function(x){
           sum(x)
         })
@@ -221,12 +223,14 @@ createSignatures <- function(ref, labels, dep_list, quantiles_matrix, probs, cor
       }
 
 
-      # Save signatures
+      # Round and sort genes scores
       top_scores <- sort(unique(round(gene_passed-0.5)), decreasing = TRUE)
-      n_top <- ifelse(length(top_scores) > 5, 5, length(top_scores))
-      top_scores <- top_scores[1:n_top]
 
-      for (score in top_scores) {
+      # Take top 10 highest scores
+      # TODO: test different n_tops parameters (currently 10 is default)
+      n_top <- ifelse(length(top_scores) > 10, 10, length(top_scores))
+
+      for (score in top_scores[1:n_top]) {
 
         n_genes <- sum(gene_passed >= score)
 
@@ -816,9 +820,9 @@ setClass("xCell2Signatures", slots = list(
 #' @param max_genes The maximum number of genes to include in the signature (optional).
 #' @return An S4 object containing the signatures, cell type labels, and cell type dependencies.
 #' @export
-xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, mixture_fractions = c(0, 0.001, 0.005, seq(0.01, 0.25, 0.03)),
-                        probs = c(0.01, 0.05, 0.1, 0.25, 0.333, 0.49), diff_vals = c(0, 0.1, 0.585, 1, 1.585, 2, 3, 4, 5),
-                        min_genes = 2, max_genes = 200, filter_sigs = TRUE){
+xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, clean_genes = TRUE,
+                        mixture_fractions = c(0, 0.001, 0.005, seq(0.01, 0.25, 0.03)), diff_vals = c(1, 1.32, 1.585, 2, 3, 4, 5),
+                        min_genes = 5, max_genes = 200, filter_sigs = TRUE){
 
 
   # Validate inputs
@@ -826,10 +830,14 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, mixture_fra
   ref <- inputs_validated$ref
   labels <- inputs_validated$labels
 
+  # Clean genes
+  if (clean_genes) {
+    gene_groups <- c("Rb", "Mrp", "other_Rb", "chrM", "chrX", "chrY")
+    ref <- cleanGenes(ref, gene_groups)
+  }
+
   # Normalize Reference
   ref <- NormalizeRef(ref, data_type)
-
-  # TODO: Remove gene like in BayesPrism?
 
   # Build cell types correlation matrix
   message("Calculating cell-type correlation matrix...")
@@ -845,9 +853,13 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, mixture_fra
   }
 
   # Generate signatures for each cell type
+  if (data_type != "sc") {
+    probs <- c(0.01, 0.05, 0.1, 0.25, 0.333, 0.49)
+  }else{
+    probs <- c(0.1, 0.15, 0.2, 0.25, 0.333, 0.49)
+  }
   message("Calculating quantiles...")
   quantiles_matrix <- makeQuantiles(ref, labels, probs, dep_list, include_descendants = FALSE)
-
   message("Generating signatures...")
   signatures_collection <- createSignatures(ref, labels, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, weight_genes = TRUE)
 
@@ -858,10 +870,7 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, mixture_fra
   # Filter signatures
   message("Filtering signatures...")
   filterSignatures.out <- filterSignatures(ref, labels, mixture_fractions, dep_list, cor_mat, pure_ct_mat, signatures_collection, use_median = FALSE, data_type)
-
-  # TODO: Remove (!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!):
-  #signatures_filtered <- signatures_collection[names(signatures_collection) %in% filterSignatures.out$simulations$signature]
-  signatures_filtered <- signatures_collection
+  signatures_filtered <- signatures_collection[names(signatures_collection) %in% filterSignatures.out$simulations$signature]
 
   mixtures <- filterSignatures.out$mixtures$mix1
 

@@ -9,37 +9,36 @@ xCell2Train(
   labels,
   data_type,
   lineage_file = NULL,
+  clean_genes = TRUE,
   mixture_fractions = c(0, 0.001, 0.005, seq(0.01, 0.25, 0.03)),
-  probs = seq(0.25, 0.5, 0.05),
-  diff_vals = c(0, 0.25, 0.5, 1, 1.5, 2, 3, 4, 5, 10, 12, 15, 17),
-  min_genes = 2,
-  max_genes = 200
+  diff_vals = c(1, 1.32, 1.585, 2, 3, 4, 5),
+  min_genes = 5,
+  max_genes = 200,
+  filter_sigs = TRUE
 )
 }
 \arguments{
 \item{ref}{A reference gene expression matrix.}
 
 \item{labels}{A data frame in which the rows correspond to samples in the ref. The data frame must have four columns:
-"ont": the cell type ontology as a character (i.e., "CL:0000545").
+"ont": the cell type ontology as a character (i.e., "CL:0000545" or NA if there is no ontology).
 "label": the cell type name as a character (i.e., "T-helper 1 cell").
 "sample": the cell type sample should match the column name in ref.
 "dataset": the cell type sample dataset or subject (for single-cell) as a character.}
 
 \item{data_type}{Gene expression data type: "rnaseq", "array", or "sc".}
 
-\item{lineage_file}{(Optional) Path to the cell type lineage file generated with `xCell2GetLineage` function.}
+\item{lineage_file}{Path to the cell type lineage file generated with `xCell2GetLineage` function (optional) .}
 
-\item{mixture_fractions}{A vector of mixture fractions to be used in signature filtering.}
+\item{mixture_fractions}{A vector of mixture fractions to be used in signature filtering (optional).}
 
-\item{probs}{A vector of probability thresholds to be used for generating signatures.}
+\item{diff_vals}{A vector of delta values to be used for generating signatures (optional).}
 
-\item{diff_vals}{A vector of delta values to be used for generating signatures.}
+\item{min_genes}{The minimum number of genes to include in the signature (optional).}
 
-\item{min_genes}{The minimum number of genes to include in the signature.}
+\item{max_genes}{The maximum number of genes to include in the signature (optional).}
 
-\item{max_genes}{The maximum number of genes to include in the signature.}
-
-\item{return_unfiltered_signatures}{for development (remove)!}
+\item{probs}{A vector of probability thresholds to be used for generating signatures (optional).}
 }
 \value{
 An S4 object containing the signatures, cell type labels, and cell type dependencies.
