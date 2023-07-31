@@ -832,7 +832,7 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, clean_genes
 
   # Clean genes
   if (clean_genes) {
-    gene_groups <- c("Rb", "Mrp", "other_Rb", "chrM", "chrX", "chrY")
+    gene_groups <- c("Rb", "Mrp", "other_Rb", "chrM", "MALAT1", "chrX", "chrY")
     ref <- cleanGenes(ref, gene_groups)
   }
 
