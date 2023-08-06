@@ -13,7 +13,7 @@
 xCell2CleanGenes <- function(ref, mix, gene_groups = c("Rb", "Mrp", "other_Rb", "chrM", "MALAT1", "chrX", "chrY"), top_var_genes = FALSE, n_var_genes = 10000){
 
   if (all(startsWith(rownames(ref), "ENSG"))) {
-    message("Assuming genes are in Ensembl ID...")
+    message("Assuming genes are in Ensembl ID.")
     id <- 2
   }else{
     message("Assuming genes are in symbol ID...")

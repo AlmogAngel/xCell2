@@ -10,11 +10,12 @@ xCell2Train(
   data_type,
   lineage_file = NULL,
   clean_genes = TRUE,
-  mixture_fractions = c(0, 0.001, 0.005, seq(0.01, 0.25, 0.03)),
+  sim_fracs = c(0, seq(0.01, 0.25, 0.01)),
   diff_vals = c(1, 1.32, 1.585, 2, 3, 4, 5),
   min_genes = 5,
   max_genes = 200,
-  filter_sigs = TRUE
+  filter_sigs = TRUE,
+  simpleSim = TRUE
 )
 }
 \arguments{
@@ -30,7 +31,7 @@ xCell2Train(
 
 \item{lineage_file}{Path to the cell type lineage file generated with `xCell2GetLineage` function (optional) .}
 
-\item{mixture_fractions}{A vector of mixture fractions to be used in signature filtering (optional).}
+\item{sim_fracs}{A vector of mixture fractions to be used in signature filtering (optional).}
 
 \item{diff_vals}{A vector of delta values to be used for generating signatures (optional).}
 

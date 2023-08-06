@@ -7,7 +7,9 @@
 xCell2CleanGenes(
   ref,
   mix,
-  gene_groups = c("Rb", "Mrp", "other_Rb", "chrM", "MALAT1", "chrX", "chrY")
+  gene_groups = c("Rb", "Mrp", "other_Rb", "chrM", "MALAT1", "chrX", "chrY"),
+  top_var_genes = FALSE,
+  n_var_genes = 10000
 )
 }
 \arguments{
@@ -16,6 +18,10 @@ xCell2CleanGenes(
 \item{mix}{Mixture gene expression matrix.}
 
 \item{gene_groups}{Gene group to clean c("Rb", "Mrp", "other_Rb", "chrM", "MALAT1", "chrX", "chrY")}
+
+\item{top_var_genes}{Select top variable genes using Seurat's FindVariableFeatures function (only for scRNA-seq data)}
+
+\item{n_var_genes}{Number of top variable genes to select  (only for scRNA-seq data)}
 }
 \value{
 A list of ref and mix with the shared genes after cleaning
