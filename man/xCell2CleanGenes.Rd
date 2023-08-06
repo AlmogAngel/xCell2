@@ -8,6 +8,7 @@ xCell2CleanGenes(
   ref,
   mix,
   gene_groups = c("Rb", "Mrp", "other_Rb", "chrM", "MALAT1", "chrX", "chrY"),
+  use_protein_coding = TRUE,
   top_var_genes = FALSE,
   n_var_genes = 10000
 )
@@ -18,6 +19,8 @@ xCell2CleanGenes(
 \item{mix}{Mixture gene expression matrix.}
 
 \item{gene_groups}{Gene group to clean c("Rb", "Mrp", "other_Rb", "chrM", "MALAT1", "chrX", "chrY")}
+
+\item{use_protein_coding}{Boolean - use only protein coding genes?}
 
 \item{top_var_genes}{Select top variable genes using Seurat's FindVariableFeatures function (only for scRNA-seq data)}
 
