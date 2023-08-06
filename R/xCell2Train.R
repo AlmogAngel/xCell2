@@ -890,6 +890,7 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, clean_genes
   message("Filtering signatures...")
   # out <- filterSignatures(sim = simple_sim_mat2, signatures_collection = refs.data[[ref_name]]$signatures_collection,
   #                         dep_list = refs.data[[ref_name]]$dep_list)
+  signatures <- signatures_collection
 
 
   # Get transformation models
@@ -902,7 +903,7 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, clean_genes
 
   # Get spillover matrix
   # TODO: Use filtered signatures
-  spill_mat <- getSpillOverMat(simple_sim = simple_simulations, signatures = signatures_collection, dep_list, trans_models = simple_trans_models)
+  spill_mat <- getSpillOverMat(simple_sim = simple_simulations, signatures = signatures, dep_list, trans_models = simple_trans_models)
 
   # Save results in S4 object
   xCell2Sigs.S4 <- new("xCell2Signatures",
