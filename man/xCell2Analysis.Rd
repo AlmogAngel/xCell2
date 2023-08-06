@@ -5,20 +5,26 @@
 \title{xCell2Analysis function}
 \usage{
 xCell2Analysis(
-  bulk,
+  mix,
   xcell2sigs,
-  min_genes_overlap = 0.5,
+  min_intersect = 0.9,
+  tranform,
+  spillover,
   spillover_alpha = 0.5
 )
 }
 \arguments{
-\item{bulk}{A matrix containing gene expression data.}
+\item{mix}{a matrix containing gene expression data}
 
-\item{xcell2sigs}{A `xCell2Signatures` object.}
+\item{xcell2sigs}{S4 object of `xCell2Signatures`}
+
+\item{tranform}{Boolean - should scores transformed to fraction?}
+
+\item{spillover}{Boolean - should we use spillover corretion on the transformed scores?}
 }
 \value{
 A data frame containing the cell type enrichment for each sample in the input matrix, as estimated by xCell2.
 }
 \description{
-This function takes a matrix of bulk gene expression data and a `xCell2Signatures` object containing a set of signatures as input. It performs downstream analysis to identify enriched cell types in the bulk sample.
+This function takes a matrix of mix gene expression data and a `xCell2Signatures` object containing a set of signatures as input. It performs downstream analysis to identify enriched cell types in the mix sample.
 }
