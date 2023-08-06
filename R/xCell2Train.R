@@ -786,13 +786,15 @@ getSpillOverMat <- function(simple_sim, signatures, dep_list, trans_models){
 #' @slot dependencies list of cell type dependencies
 #' @slot transformation_models data frame of cell type transformation models
 #' @slot spill_mat matrix of cell types spillover
+#' @slot genes_used character vector of genes names used to train the signatures
 #' @importFrom methods new
 # Create S4 object for the new reference
 setClass("xCell2Signatures", slots = list(
   signatures = "list",
   dependencies = "list",
   transformation_models = "data.frame",
-  spill_mat = "matrix"
+  spill_mat = "matrix",
+  genes_used = "character"
 ))
 
 
@@ -910,7 +912,8 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, clean_genes
                        signatures = signatures,
                        dependencies = dep_list,
                        transformation_models = trans_models,
-                       spill_mat = spill_mat)
+                       spill_mat = spill_mat,
+                       genes_used = rownames(ref))
 
   return(xCell2Sigs.S4)
 
