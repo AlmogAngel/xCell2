@@ -25,22 +25,15 @@ xCell2Analysis <- function(mix, xcell2sigs, min_intersect = 0.9, tranform, spill
       suppressWarnings(singscore::simpleScore(mix_ranked, upSet = sig, centerScore = FALSE)$TotalScore)
     })
 
-    mean_scores <- apply(scores, 1, mean)
-    names(mean_scores) <- colnames(mix_ranked)
-
-    return(mean_scores)
+    return(scores)
   }
 
-  # Transform scores
-  transfomScores <- function(ctoi, scores, xcell2sigs){
+  predictFracs <- function(ctoi, scores, xcell2sigs){
 
-    shift_value <- filter(xcell2sigs@transformation_models, celltype == ctoi)$shift_value
-    shifted_scores <- scores - shift_value
+    model <- filter(xcell2sigs@transformation_models, celltype == ctoi)$model[[1]]
+    predictions <- round(predict(model, newdata = scores, type = "response"), 3)
 
-    transformation_model <- filter(xcell2sigs@transformation_models, celltype == ctoi)$model[[1]]
-    transformed_scores <- round(predict(transformation_model, newdata = data.frame("shifted_score" = shifted_scores), type = "response"), 3)
-    #transformed_scores[transformed_scores < 0] <- 0
-    return(transformed_scores)
+    return(predictions)
 
   }
 
@@ -55,21 +48,20 @@ xCell2Analysis <- function(mix, xcell2sigs, min_intersect = 0.9, tranform, spill
   # Rank mix gene expression matrix
   mix_ranked <- singscore::rankGenes(mix)
 
-  # Score and transform
+  # Score and predict
   sigs_celltypes <- unique(unlist(lapply(names(xcell2sigs@signatures), function(x){strsplit(x, "#")[[1]][1]})))
 
-  scores_transformed <- tibble(label = sigs_celltypes) %>%
+   all_predictions <- tibble(label = sigs_celltypes) %>%
     rowwise() %>%
     mutate(scores = list(scoreMix(ctoi = label, mix_ranked, xcell2sigs))) %>%
-    #filter(all(!is.na(scores))) %>%
-    mutate(transfomed_scores = ifelse(tranform, list(transfomScores(ctoi = label, scores, xcell2sigs)), list(scores))) %>%
-    unnest_longer(transfomed_scores, indices_to = "sample") %>%
+    mutate(predictions = ifelse(tranform, list(predictFracs(ctoi = label, scores, xcell2sigs)), list(scores))) %>%
+    unnest_longer(predictions, indices_to = "sample") %>%
     select(-scores) %>%
-    pivot_wider(names_from = sample, values_from = transfomed_scores)
+    pivot_wider(names_from = sample, values_from = predictions)
 
   # Convert to matrix
-  scores_transformed_mat <- as.matrix(scores_transformed[,-1])
-  row.names(scores_transformed_mat) <- pull(scores_transformed[,1])
+   all_predictions_mat <- as.matrix(all_predictions[,-1])
+  rownames(all_predictions_mat) <- pull(all_predictions[,1])
 
   if (tranform & spillover) {
     # Spillover correction

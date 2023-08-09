@@ -616,90 +616,34 @@ scoreSimulations <- function(signatures, simulations, dep_list, simple){
 }
 getTranformationModels <- function(simulations_scored, simple){
 
+  set.seed(123)
 
-  fitPolyModel <- function(data, celltype, max_degree = 2){
+  fitRRF <- function(data, gamma = 0.8){
 
-    df <- data.frame(data)
-
-    # Get linear model
-    linear_model <- lm(sim_frac ~ shifted_score, data = df)
-    linear_bic <- BIC(linear_model)
-    linear_bic  <- -999999999
-
-    # Get Polynomial models
-    poly_models <- list()
-    for (degree in 1:max_degree) {
-      model <- suppressWarnings(glm(sim_frac ~ poly(shifted_score, degree), data = df, family = binomial(link = "logit")))
-      poly_models[[degree]] <- model
-    }
-
-    poly_bic <- sapply(poly_models, BIC)
-    best_degree <- which.min(poly_bic)
-
-    if (linear_bic < poly_bic[[best_degree]]) {
-      final_model <- lm(sim_frac ~ shifted_score, data = df)
-    }else{
-      final_model <- glm(sim_frac ~ poly(shifted_score, degree = best_degree), data = df, family = binomial(link = "logit"))
-    }
-
-    # # Create a sequence of x values for the prediction
-    # x_pred <- seq(min(df$shifted_score), max(df$shifted_score), length.out = 100)
-    # # Predict y values using the model
-    # y_pred <- predict(final_model, newdata = data.frame(shifted_score = x_pred), type="response")
-    # # Plot the original data
-    # plot(df$shifted_score, df$sim_frac, main = celltype, xlab = "shifted_score", ylab = "sim_frac", pch = 19)
-    # # Add the fitted line
-    # lines(x_pred, y_pred, col = "red", lwd = 2)
+    train_mat <- data %>%
+      filter(sim_type == "ctoi") %>%
+      select(signature, sim_frac, score) %>%
+      mutate(sim_frac = as.numeric(sim_frac)) %>%
+      pivot_wider(names_from = signature, values_from = score) %>%
+      as.matrix()
 
 
-    return(final_model)
+    RF <- RRF::RRF(train_mat[,-1], train_mat[,1], flagReg = 0, importance = TRUE)
+    RF_imp <- RF$importance[,"%IncMSE"] / max(RF$importance[,"%IncMSE"])
+    RRF <- RRF::RRF(train_mat[,-1], train_mat[,1], flagReg = 1, coefReg = (1-gamma) + gamma*RF_imp)
+
+
+
+    return(RRF)
   }
 
-  # data = x[1,]$data[[1]]
-  # celltype = x[1,]$celltype[[1]]
 
-  if (simple) {
-    bind_rows(simulations_scored) %>%
-      filter(sim_type != "control") %>%
-      # Mean of signatures
-      group_by(celltype, sim_frac) %>%
-      summarise(mean_score = mean(score)) %>%
-      # Get shift values
-      mutate(shift_value = mean_score[sim_frac == 0]) %>%
-      # Shift scores
-      mutate(shifted_score = mean_score - shift_value) %>%
-      mutate(shifted_score = ifelse(shifted_score < 0, 0, shifted_score)) %>%
-      select(-mean_score) %>%
-      mutate(sim_frac = as.numeric(sim_frac)) %>%
-      nest(data = c(shifted_score, sim_frac)) %>%
-      rowwise() %>%
-      mutate(model = list(fitPolyModel(data, celltype))) %>%
-      select(-data) %>%
-      as.data.frame() %>%
-      return(.)
-  }else{
-    bind_rows(simulations_scored) %>%
-      group_by(signature, celltype, sim_frac) %>%
-      # Median of simulations
-      summarise(score = median(score)) %>%
-      # Mean of signatures
-      group_by(celltype, sim_frac) %>%
-      summarise(mean_score = mean(score)) %>%
-      # Get shift values
-      mutate(shift_value = mean_score[sim_frac == 0]) %>%
-      # Shift scores
-      mutate(shifted_score = mean_score - shift_value) %>%
-      mutate(shifted_score = ifelse(shifted_score < 0, 0, shifted_score)) %>%
-      select(-mean_score) %>%
-      mutate(sim_frac = as.numeric(sim_frac)) %>%
-      nest(data = c(shifted_score, sim_frac)) %>%
-      rowwise() %>%
-      mutate(model = list(fitPolyModel(data, celltype))) %>%
-      select(-data) %>%
-      as.data.frame() %>%
-      return(.)
+  enframe(simulations_scored, name = "celltype", value = "data") %>%
+    rowwise() %>%
+    mutate(model = list(fitRRF(data))) %>%
+    dplyr::select(celltype, model) %>%
+    return(.)
 
-  }
 
 }
 getSpillOverMat <- function(simple_sim, signatures, dep_list, trans_models){
@@ -836,7 +780,7 @@ setClass("xCell2Signatures", slots = list(
 #' @return An S4 object containing the signatures, cell type labels, and cell type dependencies.
 #' @export
 xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, clean_genes = TRUE,
-                        sim_fracs = c(0, 0.001, 0.002, 0.004, 0.006, 0.008, seq(0.01, 0.25, 0.01)), diff_vals = c(1, 1.32, 1.585, 2, 3, 4, 5),
+                        sim_fracs = c(0, 0.001, 0.002, 0.004, 0.006, 0.008, seq(0.01, 1, 0.01)), diff_vals = c(1, 1.32, 1.585, 2, 3, 4, 5),
                         min_genes = 5, max_genes = 200, filter_sigs = TRUE, simpleSim = TRUE){
 
 
@@ -913,7 +857,8 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, clean_genes
 
   # Get spillover matrix
   # TODO: Use filtered signatures
-  spill_mat <- getSpillOverMat(simple_sim = simple_simulations, signatures = signatures, dep_list, trans_models = trans_models)
+  # spill_mat <- getSpillOverMat(simple_sim = simple_simulations, signatures = signatures, dep_list, trans_models = trans_models)
+  spill_mat <- matrix()
 
   # Save results in S4 object
   xCell2Sigs.S4 <- new("xCell2Signatures",
