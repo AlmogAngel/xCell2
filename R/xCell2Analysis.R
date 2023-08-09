@@ -75,7 +75,7 @@ xCell2Analysis <- function(mix, xcell2sigs, min_intersect = 0.9, tranform, spill
     rownames(scores_corrected) <- rows
     return(scores_corrected)
   }else{
-    return(scores_transformed_mat)
+    return(all_predictions_mat)
   }
 
 
