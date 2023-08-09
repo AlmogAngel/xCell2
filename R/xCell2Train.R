@@ -617,18 +617,19 @@ scoreSimulations <- function(signatures, simulations, dep_list, simple){
 getTranformationModels <- function(simulations_scored, simple){
 
 
-  fitPolyModel <- function(data, celltype, max_degree = 4){
+  fitPolyModel <- function(data, celltype, max_degree = 2){
 
     df <- data.frame(data)
 
     # Get linear model
     linear_model <- lm(sim_frac ~ shifted_score, data = df)
     linear_bic <- BIC(linear_model)
+    linear_bic  <- -999999999
 
     # Get Polynomial models
     poly_models <- list()
     for (degree in 1:max_degree) {
-      model <- suppressWarnings(glm(sim_frac ~ poly(shifted_score, degree), data = df))
+      model <- suppressWarnings(glm(sim_frac ~ poly(shifted_score, degree), data = df, family = binomial(link = "logit")))
       poly_models[[degree]] <- model
     }
 
@@ -638,10 +639,10 @@ getTranformationModels <- function(simulations_scored, simple){
     if (linear_bic < poly_bic[[best_degree]]) {
       final_model <- lm(sim_frac ~ shifted_score, data = df)
     }else{
-      final_model <- glm(sim_frac ~ poly(shifted_score, degree = best_degree), data = df)
+      final_model <- glm(sim_frac ~ poly(shifted_score, degree = best_degree), data = df, family = binomial(link = "logit"))
     }
 
-    # Create a sequence of x values for the prediction
+    # # Create a sequence of x values for the prediction
     # x_pred <- seq(min(df$shifted_score), max(df$shifted_score), length.out = 100)
     # # Predict y values using the model
     # y_pred <- predict(final_model, newdata = data.frame(shifted_score = x_pred), type="response")
@@ -649,7 +650,7 @@ getTranformationModels <- function(simulations_scored, simple){
     # plot(df$shifted_score, df$sim_frac, main = celltype, xlab = "shifted_score", ylab = "sim_frac", pch = 19)
     # # Add the fitted line
     # lines(x_pred, y_pred, col = "red", lwd = 2)
-    #
+
 
     return(final_model)
   }
