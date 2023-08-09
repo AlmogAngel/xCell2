@@ -10,7 +10,7 @@ xCell2Train(
   data_type,
   lineage_file = NULL,
   clean_genes = TRUE,
-  sim_fracs = c(0, seq(0.01, 0.25, 0.01)),
+  sim_fracs = c(0, 0.001, 0.002, 0.004, 0.006, 0.008, seq(0.01, 0.25, 0.01)),
   diff_vals = c(1, 1.32, 1.585, 2, 3, 4, 5),
   min_genes = 5,
   max_genes = 200,
