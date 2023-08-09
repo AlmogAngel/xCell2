@@ -32,8 +32,7 @@ xCell2Analysis <- function(mix, xcell2sigs, min_intersect = 0.9, tranform, spill
   predictFracs <- function(ctoi, scores, xcell2sigs){
 
     model <- filter(xcell2sigs@transformation_models, celltype == ctoi)$model[[1]]
-    predictions <- round(predict(model, newdata = scores, type = "response"), 3)
-
+    predictions <- round(predict(model, newdata = scores, type = "response"), 4)
     return(predictions)
 
   }
