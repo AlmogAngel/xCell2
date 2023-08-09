@@ -24,6 +24,7 @@ xCell2Analysis <- function(mix, xcell2sigs, min_intersect = 0.9, tranform, spill
     scores <- sapply(signatures_ctoi, simplify = TRUE, function(sig){
       suppressWarnings(singscore::simpleScore(mix_ranked, upSet = sig, centerScore = FALSE)$TotalScore)
     })
+    rownames(scores) <- colnames(mix_ranked)
 
     return(scores)
   }
