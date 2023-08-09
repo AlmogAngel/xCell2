@@ -41,6 +41,7 @@ xCell2CleanGenes <- function(ref, mix, gene_groups = c("Rb", "Mrp", "other_Rb", 
 
     # Check if Seurat changed genes names
     if (!all(var_genes %in% genes_names)) {
+      # TODO: find a solution
       # rownames(ref.norm) <- genes_names # Because Seurat change genes names from "_" to "-"
       stop("Seurat genes name error")
     }
@@ -50,7 +51,7 @@ xCell2CleanGenes <- function(ref, mix, gene_groups = c("Rb", "Mrp", "other_Rb", 
 
   ngenes_after <- nrow(ref)
   ngenes_removed <- ngenes_before - ngenes_after
-  message(paste0(ngenes_removed, " removed from reference in total."))
+  message(paste0(ngenes_removed, " total genes removed from reference."))
 
 
   shared_genes <- intersect(rownames(ref), rownames(mix))

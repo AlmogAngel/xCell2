@@ -38,7 +38,7 @@ xCell2Analysis <- function(mix, xcell2sigs, min_intersect = 0.9, tranform, spill
     shifted_scores <- scores - shift_value
 
     transformation_model <- filter(xcell2sigs@transformation_models, celltype == ctoi)$model[[1]]
-    transformed_scores <- round(predict(transformation_model, newdata = data.frame("shifted_score" = shifted_scores), type = "response"), 2)
+    transformed_scores <- round(predict(transformation_model, newdata = data.frame("shifted_score" = shifted_scores), type = "response"), 3)
     return(transformed_scores)
 
   }
