@@ -618,7 +618,8 @@ getTranformationModels <- function(simulations_scored, simple){
 
   set.seed(123)
 
-  fitRRF <- function(data, gamma = 0.8){
+  fitModel <- function(data, gamma = 0.8, model_type){
+
 
     train_mat <- data %>%
       filter(sim_type == "ctoi") %>%
@@ -627,20 +628,57 @@ getTranformationModels <- function(simulations_scored, simple){
       pivot_wider(names_from = signature, values_from = score) %>%
       as.matrix()
 
+    if (model_type == "rf") {
+      RF <- RRF::RRF(train_mat[,-1], train_mat[,1], flagReg = 0, importance = TRUE)
+      RF_imp <- RF$importance[,"%IncMSE"] / max(RF$importance[,"%IncMSE"])
+      RRF <- RRF::RRF(train_mat[,-1], train_mat[,1], flagReg = 1, coefReg = (1-gamma) + gamma*RF_imp)
+      return(RRF)
+    }
 
-    RF <- RRF::RRF(train_mat[,-1], train_mat[,1], flagReg = 0, importance = TRUE)
-    RF_imp <- RF$importance[,"%IncMSE"] / max(RF$importance[,"%IncMSE"])
-    RRF <- RRF::RRF(train_mat[,-1], train_mat[,1], flagReg = 1, coefReg = (1-gamma) + gamma*RF_imp)
 
+    if (model_type == "xgb") {
+      train_mat <- data %>%
+        filter(sim_type == "ctoi") %>%
+        select(signature, sim_frac, score) %>%
+        mutate(sim_frac = as.numeric(sim_frac)) %>%
+        pivot_wider(names_from = signature, values_from = score) %>%
+        as.matrix()
 
+      train_mat <- xgboost::xgb.DMatrix(data = train_mat[,-1], label = train_mat[,1])
 
-    return(RRF)
+      params <- list(
+        booster = "gbtree",
+        eta = 0.1,
+        max_depth = 6,
+        alpha = 0,  # L1 regularization term
+        lambda = 1, # L2 regularization term
+        objective = "reg:squarederror"
+      )
+
+      # cv_results <- xgboost::xgb.cv(
+      #   params = params,
+      #   data = train_mat,
+      #   nfold = 5,
+      #   nrounds = 1000,
+      #   early_stopping_rounds = 10,
+      #   stratified = TRUE, # if it's a classification problem
+      #   print_every_n = 10 # print every 10 iterations
+      # )
+
+      model <- xgboost::xgb.train(
+        params = params,
+        data = train_mat,
+        nrounds = 100
+      )
+
+      return(model)
+    }
+
   }
-
 
   enframe(simulations_scored, name = "celltype", value = "data") %>%
     rowwise() %>%
-    mutate(model = list(fitRRF(data))) %>%
+    mutate(model = list(fitModel(data, model_type = "xgb"))) %>%
     dplyr::select(celltype, model) %>%
     return(.)
 
@@ -762,6 +800,8 @@ setClass("xCell2Signatures", slots = list(
 #' @importFrom Rfast rowMedians rowmeans
 #' @importFrom pbapply pblapply pbsapply
 #' @importFrom sparseMatrixStats rowMedians
+#' @importFrom RRF RRF
+#' @importFrom xgboost xgb.DMatrix xgb.train
 #' @importFrom Matrix rowMeans
 #' @importFrom singscore rankGenes simpleScore
 #' @param ref A reference gene expression matrix.
@@ -827,7 +867,7 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, clean_genes
   message("Generating simulations...")
   simple_simulations <- makeSimulations(ref, labels, pure_ct_mat, cor_mat, dep_list, sim_fracs, n_sims = 1, n_samples_sim = NULL, add_noise = FALSE, simple = TRUE)
   if (!simpleSim) {
-    complex_simulations <- makeSimulations(ref, labels, pure_ct_mat, cor_mat, dep_list, sim_fracs, n_sims = 20, n_samples_sim = 9, add_noise = TRUE, simple = FALSE)
+    complex_simulations <- makeSimulations(ref, labels, pure_ct_mat, cor_mat, dep_list, sim_fracs, n_sims = 5, n_samples_sim = 9, add_noise = TRUE, simple = FALSE)
   }
 
   # Score simulations
@@ -838,13 +878,9 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, clean_genes
     complex_simulations_scored <- scoreSimulations(signatures = signatures_collection, simulations = complex_simulations, dep_list, simple = FALSE)
   }
 
-
   # Filter signatures
-  # TODO: Finish filtering step!!!
   message("Filtering signatures...")
-  # out <- filterSignatures(sim = simple_sim_mat2, signatures_collection = refs.data[[ref_name]]$signatures_collection,
-  #                         dep_list = refs.data[[ref_name]]$dep_list)
-  signatures <- signatures_collection
+  signatures = signatures_collection
 
 
   # Get transformation models

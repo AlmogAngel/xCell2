@@ -7,6 +7,7 @@
 #' @import tibble
 #' @import purrr
 #' @importFrom  pracma lsqlincon
+#' @importFrom xgboost xgb.DMatrix
 #' @param mix a matrix containing gene expression data
 #' @param xcell2sigs S4 object of `xCell2Signatures`
 #' @param tranform Boolean - should scores transformed to fraction?
@@ -32,7 +33,12 @@ xCell2Analysis <- function(mix, xcell2sigs, min_intersect = 0.9, tranform, spill
   predictFracs <- function(ctoi, scores, xcell2sigs){
 
     model <- filter(xcell2sigs@transformation_models, celltype == ctoi)$model[[1]]
-    predictions <- round(predict(model, newdata = scores, type = "response"), 4)
+    if (class(model) == "xgb.Booster") {
+      predictions <- round(predict(model, newdata = xgboost::xgb.DMatrix(scores), type = "response"), 4)
+    }else{
+      predictions <- round(predict(model, newdata = scores, type = "response"), 4)
+    }
+
     return(predictions)
 
   }
