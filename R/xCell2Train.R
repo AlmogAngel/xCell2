@@ -638,6 +638,11 @@ getTranformationModels <- function(simulations_scored, RFgamma, XGBparams, model
 
     if (model_type == "xgb") {
 
+
+      if (XGBparams$objective == "reg:gamma") {
+        train_mat[,1][train_mat[,1] == 0] <- 0.000000001
+      }
+
       train_mat <- xgboost::xgb.DMatrix(data = train_mat[,-1], label = train_mat[,1])
 
       # params <- list(
@@ -675,6 +680,7 @@ getTranformationModels <- function(simulations_scored, RFgamma, XGBparams, model
       #     }
       #   }
       # }
+
 
       model <- xgboost::xgb.train(
         params = xgbparams,
