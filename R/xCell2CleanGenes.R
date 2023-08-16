@@ -34,15 +34,20 @@ xCell2CleanGenes <- function(ref, mix, gene_groups = c("Rb", "Mrp", "other_Rb", 
   if (top_var_genes) {
 
     message(paste0("Selecting top ", n_var_genes, " variable genes - make sure you are using scRNA-Seq reference data!"))
+
     genes_names <- rownames(ref)
+    placeholder <- "PLACEHOLDER"
+    genes_names_with_placeholder <- gsub("-", placeholder, genes_names)
+    rownames(ref) <- genes_names_with_placeholder
+
     ref.srt <- Seurat::CreateSeuratObject(counts = ref)
     ref.srt <- Seurat::FindVariableFeatures(ref.srt, selection.method = "vst", nfeatures = n_var_genes, verbose = FALSE)
     var_genes <- Seurat::VariableFeatures(ref.srt)
+    var_genes <- gsub("-", "_", var_genes)
+    var_genes <- gsub(placeholder, "-", var_genes)
 
-    # Check if Seurat changed genes names
+    # Check genes names
     if (!all(var_genes %in% genes_names)) {
-      # TODO: find a solution
-      # rownames(ref.norm) <- genes_names # Because Seurat change genes names from "_" to "-"
       stop("Seurat genes name error")
     }
 
