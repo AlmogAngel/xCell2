@@ -614,11 +614,11 @@ scoreSimulations <- function(signatures, simulations, dep_list, simple){
   return(sims_scored)
 
 }
-getTranformationModels <- function(simulations_scored, RFgamma, modelType){
+getTranformationModels <- function(simulations_scored, RFgamma, XGBparams, modelType){
 
   set.seed(123)
 
-  fitModel <- function(data, gamma = RFgamma, model_type){
+  fitModel <- function(data, gamma = RFgamma, XGBparams, model_type){
 
 
     train_mat <- data %>%
@@ -637,6 +637,7 @@ getTranformationModels <- function(simulations_scored, RFgamma, modelType){
 
 
     if (model_type == "xgb") {
+
       train_mat <- data %>%
         filter(sim_type == "ctoi") %>%
         select(signature, sim_frac, score) %>%
@@ -646,18 +647,44 @@ getTranformationModels <- function(simulations_scored, RFgamma, modelType){
 
       train_mat <- xgboost::xgb.DMatrix(data = train_mat[,-1], label = train_mat[,1])
 
-      params <- list(
-        booster = "gbtree",
-        eta = 0.1,
-        max_depth = 6,
-        alpha = 0,  # L1 regularization term
-        lambda = 1, # L2 regularization term
-        objective = "reg:squaredlogerror"
-      )
+      # params <- list(
+      #   booster = "gbtree",
+      #   eta = 0.1,
+      #   max_depth = 6,
+      #   alpha = 0,  # L1 regularization term
+      #   lambda = 1, # L2 regularization term
+      #   objective = "reg:logistic"
+      # )
 
+      # # Tune parameters
+      # cv_results <- xgboost::xgb.cv(params = params, data = train_mat, nrounds = 1000, nfold = 5,
+      #                      early_stopping_rounds = 10, verbose = 0)
+      # best_nrounds <- cv_results$best_iteration
+      #
+      # best_params <- list()
+      # best_score <- Inf
+      # best_reg <- list()
+      #
+      # for (eta in c(0.01, 0.05)) {
+      #   for (max_depth in c(6, 8, 10)) {
+      #     for (reg in list(c(0, 0), c(0, 1), c(1, 0), c(1, 1))) {
+      #       params$eta <- eta
+      #       params$max_depth <- max_depth
+      #       params$alpha <- reg[1]
+      #       params$lambda <- reg[2]
+      #       cv_results <- xgboost::xgb.cv(params = params, data = train_mat, nrounds = best_nrounds, nfold = 5)
+      #       mean_test_error <- mean(cv_results$evaluation_log$test_rmse_mean)
+      #       if (mean_test_error < best_score) {
+      #         best_score <- mean_test_error
+      #         best_params <- params
+      #         best_reg <- reg
+      #       }
+      #     }
+      #   }
+      # }
 
       model <- xgboost::xgb.train(
-        params = params,
+        params = XGBparams,
         data = train_mat,
         nrounds = 100
       )
@@ -812,7 +839,7 @@ setClass("xCell2Signatures", slots = list(
 #' @export
 xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, clean_genes = TRUE,
                         sim_fracs = c(0, 0.001, 0.002, 0.004, 0.006, 0.008, seq(0.01, 1, 0.01)), diff_vals = c(1, 1.32, 1.585, 2, 3, 4, 5),
-                        min_genes = 5, max_genes = 200, filter_sigs = TRUE, simpleSim = TRUE, sigsFile = NULL, RFgamma = 0.8, modelType = "rf"){
+                        min_genes = 5, max_genes = 200, filter_sigs = TRUE, simpleSim = TRUE, sigsFile = NULL, RFgamma = 0.8, XGBparams = list(), modelType = "rf"){
 
 
   # Validate inputs
@@ -883,7 +910,7 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, clean_genes
 
   # Get transformation models
   # TODO: Use filtered signatures
-  trans_models <- getTranformationModels(simulations_scored = simple_simulations_scored, RFgamma, modelType)
+  trans_models <- getTranformationModels(simulations_scored = simple_simulations_scored, RFgamma, XGBparams, modelType)
 
 
   # Get spillover matrix
