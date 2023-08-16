@@ -475,9 +475,9 @@ makeSimulations <- function(ref, labels, pure_ct_mat, cor_mat, dep_list, sim_fra
   return(sim_list)
 
 }
-filterSignatures <- function(simulations_scored, topCor, topDelta){
+filterSignatures <- function(simulations_scored, top_cor, top_delta){
 
-  if (!topCor & !topDelta) {
+  if (!top_cor & !top_delta) {
     bind_rows(simulations_scored) %>%
       pull(signature) %>%
       unique() %>%
@@ -492,7 +492,7 @@ filterSignatures <- function(simulations_scored, topCor, topDelta){
     top_n(n = max(50, 0.5*n()), wt = cor) %>%
     pull(signature)
 
-  if (topCor) {
+  if (top_cor) {
     return(top_cor_sigs)
   }
 
@@ -505,7 +505,7 @@ filterSignatures <- function(simulations_scored, topCor, topDelta){
     top_n(n = max(50, 0.5*n()), wt = delta_score) %>%
     pull(signature)
 
-  if (topDelta) {
+  if (top_delta) {
     return(top_delta_sigs)
   }
 
@@ -890,7 +890,7 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, clean_genes
 
   # TODO: Filter signatures
   message("Filtering signatures...")
-  signatures_filtered <- filterSignatures(simulations_scored, topCor, topDelta)
+  signatures_filtered <- filterSignatures(simulations_scored, top_cor = topCor, top_delta = topDelta)
   signatures <- signatures_collection[names(signatures_collection) %in% signatures_filtered]
 
   # Get transformation models
