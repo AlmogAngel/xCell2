@@ -618,7 +618,7 @@ getTranformationModels <- function(simulations_scored, RFgamma, XGBparams, model
 
   set.seed(123)
 
-  fitModel <- function(data, gamma = RFgamma, XGBparams = XGBparams, model_type){
+  fitModel <- function(data, gamma = RFgamma, xgbparams = XGBparams, model_type){
 
 
     train_mat <- data %>%
@@ -637,13 +637,6 @@ getTranformationModels <- function(simulations_scored, RFgamma, XGBparams, model
 
 
     if (model_type == "xgb") {
-
-      train_mat <- data %>%
-        filter(sim_type == "ctoi") %>%
-        select(signature, sim_frac, score) %>%
-        mutate(sim_frac = as.numeric(sim_frac)) %>%
-        pivot_wider(names_from = signature, values_from = score) %>%
-        as.matrix()
 
       train_mat <- xgboost::xgb.DMatrix(data = train_mat[,-1], label = train_mat[,1])
 
@@ -684,7 +677,7 @@ getTranformationModels <- function(simulations_scored, RFgamma, XGBparams, model
       # }
 
       model <- xgboost::xgb.train(
-        params = XGBparams,
+        params = xgbparams,
         data = train_mat,
         nrounds = 100
       )
