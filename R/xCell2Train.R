@@ -890,11 +890,12 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, clean_genes
 
   # TODO: Filter signatures
   message("Filtering signatures...")
-  signatures_filtered <- filterSignatures(simulations_scored, top_cor = topCor, top_delta = topDelta)
+  signatures_filtered <- filterSignatures(simulations_scored = simple_simulations_scored, top_cor = topCor, top_delta = topDelta)
   signatures <- signatures_collection[names(signatures_collection) %in% signatures_filtered]
 
   # Get transformation models
   # TODO: Use filtered signatures
+  message("Training models...")
   simple_simulations_scored <- lapply(simple_simulations_scored, function(ct){
     ct %>%
       filter(signature %in% signatures_filtered)
