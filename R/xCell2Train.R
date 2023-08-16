@@ -478,10 +478,9 @@ makeSimulations <- function(ref, labels, pure_ct_mat, cor_mat, dep_list, sim_fra
 filterSignatures <- function(simulations_scored, top_cor, top_delta){
 
   if (!top_cor & !top_delta) {
-    bind_rows(simulations_scored) %>%
-      pull(signature) %>%
-      unique() %>%
-      return(.)
+    all_sigs <- bind_rows(simulations_scored) %>%
+      pull(signature)
+    return(unique(all_sigs))
   }
 
   top_cor_sigs <- bind_rows(simulations_scored) %>%
