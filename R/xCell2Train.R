@@ -529,40 +529,48 @@ filterSignatures <- function(sim, signatures_collection, dep_list, n_null = 1000
 
   sigs_scores_pvals_tidy_clean <- scoreSim(sim, signatures_collection, dep_list, n_null)
 
-  # Get top 25% or top 10 signatures by p-value delta
-  top_pval_sigs <- sigs_scores_pvals_tidy_clean %>%
-    mutate(pval = -log(pval)) %>%
-    mutate(pval_type = ifelse(sig_celltype == sim_celltype, "ctoi", "controls")) %>%
-    group_by(sig_celltype, signature, pval_type) %>%
-    summarise(pval = mean(pval)) %>%
-    pivot_wider(names_from = pval_type, values_from = pval) %>%
-    mutate(delta_pval = `ctoi` - `controls`) %>%
-    group_by(sig_celltype) %>%
-    top_n(n = max(10, 0.25*n()), wt = delta_pval) %>%
-    pull(signature)
 
 
-  # Filter by top_pval_sigs and get top 10% or top 5 signatures by p-value delta
-  filtered_sigs <- sigs_scores_pvals_tidy_clean %>%
-    filter(signature %in% top_pval_sigs) %>%
-    mutate(score_type = ifelse(sig_celltype == sim_celltype, "ctoi", "controls")) %>%
-    group_by(sig_celltype, signature, score_type) %>%
-    summarise(score = mean(score)) %>%
-    pivot_wider(names_from = score_type, values_from = score) %>%
-    mutate(delta_score = `ctoi` - `controls`) %>%
-    group_by(sig_celltype) %>%
-    top_n(n = max(5, 0.1*n()), wt = delta_score) %>%
-    pull(signature)
+  bind_rows(simulations_scored) %>%
+    filter(sim_type == "ctoi") %>%
+    mutate(sim_frac = as.numeric(sim_frac)) %>%
+    group_by(celltype, signature) %>%
+    summarise(cor = cor(sim_frac, score)) %>% View()
 
-
-  # celltypes <- unique(gsub("#.*", "", names(signatures_collection)))
-  # table(gsub("#.*", "", filtered_sigs))
-  # table(gsub("#.*", "", unique(sigs_scores_pvals_tidy_clean$signature)))
-
-  signatures_collection_filtered <- signatures_collection[names(signatures_collection) %in% filtered_sigs]
-
-  out <- list(sim_results = sigs_scores_pvals_tidy_clean,
-              filtered_sigs = signatures_collection_filtered)
+  # # Get top 25% or top 10 signatures by p-value delta
+  # top_pval_sigs <- sigs_scores_pvals_tidy_clean %>%
+  #   mutate(pval = -log(pval)) %>%
+  #   mutate(pval_type = ifelse(sig_celltype == sim_celltype, "ctoi", "controls")) %>%
+  #   group_by(sig_celltype, signature, pval_type) %>%
+  #   summarise(pval = mean(pval)) %>%
+  #   pivot_wider(names_from = pval_type, values_from = pval) %>%
+  #   mutate(delta_pval = `ctoi` - `controls`) %>%
+  #   group_by(sig_celltype) %>%
+  #   top_n(n = max(10, 0.25*n()), wt = delta_pval) %>%
+  #   pull(signature)
+  #
+  #
+  # # Filter by top_pval_sigs and get top 10% or top 5 signatures by p-value delta
+  # filtered_sigs <- sigs_scores_pvals_tidy_clean %>%
+  #   filter(signature %in% top_pval_sigs) %>%
+  #   mutate(score_type = ifelse(sig_celltype == sim_celltype, "ctoi", "controls")) %>%
+  #   group_by(sig_celltype, signature, score_type) %>%
+  #   summarise(score = mean(score)) %>%
+  #   pivot_wider(names_from = score_type, values_from = score) %>%
+  #   mutate(delta_score = `ctoi` - `controls`) %>%
+  #   group_by(sig_celltype) %>%
+  #   top_n(n = max(5, 0.1*n()), wt = delta_score) %>%
+  #   pull(signature)
+  #
+  #
+  # # celltypes <- unique(gsub("#.*", "", names(signatures_collection)))
+  # # table(gsub("#.*", "", filtered_sigs))
+  # # table(gsub("#.*", "", unique(sigs_scores_pvals_tidy_clean$signature)))
+  #
+  # signatures_collection_filtered <- signatures_collection[names(signatures_collection) %in% filtered_sigs]
+  #
+  # out <- list(sim_results = sigs_scores_pvals_tidy_clean,
+  #             filtered_sigs = signatures_collection_filtered)
 
   return(out)
 }
@@ -614,11 +622,11 @@ scoreSimulations <- function(signatures, simulations, dep_list, simple){
   return(sims_scored)
 
 }
-getTranformationModels <- function(simulations_scored, RFgamma, XGBparams, modelType){
+getTranformationModels <- function(simulations_scored, params, modelType){
 
   set.seed(123)
 
-  fitModel <- function(data, gamma = RFgamma, xgbparams = XGBparams, model_type){
+  fitModel <- function(data, modelParams = params, model_type = modelType){
 
 
     train_mat <- data %>%
@@ -629,7 +637,11 @@ getTranformationModels <- function(simulations_scored, RFgamma, XGBparams, model
       as.matrix()
 
     if (model_type == "rf") {
-      RF <- RRF::RRF(train_mat[,-1], train_mat[,1], flagReg = 0, importance = TRUE)
+
+
+      gamma <- modelParams$gamma
+
+      RF <- RRF::RRF(train_mat[,-1], train_mat[,1], flagReg = 0, importance = TRUE, mtry = modelParams$mtry, ntree = modelParams$ntree, nodesize = modelParams$nodesize)
       RF_imp <- RF$importance[,"%IncMSE"] / max(RF$importance[,"%IncMSE"])
       RRF <- RRF::RRF(train_mat[,-1], train_mat[,1], flagReg = 1, coefReg = (1-gamma) + gamma*RF_imp)
       return(RRF)
@@ -683,7 +695,7 @@ getTranformationModels <- function(simulations_scored, RFgamma, XGBparams, model
 
 
       model <- xgboost::xgb.train(
-        params = xgbparams,
+        params = modelParams,
         data = train_mat,
         nrounds = 100
       )
@@ -695,7 +707,7 @@ getTranformationModels <- function(simulations_scored, RFgamma, XGBparams, model
 
   enframe(simulations_scored, name = "celltype", value = "data") %>%
     rowwise() %>%
-    mutate(model = list(fitModel(data, model_type = modelType))) %>%
+    mutate(model = list(fitModel(data))) %>%
     dplyr::select(celltype, model) %>%
     return(.)
 
@@ -838,7 +850,7 @@ setClass("xCell2Signatures", slots = list(
 #' @export
 xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, clean_genes = TRUE,
                         sim_fracs = c(0, 0.001, 0.002, 0.004, 0.006, 0.008, seq(0.01, 1, 0.01)), diff_vals = c(1, 1.32, 1.585, 2, 3, 4, 5),
-                        min_genes = 5, max_genes = 200, filter_sigs = TRUE, simpleSim = TRUE, sigsFile = NULL, RFgamma = 0.8, XGBparams = list(), modelType = "rf"){
+                        min_genes = 5, max_genes = 200, filter_sigs = TRUE, simpleSim = TRUE, sigsFile = NULL, params = list(), modelType = "rf"){
 
 
   # Validate inputs
@@ -909,7 +921,7 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, clean_genes
 
   # Get transformation models
   # TODO: Use filtered signatures
-  trans_models <- getTranformationModels(simulations_scored = simple_simulations_scored, RFgamma, XGBparams, modelType)
+  trans_models <- getTranformationModels(simulations_scored = simple_simulations_scored, params, modelType)
 
 
   # Get spillover matrix
