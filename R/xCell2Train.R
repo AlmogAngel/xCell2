@@ -515,6 +515,12 @@ makeSimulations <- function(ref, labels, pure_ct_mat, cor_mat, dep_list, sim_fra
 }
 filterSignatures <- function(simulations_scored, topCor, topDelta){
 
+  if (!topCor & !topDelta) {
+    bind_rows(simulations_scored) %>%
+      pull(signature) %>%
+      unique() %>%
+      return(.)
+  }
 
   top_cor_sigs <- bind_rows(simulations_scored) %>%
     filter(sim_type == "ctoi") %>%
@@ -856,7 +862,7 @@ setClass("xCell2Signatures", slots = list(
 #' @export
 xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, clean_genes = TRUE,
                         sim_fracs = c(0, 0.001, 0.002, 0.004, 0.006, 0.008, seq(0.01, 1, 0.01)), diff_vals = c(1, 1.32, 1.585, 2, 3, 4, 5),
-                        min_genes = 5, max_genes = 200, filter_sigs = TRUE, simpleSim = TRUE, sigsFile = NULL, params = list(), modelType = "rf", topCor, topDelta){
+                        min_genes = 5, max_genes = 200, filter_sigs = TRUE, simpleSim = TRUE, sigsFile = NULL, params = list(), modelType = "rf", topCor = FALSE, topDelta = FALSE){
 
 
   # Validate inputs
