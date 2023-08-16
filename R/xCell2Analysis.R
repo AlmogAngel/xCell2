@@ -13,7 +13,6 @@
 #' @param tranform Boolean - should scores transformed to fraction?
 #' @param spillover Boolean - should we use spillover corretion on the transformed scores?
 #' @return A data frame containing the cell type enrichment for each sample in the input matrix, as estimated by xCell2.
-#' @examples
 #' @export
 xCell2Analysis <- function(mix, xcell2sigs, min_intersect = 0.9, tranform, spillover, spillover_alpha = 0.5){
 
@@ -75,24 +74,21 @@ xCell2Analysis <- function(mix, xcell2sigs, min_intersect = 0.9, tranform, spill
    all_predictions_mat <- as.matrix(all_predictions[,-1])
   rownames(all_predictions_mat) <- pull(all_predictions[,1])
 
-
-
-
-  if (tranform & spillover) {
-    # Spillover correction
-    spill_mat <- xcell2sigs@spill_mat * spillover_alpha
-    diag(spill_mat) <- 1
-
-    rows <- rownames(scores_transformed_mat)[rownames(scores_transformed_mat) %in% rownames(spill_mat)]
-
-    scores_corrected <- apply(scores_transformed_mat[rows, ], 2, function(x) pracma::lsqlincon(spill_mat[rows, rows], x, lb = 0))
-    scores_corrected[scores_corrected < 0] <- 0
-    rownames(scores_corrected) <- rows
-    return(scores_corrected)
-  }else{
+  if (!spillover) {
     return(all_predictions_mat)
   }
 
+
+  # Spillover correction
+  spill_mat <- xcell2sigs@spill_mat * spillover_alpha
+  diag(spill_mat) <- 1
+
+  rows <- rownames(scores_transformed_mat)[rownames(scores_transformed_mat) %in% rownames(spill_mat)]
+
+  scores_corrected <- apply(scores_transformed_mat[rows, ], 2, function(x) pracma::lsqlincon(spill_mat[rows, rows], x, lb = 0))
+  scores_corrected[scores_corrected < 0] <- 0
+  rownames(scores_corrected) <- rows
+  return(scores_corrected)
 
 
 }
