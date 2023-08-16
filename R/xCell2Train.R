@@ -618,7 +618,7 @@ getTranformationModels <- function(simulations_scored, RFgamma, XGBparams, model
 
   set.seed(123)
 
-  fitModel <- function(data, gamma = RFgamma, XGBparams, model_type){
+  fitModel <- function(data, gamma = RFgamma, XGBparams = XGBparams, model_type){
 
 
     train_mat <- data %>%
