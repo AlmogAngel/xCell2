@@ -38,9 +38,10 @@ xCell2CleanGenes <- function(ref, mix, gene_groups = c("Rb", "Mrp", "other_Rb", 
     genes_names <- rownames(ref)
     placeholder <- "PLACEHOLDER"
     genes_names_with_placeholder <- gsub("-", placeholder, genes_names)
-    rownames(ref) <- genes_names_with_placeholder
+    ref_tmp <- ref
+    rownames(ref_tmp) <- genes_names_with_placeholder
 
-    ref.srt <- Seurat::CreateSeuratObject(counts = ref)
+    ref.srt <- Seurat::CreateSeuratObject(counts = ref_tmp)
     ref.srt <- Seurat::FindVariableFeatures(ref.srt, selection.method = "vst", nfeatures = n_var_genes, verbose = FALSE)
     var_genes <- Seurat::VariableFeatures(ref.srt)
     var_genes <- gsub("-", "_", var_genes)
