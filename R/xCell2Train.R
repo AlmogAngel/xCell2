@@ -1,3 +1,41 @@
+library(tidyverse)
+
+# Load reference
+ref.in <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/references/lm22_ref.rds")
+ref = ref.in$ref
+labels = ref.in$labels
+
+# Load mixture
+val_dataset = "BG_blood"
+val_type = "blood"
+mix <- cyto.vals$mixtures[[val_type]][[val_dataset]]
+
+# Get shared genes
+shared_clean_genes <- xCell2::xCell2CleanGenes(ref, mix, top_var_genes = TRUE, use_protein_coding = TRUE, n_var_genes = 10000)
+ref <- shared_clean_genes$ref
+mix <- shared_clean_genes$mix
+
+# Load parameters
+data_type = "array"
+lineage_file = ref.in$lineage_file
+clean_genes = TRUE
+sim_fracs = c(0, 0.001, 0.002, 0.004, 0.006, 0.008, seq(0.01, 1, 0.01))
+diff_vals = c(1, 1.32, 1.585, 2, 3, 4, 5)
+min_genes = 5
+max_genes = 200
+filter_sigs = TRUE
+simpleSim = TRUE
+sigsFile = NULL
+RFgamma = 0.8
+modelType = "rf"
+params = list(mtry = 49,
+              ntree = 500,
+              nodesize = 5,
+              gamma = 0.5)
+sigsFile = "/bigdata/almogangel/xCell2_data/dev_data/sigs/BG_blood_lm22_sigs.rds"
+topCor = FALSE
+topDelta = TRUE
+
 validateInputs <- function(ref, labels, data_type){
   if (length(unique(labels$label)) < 3) {
     stop("Reference must have at least 3 cell types")
@@ -475,67 +513,34 @@ makeSimulations <- function(ref, labels, pure_ct_mat, cor_mat, dep_list, sim_fra
   return(sim_list)
 
 }
-filterSignatures <- function(sim, signatures_collection, dep_list, n_null = 1000, n_cpu = 10){
-
-  scoreSim <- function(sim, signatures_collection, dep_list, n_null){
-
-    # Rank mixture
-    sim_ranked <- singscore::rankGenes(sim)
-
-    # Generate null distribution for p-values
-    sigs_genes <- unique(unlist(signatures_collection))
-    non_sigs_genes <- rownames(sim_ranked)[!rownames(sim_ranked) %in% sigs_genes]
-    sigs_lengths <- unique(lengths(signatures_collection))
-    all_lengths_null_scores <- pbapply::pblapply(sigs_lengths, function(len){
-      tmp_genes <- sample(non_sigs_genes, len)
-      singscore::generateNull(
-        upSet = tmp_genes,
-        rankData = sim_ranked,
-        subSamples = 1:ncol(sim_ranked),
-        centerScore = FALSE,
-        B = n_null,
-        ncores = n_cpu,
-        seed = 1)
-    })
-    names(all_lengths_null_scores) <- sigs_lengths
+filterSignatures <- function(simulations_scored, topCor, topDelta){
 
 
-    # Score signatures and get p-values
-    sigs_scores_pvals <- pbapply::pblapply(signatures_collection, function(sig){
-      sig_len <- length(sig)
-      scoredf <- singscore::simpleScore(sim_ranked, upSet = sig, centerScore = FALSE)
-      pvals <- singscore::getPvals(all_lengths_null_scores[[as.character(sig_len)]], scoredf)
-      tibble("sim_name" = names(pvals), "score" = scoredf$TotalScore, "pval" = pvals)
-    })
-    names(sigs_scores_pvals) <- names(signatures_collection)
-
-
-    # Make results tidy
-    sigs_scores_pvals_tidy <- enframe(sigs_scores_pvals, name = "signature") %>%
-      unnest(value) %>%
-      separate(sim_name, into = c("sim_celltype", "sim_control"), sep = "%%") %>%
-      separate(signature, into = "sig_celltype", sep = "#", extra = "drop", remove = FALSE)
-
-    # Clean scores
-    sigs_scores_pvals_tidy_clean <- sigs_scores_pvals_tidy %>%
-      filter(sig_celltype != sim_control) %>% # Signature cell type cannot be the same as the control
-      rowwise() %>%
-      filter(!sim_celltype %in% unname(unlist(dep_list[[sig_celltype]])) & !sim_control %in% unname(unlist(dep_list[[sig_celltype]])))  # sim_celltype and sim_control cannot be dependent on signature cell type
-
-    return(sigs_scores_pvals_tidy_clean)
-
-  }
-
-
-  sigs_scores_pvals_tidy_clean <- scoreSim(sim, signatures_collection, dep_list, n_null)
-
-
-
-  bind_rows(simulations_scored) %>%
+  top_cor_sigs <- bind_rows(simulations_scored) %>%
     filter(sim_type == "ctoi") %>%
     mutate(sim_frac = as.numeric(sim_frac)) %>%
     group_by(celltype, signature) %>%
-    summarise(cor = cor(sim_frac, score)) %>% View()
+    summarise(cor = cor(sim_frac, score)) %>%
+    top_n(n = max(50, 0.5*n()), wt = cor) %>%
+    pull(signature)
+
+  if (topCor) {
+    return(top_cor_sigs)
+  }
+
+
+  top_delta_sigs <- bind_rows(simulations_scored) %>%
+    filter(sim_frac == 1) %>%
+    mutate(delta_score = lag(score) - score) %>%
+    filter(sim_type == "control") %>%
+    group_by(celltype) %>%
+    top_n(n = max(50, 0.5*n()), wt = delta_score) %>%
+    pull(signature)
+
+  if (topDelta) {
+    return(top_delta_sigs)
+  }
+
 
   # # Get top 25% or top 10 signatures by p-value delta
   # top_pval_sigs <- sigs_scores_pvals_tidy_clean %>%
@@ -572,7 +577,7 @@ filterSignatures <- function(sim, signatures_collection, dep_list, n_null = 1000
   # out <- list(sim_results = sigs_scores_pvals_tidy_clean,
   #             filtered_sigs = signatures_collection_filtered)
 
-  return(out)
+  #return(out)
 }
 scoreSimulations <- function(signatures, simulations, dep_list, simple){
 
@@ -851,7 +856,7 @@ setClass("xCell2Signatures", slots = list(
 #' @export
 xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, clean_genes = TRUE,
                         sim_fracs = c(0, 0.001, 0.002, 0.004, 0.006, 0.008, seq(0.01, 1, 0.01)), diff_vals = c(1, 1.32, 1.585, 2, 3, 4, 5),
-                        min_genes = 5, max_genes = 200, filter_sigs = TRUE, simpleSim = TRUE, sigsFile = NULL, params = list(), modelType = "rf"){
+                        min_genes = 5, max_genes = 200, filter_sigs = TRUE, simpleSim = TRUE, sigsFile = NULL, params = list(), modelType = "rf", topCor, topDelta){
 
 
   # Validate inputs
@@ -917,11 +922,15 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, clean_genes
 
   # TODO: Filter signatures
   message("Filtering signatures...")
-  signatures <- signatures_collection
-
+  signatures_filtered <- filterSignatures(simulations_scored, topCor, topDelta)
+  signatures <- signatures_collection[names(signatures_collection) %in% signatures_filtered]
 
   # Get transformation models
   # TODO: Use filtered signatures
+  simple_simulations_scored <- lapply(simple_simulations_scored, function(ct){
+    ct %>%
+      filter(signature %in% signatures_filtered)
+  })
   trans_models <- getTranformationModels(simulations_scored = simple_simulations_scored, params, modelType)
 
 
