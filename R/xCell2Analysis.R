@@ -43,6 +43,8 @@ xCell2Analysis <- function(mix, xcell2sigs, min_intersect = 0.9, tranform, spill
 
   }
 
+
+
   # Check reference/mixture genes intersection
   genes_intersect_frac <- length(intersect(rownames(mix), xcell2sigs@genes_used)) / length(xcell2sigs@genes_used)
   if (genes_intersect_frac < min_intersect) {
@@ -51,8 +53,10 @@ xCell2Analysis <- function(mix, xcell2sigs, min_intersect = 0.9, tranform, spill
   }
 
 
+
   # Rank mix gene expression matrix
   mix_ranked <- singscore::rankGenes(mix)
+
 
   # Score and predict
   sigs_celltypes <- unique(unlist(lapply(names(xcell2sigs@signatures), function(x){strsplit(x, "#")[[1]][1]})))
@@ -68,6 +72,9 @@ xCell2Analysis <- function(mix, xcell2sigs, min_intersect = 0.9, tranform, spill
   # Convert to matrix
    all_predictions_mat <- as.matrix(all_predictions[,-1])
   rownames(all_predictions_mat) <- pull(all_predictions[,1])
+
+
+
 
   if (tranform & spillover) {
     # Spillover correction

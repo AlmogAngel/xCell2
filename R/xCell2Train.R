@@ -39,7 +39,7 @@ prepareRef <- function(ref, data_type){
       # Check if Seurat changed genes names
       if (!all(rownames(ref.norm) %in% genes_names)) {
         # rownames(ref.norm) <- genes_names # Because Seurat change genes names from "_" to "-"
-        errorCondition("Seurat genes name error")
+        stop("Seurat genes name error")
       }
 
       return(ref.norm)
@@ -614,11 +614,11 @@ scoreSimulations <- function(signatures, simulations, dep_list, simple){
   return(sims_scored)
 
 }
-getTranformationModels <- function(simulations_scored, simple){
+getTranformationModels <- function(simulations_scored, RFgamma, modelType){
 
   set.seed(123)
 
-  fitModel <- function(data, gamma = 0.8, model_type){
+  fitModel <- function(data, gamma = RFgamma, model_type){
 
 
     train_mat <- data %>%
@@ -652,18 +652,9 @@ getTranformationModels <- function(simulations_scored, simple){
         max_depth = 6,
         alpha = 0,  # L1 regularization term
         lambda = 1, # L2 regularization term
-        objective = "reg:squarederror"
+        objective = "reg:squaredlogerror"
       )
 
-      # cv_results <- xgboost::xgb.cv(
-      #   params = params,
-      #   data = train_mat,
-      #   nfold = 5,
-      #   nrounds = 1000,
-      #   early_stopping_rounds = 10,
-      #   stratified = TRUE, # if it's a classification problem
-      #   print_every_n = 10 # print every 10 iterations
-      # )
 
       model <- xgboost::xgb.train(
         params = params,
@@ -678,7 +669,7 @@ getTranformationModels <- function(simulations_scored, simple){
 
   enframe(simulations_scored, name = "celltype", value = "data") %>%
     rowwise() %>%
-    mutate(model = list(fitModel(data, model_type = "xgb"))) %>%
+    mutate(model = list(fitModel(data, model_type = modelType))) %>%
     dplyr::select(celltype, model) %>%
     return(.)
 
@@ -821,7 +812,7 @@ setClass("xCell2Signatures", slots = list(
 #' @export
 xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, clean_genes = TRUE,
                         sim_fracs = c(0, 0.001, 0.002, 0.004, 0.006, 0.008, seq(0.01, 1, 0.01)), diff_vals = c(1, 1.32, 1.585, 2, 3, 4, 5),
-                        min_genes = 5, max_genes = 200, filter_sigs = TRUE, simpleSim = TRUE){
+                        min_genes = 5, max_genes = 200, filter_sigs = TRUE, simpleSim = TRUE, sigsFile = NULL, RFgamma = 0.8, modelType = "rf"){
 
 
   # Validate inputs
@@ -845,23 +836,30 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, clean_genes
     dep_list <- getDependencies(lineage_file)
   }
 
-  # Generate signatures
-  if (data_type != "sc") {
-    probs <- c(0.01, 0.05, 0.1, 0.25, 0.333, 0.49)
-  }else{
-    probs <- c(0.1, 0.15, 0.2, 0.25, 0.333, 0.49)
-    # Adjust diff values to log1p
-    fold_change_vals <- round(2^diff_vals, 4)
-    diff_vals <- round(log1p(fold_change_vals - 1), 3)
-  }
-  message("Calculating quantiles...")
-  quantiles_matrix <- makeQuantiles(ref, labels, probs, dep_list, include_descendants = FALSE)
-  message("Generating signatures...")
-  signatures_collection <- createSignatures(ref, labels, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, weight_genes = TRUE)
+  # Generate/Load signatures
+  if (is.null(sigsFile)) {
+    # Generate signatures
+    if (data_type != "sc") {
+      probs <- c(0.01, 0.05, 0.1, 0.25, 0.333, 0.49)
+    }else{
+      probs <- c(0.1, 0.15, 0.2, 0.25, 0.333, 0.49)
+      # Adjust diff values to log1p
+      fold_change_vals <- round(2^diff_vals, 4)
+      diff_vals <- round(log1p(fold_change_vals - 1), 3)
+    }
+    message("Calculating quantiles...")
+    quantiles_matrix <- makeQuantiles(ref, labels, probs, dep_list, include_descendants = FALSE)
+    message("Generating signatures...")
+    signatures_collection <- createSignatures(ref, labels, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, weight_genes = TRUE)
 
-  if (!filter_sigs) {
-    return(signatures_collection)
+    if (!filter_sigs) {
+      return(signatures_collection)
+    }
+  }else{
+    message("Loading signatures...")
+    signatures_collection <- readRDS(sigsFile)
   }
+
 
   # Make simulations
   message("Generating simulations...")
@@ -878,22 +876,18 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, clean_genes
     complex_simulations_scored <- scoreSimulations(signatures = signatures_collection, simulations = complex_simulations, dep_list, simple = FALSE)
   }
 
-  # Filter signatures
+  # TODO: Filter signatures
   message("Filtering signatures...")
-  signatures = signatures_collection
+  signatures <- signatures_collection
 
 
   # Get transformation models
   # TODO: Use filtered signatures
-  if (simpleSim) {
-    trans_models <- getTranformationModels(simulations_scored = simple_simulations_scored, simple = TRUE)
-  }else{
-    trans_models <- getTranformationModels(simulations_scored = complex_simulations_scored, simple = FALSE)
-  }
+  trans_models <- getTranformationModels(simulations_scored = simple_simulations_scored, RFgamma, modelType)
+
 
   # Get spillover matrix
   # TODO: Use filtered signatures
-  # spill_mat <- getSpillOverMat(simple_sim = simple_simulations, signatures = signatures, dep_list, trans_models = trans_models)
   spill_mat <- matrix()
 
   # Save results in S4 object
