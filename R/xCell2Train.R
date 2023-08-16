@@ -640,8 +640,9 @@ getTranformationModels <- function(simulations_scored, params, modelType){
 
 
       gamma <- modelParams$gamma
+      mtry2use <- ncol(train_mat[,-1]) / modelParams$mtry
 
-      RF <- RRF::RRF(train_mat[,-1], train_mat[,1], flagReg = 0, importance = TRUE, mtry = modelParams$mtry, ntree = modelParams$ntree, nodesize = modelParams$nodesize)
+      RF <- RRF::RRF(train_mat[,-1], train_mat[,1], flagReg = 0, importance = TRUE, mtry = mtry2use, ntree = modelParams$ntree, nodesize = modelParams$nodesize)
       RF_imp <- RF$importance[,"%IncMSE"] / max(RF$importance[,"%IncMSE"])
       RRF <- RRF::RRF(train_mat[,-1], train_mat[,1], flagReg = 1, coefReg = (1-gamma) + gamma*RF_imp)
       return(RRF)
