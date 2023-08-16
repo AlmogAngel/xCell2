@@ -819,6 +819,12 @@ setClass("xCell2Signatures", slots = list(
 #' @param diff_vals A vector of delta values to be used for generating signatures (optional).
 #' @param min_genes The minimum number of genes to include in the signature (optional).
 #' @param max_genes The maximum number of genes to include in the signature (optional).
+#' @param params description
+#' @param topCor description
+#' @param topDelta description
+#' @param sigsFile description
+#' @param simpleSim description
+#' @param filter_sigs description
 #' @return An S4 object containing the signatures, cell type labels, and cell type dependencies.
 #' @export
 xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, clean_genes = TRUE,
