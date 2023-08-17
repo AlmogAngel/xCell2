@@ -11,7 +11,7 @@
 #' @param n_var_genes Number of top variable genes to select  (only for scRNA-seq data)
 #' @return A list of ref and mix with the shared genes after cleaning
 #' @export
-xCell2CleanGenes <- function(ref, mix, gene_groups = c("Rb", "Mrp", "other_Rb", "chrM", "MALAT1", "chrX", "chrY"), use_protein_coding = TRUE, top_var_genes = FALSE, n_var_genes = 10000){
+xCell2CleanGenes <- function(ref, mix, gene_groups = c("Rb", "Mrp", "other_Rb", "chrM", "MALAT1", "chrX", "chrY"), use_protein_coding = TRUE, top_var_genes = FALSE, n_var_genes = 5000){
 
   if (all(startsWith(rownames(ref), "ENSG"))) {
     message("Assuming genes type are Ensembl.")

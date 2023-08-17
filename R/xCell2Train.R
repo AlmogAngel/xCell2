@@ -26,7 +26,7 @@ validateInputs <- function(ref, labels, data_type){
   return(out)
 
 }
-prepareRef <- function(ref, data_type){
+prepareRef <- function(ref, data_type, bulk_pseudo_count){
 
   if (data_type == "sc") {
     if(max(ref) >= 50){
@@ -38,10 +38,8 @@ prepareRef <- function(ref, data_type){
 
       # Check if Seurat changed genes names
       if (!all(rownames(ref.norm) %in% genes_names)) {
-        # rownames(ref.norm) <- genes_names # Because Seurat change genes names from "_" to "-"
         stop("Seurat genes name error")
       }
-
       return(ref.norm)
     }else{
       message("Assuming reference is already in log1p-space (maximum expression value < 50).")
@@ -52,7 +50,7 @@ prepareRef <- function(ref, data_type){
 
     if(max(ref) >= 50){
       message("Transforming reference to log2-space (maximum expression value >= 50).")
-      ref.norm <- log2(ref+1)
+      ref.norm <- log2(ref+bulk_pseudo_count)
       return(ref.norm)
     }else{
       message("Assuming reference is already in log2-space (maximum expression value < 50).")
@@ -825,11 +823,12 @@ setClass("xCell2Signatures", slots = list(
 #' @param sigsFile description
 #' @param simpleSim description
 #' @param filter_sigs description
+#' @param bulkPseudoCount description
 #' @return An S4 object containing the signatures, cell type labels, and cell type dependencies.
 #' @export
 xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, clean_genes = TRUE,
                         sim_fracs = c(0, 0.001, 0.002, 0.004, 0.006, 0.008, seq(0.01, 1, 0.01)), diff_vals = c(1, 1.32, 1.585, 2, 3, 4, 5),
-                        min_genes = 5, max_genes = 200, filter_sigs = TRUE, simpleSim = TRUE, sigsFile = NULL, params = list(), modelType = "rf", topCor = FALSE, topDelta = FALSE){
+                        min_genes = 5, max_genes = 200, filter_sigs = TRUE, simpleSim = TRUE, sigsFile = NULL, params = list(), modelType = "rf", topCor = FALSE, topDelta = FALSE, bulkPseudoCount = 1){
 
 
   # Validate inputs
@@ -838,12 +837,12 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, clean_genes
   labels <- inputs_validated$labels
 
   # Prepare reference
-  ref <- prepareRef(ref, data_type)
+  ref <- prepareRef(ref, data_type, bulk_pseudo_count = bulkPseudoCount)
 
   # Build cell types correlation matrix
   message("Calculating cell-type correlation matrix...")
   pure_ct_mat <- makePureCTMat(ref, labels, use_median = TRUE)
-  cor_mat <- getCellTypeCorrelation(pure_ct_mat, data_type)
+  cor_mat <- getCellTypeCorrelation(pure_ct_mat, data_type,)
 
   # Get cell type dependencies list
   message("Loading dependencies...")
