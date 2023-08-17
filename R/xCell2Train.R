@@ -842,7 +842,7 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, clean_genes
   # Build cell types correlation matrix
   message("Calculating cell-type correlation matrix...")
   pure_ct_mat <- makePureCTMat(ref, labels, use_median = TRUE)
-  cor_mat <- getCellTypeCorrelation(pure_ct_mat, data_type,)
+  cor_mat <- getCellTypeCorrelation(pure_ct_mat, data_type)
 
   # Get cell type dependencies list
   message("Loading dependencies...")
