@@ -851,7 +851,7 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, clean_genes
   message("Training models...")
   simple_simulations_scored <- lapply(simple_simulations_scored, function(ct){
     ct %>%
-      filter(signature %in% signatures_filtered)
+      filter(signature %in% names(signatures))
   })
   trans_models <- getTranformationModels(simulations_scored = simple_simulations_scored, params, modelType)
 
