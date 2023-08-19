@@ -473,76 +473,20 @@ makeSimulations <- function(ref, labels, pure_ct_mat, cor_mat, dep_list, sim_fra
   return(sim_list)
 
 }
-filterSignatures <- function(simulations_scored, top_cor, top_delta){
+filterSignatures <- function(simulations_scored){
 
-  if (!top_cor & !top_delta) {
-    all_sigs <- bind_rows(simulations_scored) %>%
-      pull(signature)
-    return(unique(all_sigs))
-  }
 
   top_cor_sigs <- bind_rows(simulations_scored) %>%
-    filter(sim_type == "ctoi") %>%
     mutate(sim_frac = as.numeric(sim_frac)) %>%
-    group_by(celltype, signature) %>%
+    group_by(celltype, signature, sim_id) %>%
     summarise(cor = cor(sim_frac, score)) %>%
+    summarise(cor = mean(cor)) %>%
     top_n(n = max(50, 0.5*n()), wt = cor) %>%
     pull(signature)
 
-  if (top_cor) {
-    return(top_cor_sigs)
-  }
+  return(top_cor_sigs)
 
 
-  top_delta_sigs <- bind_rows(simulations_scored) %>%
-    filter(sim_frac == 1) %>%
-    mutate(delta_score = lag(score) - score) %>%
-    filter(sim_type == "control") %>%
-    group_by(celltype) %>%
-    top_n(n = max(50, 0.5*n()), wt = delta_score) %>%
-    pull(signature)
-
-  if (top_delta) {
-    return(top_delta_sigs)
-  }
-
-
-  # # Get top 25% or top 10 signatures by p-value delta
-  # top_pval_sigs <- sigs_scores_pvals_tidy_clean %>%
-  #   mutate(pval = -log(pval)) %>%
-  #   mutate(pval_type = ifelse(sig_celltype == sim_celltype, "ctoi", "controls")) %>%
-  #   group_by(sig_celltype, signature, pval_type) %>%
-  #   summarise(pval = mean(pval)) %>%
-  #   pivot_wider(names_from = pval_type, values_from = pval) %>%
-  #   mutate(delta_pval = `ctoi` - `controls`) %>%
-  #   group_by(sig_celltype) %>%
-  #   top_n(n = max(10, 0.25*n()), wt = delta_pval) %>%
-  #   pull(signature)
-  #
-  #
-  # # Filter by top_pval_sigs and get top 10% or top 5 signatures by p-value delta
-  # filtered_sigs <- sigs_scores_pvals_tidy_clean %>%
-  #   filter(signature %in% top_pval_sigs) %>%
-  #   mutate(score_type = ifelse(sig_celltype == sim_celltype, "ctoi", "controls")) %>%
-  #   group_by(sig_celltype, signature, score_type) %>%
-  #   summarise(score = mean(score)) %>%
-  #   pivot_wider(names_from = score_type, values_from = score) %>%
-  #   mutate(delta_score = `ctoi` - `controls`) %>%
-  #   group_by(sig_celltype) %>%
-  #   top_n(n = max(5, 0.1*n()), wt = delta_score) %>%
-  #   pull(signature)
-  #
-  #
-  # # celltypes <- unique(gsub("#.*", "", names(signatures_collection)))
-  # # table(gsub("#.*", "", filtered_sigs))
-  # # table(gsub("#.*", "", unique(sigs_scores_pvals_tidy_clean$signature)))
-  #
-  # signatures_collection_filtered <- signatures_collection[names(signatures_collection) %in% filtered_sigs]
-  #
-  # out <- list(sim_results = sigs_scores_pvals_tidy_clean,
-  #             filtered_sigs = signatures_collection_filtered)
-
-  #return(out)
 }
 scoreSimulations <- function(signatures, simulations, dep_list, simple){
 
@@ -828,7 +772,7 @@ setClass("xCell2Signatures", slots = list(
 #' @export
 xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, clean_genes = TRUE,
                         sim_fracs = c(0, 0.001, 0.002, 0.004, 0.006, 0.008, seq(0.01, 1, 0.01)), diff_vals = c(1, 1.32, 1.585, 2, 3, 4, 5),
-                        min_genes = 5, max_genes = 200, filter_sigs = TRUE, simpleSim = TRUE, sigsFile = NULL, params = list(), modelType = "rf", topCor = FALSE, topDelta = FALSE, bulkPseudoCount = 1){
+                        min_genes = 5, max_genes = 200, filter_sigs = TRUE, simpleSim = TRUE, sigsFile = NULL, params = list(), modelType = "rf", bulkPseudoCount = 1){
 
 
   # Validate inputs
@@ -886,16 +830,21 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, clean_genes
 
   # Score simulations
   message("Scoring simulations...")
-  if (simpleSim) {
-    simple_simulations_scored <- scoreSimulations(signatures = signatures_collection, simulations = simple_simulations, dep_list, simple = TRUE)
-  }else{
+  simple_simulations_scored <- scoreSimulations(signatures = signatures_collection, simulations = simple_simulations, dep_list, simple = TRUE)
+  if (!simpleSim) {
     complex_simulations_scored <- scoreSimulations(signatures = signatures_collection, simulations = complex_simulations, dep_list, simple = FALSE)
   }
 
-  # TODO: Filter signatures
+
+  # Filter signatures
   message("Filtering signatures...")
-  signatures_filtered <- filterSignatures(simulations_scored = simple_simulations_scored, top_cor = topCor, top_delta = topDelta)
-  signatures <- signatures_collection[names(signatures_collection) %in% signatures_filtered]
+  if (!simpleSim) {
+    signatures_filtered <- filterSignatures(simulations_scored = complex_simulations_scored)
+    signatures <- signatures_collection[names(signatures_collection) %in% signatures_filtered]
+  }else{
+    signatures <- signatures_collection
+  }
+
 
   # Get transformation models
   # TODO: Use filtered signatures
