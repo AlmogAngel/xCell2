@@ -272,9 +272,8 @@ createSignatures <- function(ref, labels, dep_list, quantiles_matrix, probs, cor
 
   return(all_sigs)
 }
-makeSimulations <- function(ref, labels, pure_ct_mat, cor_mat, dep_list, sim_fracs, n_sims, n_samples_sim, add_noise, seed = 123, simple){
+makeSimulations <- function(ref, labels, pure_ct_mat, cor_mat, dep_list, sim_fracs, ctoi_samples_frac = 1, n_sims = 1){
 
-  set.seed(seed)
   celltypes <- unique(labels$label)
 
   makeSamplesPool <- function(labels, ctoi){
@@ -291,108 +290,23 @@ makeSimulations <- function(ref, labels, pure_ct_mat, cor_mat, dep_list, sim_fra
 
     return(ctoi_samples_pool)
   }
-  makeFractionMatrixCTOI <- function(ref, sim_fracs, ctoi_samples2use){
+  makeFractionMatrix <- function(ref, sim_fracs, samples2use, control){
 
-    if (length(ctoi_samples2use) == 1) {
-      ctoi_mean_expression <- ref[,ctoi_samples2use]
+    if (length(samples2use) == 1) {
+      mean_expression <- ref[,samples2use]
     }else{
-      ctoi_mean_expression <- if("matrix" %in% class(ref)) Rfast::rowmeans(ref[,ctoi_samples2use]) else Matrix::rowMeans(ref[,ctoi_samples2use])
+      mean_expression <- if("matrix" %in% class(ref)) Rfast::rowmeans(ref[,samples2use]) else Matrix::rowMeans(ref[,samples2use])
     }
 
-    ctoi_frac_mat <- matrix(rep(ctoi_mean_expression, length(sim_fracs)), byrow = FALSE, ncol = length(sim_fracs)) %*% diag(sim_fracs)
-    rownames(ctoi_frac_mat) <- rownames(ref)
+    if (control) {
+      sim_fracs <- 1-sim_fracs
+    }
 
-    return(ctoi_frac_mat)
+    frac_mat <- matrix(rep(mean_expression, length(sim_fracs)), byrow = FALSE, ncol = length(sim_fracs)) %*% diag(sim_fracs)
+    rownames(frac_mat) <- rownames(ref)
+
+    return(frac_mat)
   }
-  makeFractionMatrixControls <- function(ref, labels, sim_fracs, dep_list, controls, n_samples_sim, max_cts_controls){
-
-    max_cts_controls <-  ifelse(max_cts_controls > length(controls), length(controls), max_cts_controls)
-
-    if (length(controls) > 1) {
-      # Sample independent controls
-      controls_shufled <- sample(controls)
-      controls2use <- c()
-      deps_seen <- c()
-      for (ctrl in controls_shufled) {
-
-        if (length(controls2use) == max_cts_controls) {
-          break
-        }
-
-        deps_seen <- c(deps_seen, unname(unlist(dep_list[[ctrl]])))
-
-        if (ctrl %in% deps_seen) {
-          next
-        }
-
-        controls2use <- c(ctrl, controls2use)
-
-      }
-    }else{
-      controls2use <- controls
-    }
-
-
-    # Generate controls matrix
-    controls_mat <- sapply(controls2use, function(ctrl){
-
-      control_samples <- labels[labels$label == ctrl,]$sample
-
-      if (is.null(n_samples_sim)) {
-        # For simple simulation take all control samples
-        samples2use <- control_samples
-      }else{
-        # For complex simulation pick random control samples by dataset
-        samples2use <- c()
-        if (length(control_samples) <= n_samples_sim) {
-          samples2use <- control_samples
-        }else{
-          while(length(samples2use) < n_samples_sim){
-            samples2use <-labels %>%
-              filter(label == ctrl & !sample %in% samples2use) %>%
-              group_by(dataset) %>%
-              slice_sample(n=1) %>%
-              pull(sample) %>%
-              c(samples2use, .)
-          }
-        }
-      }
-
-
-      if (length(samples2use) == 1) {
-        ref[,samples2use]
-      }else{
-        if("matrix" %in% class(ref)) Rfast::rowmeans(ref[,samples2use]) else Matrix::rowMeans(ref[,samples2use])
-      }
-
-    })
-    rownames(controls_mat) <- rownames(ref)
-
-
-    # Multiple control mixture by fractions
-    generateFractions <- function(target_sum, n_fracs = length(controls2use)) {
-      # Generate random numbers from a uniform distribution
-      numbers <- runif(n_fracs)
-
-      # Scale the numbers so that their sum equals target_sum
-      fracs <- numbers / sum(numbers) * target_sum
-
-      return(fracs)
-    }
-
-    controls_frac_mat <- sapply(1-sim_fracs, function(frac){
-      fracs <- generateFractions(target_sum = frac)
-      if (length(fracs) == 1) {
-        controls_mat * fracs
-      }else{
-        if("matrix" %in% class(ref)) Rfast::rowmeans(controls_mat %*% diag(fracs)) else Matrix::rowMeans(controls_mat %*% diag(fracs))
-      }
-    })
-    rownames(controls_frac_mat) <- rownames(ref)
-
-    return(controls_frac_mat)
-  }
-
 
   sim_list <- pbapply::pblapply(celltypes, function(ctoi){
 
@@ -400,65 +314,36 @@ makeSimulations <- function(ref, labels, pure_ct_mat, cor_mat, dep_list, sim_fra
     ctoi_samples_pool <- makeSamplesPool(labels, ctoi)
 
     # Number of CTOI samples to use
-    if (!simple) {
-      n_samples_sim <- ifelse(n_samples_sim < length(ctoi_samples_pool), n_samples_sim, length(ctoi_samples_pool))
-    }
+    n_samples_sim <- round(length(ctoi_samples_pool) * ctoi_samples_frac)
+    n_samples_sim <- ifelse(n_samples_sim < 1, 1, n_samples_sim)
 
-    # Get control(s) cell types
+
+    # Get control cell types
     dep_cts <- unique(c(ctoi, unname(unlist(dep_list[[ctoi]]))))
     controls <- celltypes[!celltypes %in% dep_cts]
-    if (simple) {
-      # Pick one control for the simple simulation
-      controls <- names(sort(cor_mat[ctoi, controls])[1])
-    }
+    control <- names(sort(cor_mat[ctoi, controls])[1])
 
-    # Get number of available datasets of this cell type (for adding noise)
-    n_ctoi_ds <- length(unique(labels[labels$label == ctoi,]$dataset))
 
     # Generate n_sims simulations
     ctoi_sim_list <- lapply(1:n_sims, function(i){
 
       # Make CTOI fraction matrix
-      if (is.null(n_samples_sim)) {
-        samples2use <- ctoi_samples_pool
-      }else{
-        samples2use <- ctoi_samples_pool[1:n_samples_sim]
-      }
-      ctoi_frac_mat <- makeFractionMatrixCTOI(ref, sim_fracs, ctoi_samples2use = samples2use)
+      samples2use <- ctoi_samples_pool[1:n_samples_sim]
+      ctoi_frac_mat <- makeFractionMatrix(ref, sim_fracs, samples2use, control = FALSE)
 
       # Move samples2use to the end of the vector
       ctoi_samples_pool <- c(ctoi_samples_pool[!ctoi_samples_pool %in% samples2use], samples2use)
 
       # Make control(s) fractions matrix
-      if (simple) {
-        controls_frac_mat <- makeFractionMatrixControls(ref, labels, sim_fracs, dep_list, controls, n_samples_sim, max_cts_controls = 1)
-        colnames(controls_frac_mat) <- paste0(controls, "%%", 1-sim_fracs)
-      }else{
-        controls_frac_mat <- makeFractionMatrixControls(ref, labels, sim_fracs, dep_list, controls, n_samples_sim, max_cts_controls = 8)
-      }
+      samples2use <- labels[labels$label == control,]$sample
+      control_frac_mat <- makeFractionMatrix(ref, sim_fracs, samples2use, control = TRUE)
+
 
       # Combine CTOI and control(s) fractions matrix
-      simulation <- ctoi_frac_mat + controls_frac_mat
-      colnames(simulation) <- paste0(ctoi, "%%", sim_fracs)
-
-      # Add noise
-      if (add_noise) {
-        noise_sd <- 1/n_ctoi_ds
-        # noise_sd <- 1
-        noise <- matrix(rnorm(nrow(simulation) * ncol(simulation), mean = 0, sd = noise_sd),
-                        nrow = nrow(simulation), ncol = ncol(simulation))
-        simulation <- simulation + noise
-        simulation <- pmax(simulation, 0)
-      }
-
-      if (simple) {
-        # Add another sample to estimate the control background expression for the simple simulation
-        simulation <- cbind(simulation, controls_frac_mat[,1])
-        colnames(simulation)[ncol(simulation)] <- colnames(controls_frac_mat)[1]
-      }
+      simulation <- ctoi_frac_mat + control_frac_mat
+      colnames(simulation) <- paste0(control, "%%", sim_fracs)
 
       simulation
-
     })
 
     if (n_sims == 1) {
@@ -488,7 +373,7 @@ filterSignatures <- function(simulations_scored){
 
 
 }
-scoreSimulations <- function(signatures, simulations, dep_list, simple){
+scoreSimulations <- function(signatures, simulations, dep_list, n_sims){
 
 
   celltypes <- names(simulations)
@@ -496,7 +381,7 @@ scoreSimulations <- function(signatures, simulations, dep_list, simple){
 
     signatures_ctoi <- signatures[gsub("#.*", "", names(signatures)) %in% ctoi]
 
-    if (simple) {
+    if (n_sims == 1) {
       sim_ranked <- singscore::rankGenes(simulations[[ctoi]])
 
       scores <- t(sapply(signatures_ctoi, simplify = TRUE, function(sig){
@@ -506,9 +391,8 @@ scoreSimulations <- function(signatures, simulations, dep_list, simple){
 
       as_tibble(scores, rownames = "signature") %>%
         pivot_longer(cols = -signature, values_to = "score") %>%
-        separate(name, into = c("sim_ct", "sim_frac"), sep = "%%") %>%
-        separate(signature, into = "celltype", sep = "#", remove = FALSE, extra = "drop") %>%
-        mutate(sim_type = ifelse(celltype == sim_ct, "ctoi", "control"))
+        separate(name, into = c("control", "frac"), sep = "%%") %>%
+        separate(signature, into = "celltype", sep = "#", remove = FALSE, extra = "drop")
 
     }else{
       lapply(simulations[[ctoi]], function(sim){
@@ -522,9 +406,8 @@ scoreSimulations <- function(signatures, simulations, dep_list, simple){
 
         as_tibble(scores, rownames = "signature") %>%
           pivot_longer(cols = -signature, values_to = "score") %>%
-          separate(name, into = c("sim_ct", "sim_frac"), sep = "%%") %>%
-          separate(signature, into = "celltype", sep = "#", remove = FALSE, extra = "drop") %>%
-          mutate(sim_type = ifelse(celltype == sim_ct, "ctoi", "control"))
+          separate(name, into = c("control", "frac"), sep = "%%") %>%
+          separate(signature, into = "celltype", sep = "#", remove = FALSE, extra = "drop")
 
       }) %>%
         bind_rows(., .id = "sim_id")
@@ -538,15 +421,14 @@ scoreSimulations <- function(signatures, simulations, dep_list, simple){
 }
 getTranformationModels <- function(simulations_scored, params, modelType){
 
-  set.seed(123)
+  set.seed(seed)
 
   fitModel <- function(data, modelParams = params, model_type = modelType){
 
 
     train_mat <- data %>%
-      filter(sim_type == "ctoi") %>%
-      select(signature, sim_frac, score) %>%
-      mutate(sim_frac = as.numeric(sim_frac)) %>%
+      select(signature, frac, score) %>%
+      mutate(frac = as.numeric(frac)) %>%
       pivot_wider(names_from = signature, values_from = score) %>%
       as.matrix()
 
@@ -572,43 +454,6 @@ getTranformationModels <- function(simulations_scored, params, modelType){
 
       train_mat <- xgboost::xgb.DMatrix(data = train_mat[,-1], label = train_mat[,1])
 
-      # params <- list(
-      #   booster = "gbtree",
-      #   eta = 0.1,
-      #   max_depth = 6,
-      #   alpha = 0,  # L1 regularization term
-      #   lambda = 1, # L2 regularization term
-      #   objective = "reg:logistic"
-      # )
-
-      # # Tune parameters
-      # cv_results <- xgboost::xgb.cv(params = params, data = train_mat, nrounds = 1000, nfold = 5,
-      #                      early_stopping_rounds = 10, verbose = 0)
-      # best_nrounds <- cv_results$best_iteration
-      #
-      # best_params <- list()
-      # best_score <- Inf
-      # best_reg <- list()
-      #
-      # for (eta in c(0.01, 0.05)) {
-      #   for (max_depth in c(6, 8, 10)) {
-      #     for (reg in list(c(0, 0), c(0, 1), c(1, 0), c(1, 1))) {
-      #       params$eta <- eta
-      #       params$max_depth <- max_depth
-      #       params$alpha <- reg[1]
-      #       params$lambda <- reg[2]
-      #       cv_results <- xgboost::xgb.cv(params = params, data = train_mat, nrounds = best_nrounds, nfold = 5)
-      #       mean_test_error <- mean(cv_results$evaluation_log$test_rmse_mean)
-      #       if (mean_test_error < best_score) {
-      #         best_score <- mean_test_error
-      #         best_params <- params
-      #         best_reg <- reg
-      #       }
-      #     }
-      #   }
-      # }
-
-
       model <- xgboost::xgb.train(
         params = modelParams,
         data = train_mat,
@@ -628,91 +473,90 @@ getTranformationModels <- function(simulations_scored, params, modelType){
 
 
 }
-getSpillOverMat <- function(simple_sim, signatures, dep_list, trans_models){
+getSpillOverMat <- function(simulations, signatures, dep_list, trans_models, n_sims, frac2use){
 
   scoreTransform <- function(mat, signatures, trans_models, is_controls){
 
     # Score
     mat_ranked <- singscore::rankGenes(mat)
-    scores <- t(sapply(signatures, simplify = TRUE, function(sig){
+    scores <- sapply(signatures, simplify = TRUE, function(sig){
       singscore::simpleScore(mat_ranked, upSet = sig, centerScore = FALSE)$TotalScore
-    }))
-    colnames(scores) <- colnames(mat)
-    rownames(scores) <- names(signatures)
+    })
+    rownames(scores) <- colnames(mat)
 
-    transfomed_scores <- as_tibble(scores, rownames = "signatures") %>%
-      pivot_longer(cols = -signatures, names_to = "sim_celltype", values_to = "score") %>%
-      separate(signatures, into = "sig_celltype", sep = "#", extra = "drop", remove = FALSE) %>%
-      group_by(sig_celltype, sim_celltype) %>%
-      summarise(mean_score = mean(score)) %>%
-      # Transform
-      left_join(trans_models, by = c("sig_celltype" = "celltype")) %>%
-      rowwise() %>%
-      mutate(shifted_score = mean_score - shift_value) %>%
-      mutate(transformed_score = round(predict(model, newdata = data.frame("shifted_score" = shifted_score), type = "response"), 2)) %>%
-      select(sig_celltype, sim_celltype, transformed_score) %>%
-      pivot_wider(names_from = sim_celltype, values_from = transformed_score)
 
-    # mutate(transformed_score = round(predict(model, newdata = data.frame("shifted_score" = shifted_score)) * scaling_value, 2)) %>%
-    # select(sig_celltype, mix_ctoi, transformed_score) %>%
-    # pivot_wider(names_from = mix_ctoi, values_from = transformed_score)
+    transfomed_tbl <- trans_models %>%
+      mutate(predictions = list(round(predict(model, newdata = scores[,startsWith(colnames(scores), paste0(celltype, "#"))], type = "response"), 4))) %>%
+      select(celltype, predictions) %>%
+      unnest_longer(predictions, indices_to = "sim_celltype") %>%
+      pivot_wider(names_from = sim_celltype, values_from = predictions)
 
-    # TODO: Inset
 
     # Convert to matrix
-    transfomed_scores_mat <- as.matrix(transfomed_scores[,-1])
-    rownames(transfomed_scores_mat) <- pull(transfomed_scores[,1])
+    transfomed_mat <- as.matrix(transfomed_tbl[,-1])
+    rownames(transfomed_mat) <- pull(transfomed_tbl[,1])
+
     if (!is_controls) {
-      transfomed_scores_mat <- transfomed_scores_mat[colnames(mat), colnames(mat)]
+      transfomed_mat <- transfomed_mat[colnames(mat), colnames(mat)]
     }
 
-    return(transfomed_scores_mat)
+    return(transfomed_mat)
 
   }
 
-  ctoi_mat <- sapply(simple_sim, function(sim){
-    sim[,ncol(sim)-1]
-  })
+  if (n_sims == 1) {
 
-  controls_mat <- sapply(simple_sim, function(sim){
-    sim[,ncol(sim)]
-  })
+    # Get CTOIs  matrix with frac2use fraction
+    frac_col <- which(endsWith(colnames(simulations[[1]]), paste0("%%", frac2use)))
+    ctoi_mat <- sapply(simulations, function(sim){
+      sim[,frac_col]
+    })
 
-  colnames(controls_mat) <- unname(sapply(simple_sim, function(sim){
-    gsub("%%*.", "", colnames(sim)[ncol(sim)])
-  }))
 
-  # Score and transform simulations
-  sim_mat_transformed <- scoreTransform(mat = ctoi_mat, signatures, trans_models, is_controls = FALSE)
-  controls_mat_uniq <- controls_mat[,!duplicated(colnames(controls_mat))]
-  controls_mat_transformed <- scoreTransform(mat = controls_mat_uniq, signatures, trans_models, is_controls = TRUE)
-  # Undo unique
-  controls_mat_transformed <- sapply(colnames(controls_mat), function(ctrl){
-    controls_mat_transformed[,ctrl]
-  })
-  controls_mat_transformed <- controls_mat_transformed[colnames(sim_mat_transformed), ]
+    # Get control matrix with CTOI fraction = 0
+    frac_col <- which(endsWith(colnames(simulations[[1]]), paste0("%%", 0)))
+    controls_mat <- sapply(simulations, function(sim){
+      sim[,frac_col]
+    })
+    colnames(controls_mat) <- unname(sapply(simulations, function(sim){
+      gsub("%%*.", "", colnames(sim)[frac_col])
+    }))
 
-  # Remove control signal from the transformed mixture
-  spill_mat <- sim_mat_transformed - controls_mat_transformed
 
-  # Clean and normalize spill matrix
-  spill_mat[spill_mat < 0] <- 0
-  spill_mat <- spill_mat / diag(spill_mat)
+    # Score and transform simulations
+    sim_transformed <- scoreTransform(mat = ctoi_mat, signatures, trans_models, is_controls = FALSE)
+    controls_mat_uniq <- controls_mat[,!duplicated(colnames(controls_mat))]
+    controls_mat_transformed <- scoreTransform(mat = controls_mat_uniq, signatures, trans_models, is_controls = TRUE)
+    # Undo unique
+    controls_mat_transformed <- sapply(colnames(controls_mat), function(ctrl){
+      controls_mat_transformed[,ctrl]
+    })
+    controls_mat_transformed <- controls_mat_transformed[colnames(sim_transformed), ]
 
-  # Insert zero to dependent cell types
-  for(ctoi in rownames(spill_mat)){
-    dep_cts <- unname(unlist(dep_list[[ctoi]]))
-    dep_cts <- dep_cts[dep_cts != ctoi]
-    spill_mat[ctoi, dep_cts] <- 0
+    # Remove control signal from the transformed mixture
+    spill_mat <- sim_transformed - controls_mat_transformed
+
+    # Clean and normalize spill matrix
+    spill_mat[spill_mat < 0] <- 0
+    spill_mat <- spill_mat / diag(spill_mat)
+
+    # Insert zero to dependent cell types
+    for(ctoi in rownames(spill_mat)){
+      dep_cts <- unname(unlist(dep_list[[ctoi]]))
+      dep_cts <- dep_cts[dep_cts != ctoi]
+      spill_mat[ctoi, dep_cts] <- 0
+    }
+
+    # TODO: Check this parameter
+    spill_mat[spill_mat > 0.5] <- 0.5
+    diag(spill_mat) <- 1
+
+    # pheatmap::pheatmap(spill_mat, cluster_rows = F, cluster_cols = F)
+
+    return(spill_mat)
+
   }
 
-  # TODO: Check this parameter
-  spill_mat[spill_mat > 0.5] <- 0.5
-  diag(spill_mat) <- 1
-
-  # pheatmap::pheatmap(spill_mat, cluster_rows = F, cluster_cols = F)
-
-  return(spill_mat)
 
 }
 
@@ -796,6 +640,7 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, clean_genes
     dep_list <- getDependencies(lineage_file)
   }
 
+
   # Generate/Load signatures
   if (is.null(sigsFile)) {
     # Generate signatures
@@ -810,55 +655,35 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, clean_genes
     message("Calculating quantiles...")
     quantiles_matrix <- makeQuantiles(ref, labels, probs, dep_list, include_descendants = FALSE)
     message("Generating signatures...")
-    signatures_collection <- createSignatures(ref, labels, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, weight_genes = TRUE)
+    signatures <- createSignatures(ref, labels, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, weight_genes = TRUE)
 
     if (!filter_sigs) {
-      return(signatures_collection)
+      return(signatures)
     }
   }else{
     message("Loading signatures...")
-    signatures_collection <- readRDS(sigsFile)
+    signatures <- readRDS(sigsFile)
   }
 
 
   # Make simulations
   message("Generating simulations...")
-  simple_simulations <- makeSimulations(ref, labels, pure_ct_mat, cor_mat, dep_list, sim_fracs, n_sims = 1, n_samples_sim = NULL, add_noise = FALSE, simple = TRUE)
-  if (!simpleSim) {
-    complex_simulations <- makeSimulations(ref, labels, pure_ct_mat, cor_mat, dep_list, sim_fracs, n_sims = 5, n_samples_sim = 9, add_noise = TRUE, simple = FALSE)
-  }
-
-  # Score simulations
-  message("Scoring simulations...")
-  simple_simulations_scored <- scoreSimulations(signatures = signatures_collection, simulations = simple_simulations, dep_list, simple = TRUE)
-  if (!simpleSim) {
-    complex_simulations_scored <- scoreSimulations(signatures = signatures_collection, simulations = complex_simulations, dep_list, simple = FALSE)
-  }
+  simulations <- makeSimulations(ref, labels, pure_ct_mat, cor_mat, dep_list, sim_fracs, ctoi_samples_frac = 1, n_sims = 1)
+  simulations_scored <- scoreSimulations(signatures, simulations, dep_list, n_sims = 1)
 
 
-  # Filter signatures
+  # TODO: Filter signatures
   message("Filtering signatures...")
-  if (!simpleSim) {
-    signatures_filtered <- filterSignatures(simulations_scored = complex_simulations_scored)
-    signatures <- signatures_collection[names(signatures_collection) %in% signatures_filtered]
-  }else{
-    signatures <- signatures_collection
-  }
 
 
   # Get transformation models
-  # TODO: Use filtered signatures
   message("Training models...")
-  simple_simulations_scored <- lapply(simple_simulations_scored, function(ct){
-    ct %>%
-      filter(signature %in% names(signatures))
-  })
-  trans_models <- getTranformationModels(simulations_scored = simple_simulations_scored, params, modelType)
+  trans_models <- getTranformationModels(simulations_scored, params, modelType, seed = 123)
 
 
   # Get spillover matrix
-  # TODO: Use filtered signatures
-  spill_mat <- matrix()
+  message("Generating spillover matrix...")
+  spill_mat <- getSpillOverMat(simulations, signatures, dep_list, trans_models, n_sims = 1, frac2use = 0.25)
 
   # Save results in S4 object
   xCell2Sigs.S4 <- new("xCell2Signatures",

@@ -16,7 +16,6 @@
 #' @export
 xCell2Analysis <- function(mix, xcell2sigs, min_intersect = 0.9, tranform, spillover, spillover_alpha = 0.5){
 
-  # score ranked mix gene expression matrix
   scoreMix <- function(ctoi, mix_ranked, xcell2sigs){
 
     signatures_ctoi <- xcell2sigs@signatures[startsWith(names(xcell2sigs@signatures), paste0(ctoi, "#"))]
@@ -28,7 +27,6 @@ xCell2Analysis <- function(mix, xcell2sigs, min_intersect = 0.9, tranform, spill
 
     return(scores)
   }
-
   predictFracs <- function(ctoi, scores, xcell2sigs){
 
     model <- filter(xcell2sigs@transformation_models, celltype == ctoi)$model[[1]]
@@ -45,7 +43,6 @@ xCell2Analysis <- function(mix, xcell2sigs, min_intersect = 0.9, tranform, spill
   }
 
 
-
   # Check reference/mixture genes intersection
   genes_intersect_frac <- length(intersect(rownames(mix), xcell2sigs@genes_used)) / length(xcell2sigs@genes_used)
   if (genes_intersect_frac < min_intersect) {
@@ -54,10 +51,8 @@ xCell2Analysis <- function(mix, xcell2sigs, min_intersect = 0.9, tranform, spill
   }
 
 
-
   # Rank mix gene expression matrix
   mix_ranked <- singscore::rankGenes(mix)
-
 
   # Score and predict
   sigs_celltypes <- unique(unlist(lapply(names(xcell2sigs@signatures), function(x){strsplit(x, "#")[[1]][1]})))
@@ -83,10 +78,11 @@ xCell2Analysis <- function(mix, xcell2sigs, min_intersect = 0.9, tranform, spill
   spill_mat <- xcell2sigs@spill_mat * spillover_alpha
   diag(spill_mat) <- 1
 
-  rows <- rownames(scores_transformed_mat)[rownames(scores_transformed_mat) %in% rownames(spill_mat)]
+  rows <- intersect(rownames(all_predictions_mat), rownames(spill_mat))
 
-  scores_corrected <- apply(scores_transformed_mat[rows, ], 2, function(x) pracma::lsqlincon(spill_mat[rows, rows], x, lb = 0))
+  scores_corrected <- apply(all_predictions_mat[rows, ], 2, function(x) pracma::lsqlincon(spill_mat[rows, rows], x, lb = 0))
   scores_corrected[scores_corrected < 0] <- 0
+  scores_corrected <- round(scores_corrected, 4)
   rownames(scores_corrected) <- rows
   return(scores_corrected)
 
