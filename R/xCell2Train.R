@@ -609,7 +609,6 @@ setClass("xCell2Signatures", slots = list(
 #' @param topCor description
 #' @param topDelta description
 #' @param sigsFile description
-#' @param simpleSim description
 #' @param filter_sigs description
 #' @param bulkPseudoCount description
 #' @return An S4 object containing the signatures, cell type labels, and cell type dependencies.
