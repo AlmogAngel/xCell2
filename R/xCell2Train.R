@@ -419,7 +419,7 @@ scoreSimulations <- function(signatures, simulations, dep_list, n_sims){
   return(sims_scored)
 
 }
-getTranformationModels <- function(simulations_scored, params, modelType){
+getTranformationModels <- function(simulations_scored, params, modelType, seed){
 
   set.seed(seed)
 
