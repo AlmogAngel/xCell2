@@ -616,7 +616,7 @@ setClass("xCell2Signatures", slots = list(
 #' @export
 xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, clean_genes = TRUE,
                         sim_fracs = c(0, 0.001, 0.002, 0.004, 0.006, 0.008, seq(0.01, 1, 0.01)), diff_vals = c(1, 1.32, 1.585, 2, 3, 4, 5),
-                        min_genes = 5, max_genes = 200, filter_sigs = TRUE, simpleSim = TRUE, sigsFile = NULL, params = list(), modelType = "rf", bulkPseudoCount = 1){
+                        min_genes = 5, max_genes = 200, filter_sigs = TRUE, sigsFile = NULL, params = list(), modelType = "rf", bulkPseudoCount = 1){
 
 
   # Validate inputs
