@@ -62,14 +62,14 @@ prepareRef <- function(ref, data_type, bulk_pseudo_count){
   }
 
 }
-sc2pseudoBulk <- function(ref, labels, min_n_cells = 40, min_groups = 10, seed = 123){
+sc2pseudoBulk <- function(ref, labels, min_n_cells, min_groups, seed = 123){
 
   set.seed(seed)
 
   celltypes <- unique(labels$label)
 
   groups_list <- lapply(celltypes, function(ctoi){
-    print(ctoi)
+
     ctoi_samples <- labels[labels$label == ctoi,]$sample
 
     # Calculate maximum possible number of groups given min_n_cells
@@ -663,11 +663,13 @@ setClass("xCell2Signatures", slots = list(
 #' @param sigsFile description
 #' @param filter_sigs description
 #' @param bulkPseudoCount description
+#' @param minPBcells description
+#' @param minPBgroups description
 #' @return An S4 object containing the signatures, cell type labels, and cell type dependencies.
 #' @export
 xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, clean_genes = TRUE,
                         sim_fracs = c(0, 0.001, 0.002, 0.004, 0.006, 0.008, seq(0.01, 1, 0.01)), diff_vals = c(1, 1.32, 1.585, 2, 3, 4, 5),
-                        min_genes = 5, max_genes = 200, filter_sigs = TRUE, sigsFile = NULL, params = list(), modelType = "rf", bulkPseudoCount = 1){
+                        min_genes = 5, max_genes = 200, filter_sigs = TRUE, sigsFile = NULL, params = list(), modelType = "rf", bulkPseudoCount = 1, minPBcells = 40, minPBgroups = 10){
 
 
   # Validate inputs
@@ -681,7 +683,7 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, clean_genes
   # Generate pseudo bulk from scRNA-Seq reference
   if (data_type == "sc") {
     message("Converting scRNA-seq reference to pseudo bulk...")
-    ps_data <- sc2pseudoBulk(ref, labels)
+    ps_data <- sc2pseudoBulk(ref, labels, min_n_cells = minPBcells, min_groups = minPBgroups)
     ref <- ps_data$ref
     labels <- ps_data$labels
   }
