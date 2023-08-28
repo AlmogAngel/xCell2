@@ -18,7 +18,9 @@ xCell2Train(
   sigsFile = NULL,
   params = list(),
   modelType = "rf",
-  bulkPseudoCount = 1
+  bulkPseudoCount = 1,
+  minPBcells = 40,
+  minPBgroups = 10
 )
 }
 \arguments{
@@ -49,6 +51,10 @@ xCell2Train(
 \item{params}{description}
 
 \item{bulkPseudoCount}{description}
+
+\item{minPBcells}{description}
+
+\item{minPBgroups}{description}
 
 \item{probs}{A vector of probability thresholds to be used for generating signatures (optional).}
 
