@@ -62,20 +62,26 @@ prepareRef <- function(ref, data_type, bulk_pseudo_count){
   }
 
 }
-# TODO: Fix 10 as magic number
-sc2pseudoBulk <- function(ref, labels, seed = 123){
+sc2pseudoBulk <- function(ref, labels, min_n_cells = 40, min_groups = 10, seed = 123){
 
   celltypes <- unique(labels$label)
 
   groups_list <- lapply(celltypes, function(ctoi){
 
-    # Generate 10 pseudo samples of CTOI
     ctoi_samples <- labels[labels$label == ctoi,]$sample
-    if (length(ctoi_samples) > 10) {
+
+    # Calculate the number of groups
+    num_groups <- ceiling(length(ctoi_samples) / min_n_cells)
+    if (num_groups < min_groups) {
+      num_groups <- min_groups
+    }
+
+    # Generate min_groups pseudo samples of CTOI
+    if (length(ctoi_samples) > min_groups) {
 
       set.seed(seed)
       ctoi_samples_shuffled <- sample(ctoi_samples, length(ctoi_samples))
-      list_of_ctoi_samples_shuffled <- split(ctoi_samples_shuffled, ceiling(seq_along(ctoi_samples_shuffled) / (length(ctoi_samples_shuffled) / 10)))
+      list_of_ctoi_samples_shuffled <- split(ctoi_samples_shuffled, ceiling(seq_along(ctoi_samples_shuffled) / (length(ctoi_samples_shuffled) / num_groups)))
 
       sapply(list_of_ctoi_samples_shuffled, function(ctoi_group){
         if("matrix" %in% class(ref)) Rfast::rowmeans(ref[,ctoi_group]) else Matrix::rowMeans(ref[,ctoi_group])
@@ -207,6 +213,7 @@ makeQuantiles <- function(ref, labels, probs, dep_list, include_descendants){
 
   return(quantiles_mat_list)
 }
+# TODO: Check weight_genes = FALSE
 createSignatures <- function(ref, labels, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, weight_genes){
 
 
@@ -669,7 +676,7 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, clean_genes
   # Generate pseudo bulk from scRNA-Seq reference
   if (data_type == "sc") {
     message("Converting scRNA-seq reference to pseudo bulk...")
-    ps_data <- sc2pseudoBulk(ref, labels, seed = 123)
+    ps_data <- sc2pseudoBulk(ref, labels)
     ref <- ps_data$ref
     labels <- ps_data$labels
   }
