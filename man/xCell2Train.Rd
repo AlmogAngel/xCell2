@@ -10,12 +10,15 @@ xCell2Train(
   data_type,
   lineage_file = NULL,
   clean_genes = TRUE,
-  sim_fracs = c(0, 0.001, 0.002, 0.004, 0.006, 0.008, seq(0.01, 0.25, 0.01)),
+  sim_fracs = c(0, 0.001, 0.002, 0.004, 0.006, 0.008, seq(0.01, 1, 0.01)),
   diff_vals = c(1, 1.32, 1.585, 2, 3, 4, 5),
   min_genes = 5,
   max_genes = 200,
   filter_sigs = TRUE,
-  simpleSim = TRUE
+  sigsFile = NULL,
+  params = list(),
+  modelType = "rf",
+  bulkPseudoCount = 1
 )
 }
 \arguments{
@@ -39,7 +42,19 @@ xCell2Train(
 
 \item{max_genes}{The maximum number of genes to include in the signature (optional).}
 
+\item{filter_sigs}{description}
+
+\item{sigsFile}{description}
+
+\item{params}{description}
+
+\item{bulkPseudoCount}{description}
+
 \item{probs}{A vector of probability thresholds to be used for generating signatures (optional).}
+
+\item{topCor}{description}
+
+\item{topDelta}{description}
 }
 \value{
 An S4 object containing the signatures, cell type labels, and cell type dependencies.

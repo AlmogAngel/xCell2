@@ -22,13 +22,11 @@ xCell2CleanGenes <- function(ref, mix, gene_groups = c("Rb", "Mrp", "other_Rb", 
   }
 
   # Remove gene groups
-  data("hs.genelist", package = "xCell2")
   ngenes_before <- nrow(ref)
   ref <- ref[!rownames(ref) %in% hs.genelist[hs.genelist$gene_group %in% gene_groups, id],]
 
   # Use protein coding genes
   if (use_protein_coding) {
-    data("gencode.v22.broad.category", package = "xCell2")
     pc_genes <- gencode.v22.broad.category[gencode.v22.broad.category$genes_type == "protein_coding", id]
     ref <- ref[rownames(ref) %in% pc_genes,]
   }

@@ -10,7 +10,7 @@ xCell2CleanGenes(
   gene_groups = c("Rb", "Mrp", "other_Rb", "chrM", "MALAT1", "chrX", "chrY"),
   use_protein_coding = TRUE,
   top_var_genes = FALSE,
-  n_var_genes = 10000
+  n_var_genes = 5000
 )
 }
 \arguments{

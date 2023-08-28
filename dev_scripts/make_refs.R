@@ -348,11 +348,16 @@ all(labels$sample == colnames(ref))
 bp <- celldex::BlueprintEncodeData()
 
 bp_ref <- as.matrix(bp@assays@data$logcounts)
+
+# Anti log2 data
+bp_ref <- 2^bp_ref
+bp_ref <- bp_ref-1
+
 bp_labels <- bp@colData
 
 bp_labels <- bp_labels %>%
   as_tibble() %>%
-  rename("label.ont" = "ont") %>%
+  rename("ont" = "label.ont") %>%
   rowwise() %>%
   mutate(label = plyr::mapvalues(label.fine, from = celltype_conversion_long$all_labels, to = celltype_conversion_long$xCell2_labels, warn_missing = FALSE)) %>%
   ungroup() %>%
@@ -440,45 +445,45 @@ lm22_ref <- list(ref = as.matrix(lm22.ref),
 saveRDS(lm22_ref, "/bigdata/almogangel/xCell2_data/dev_data/lm22_ref.rds")
 
 
-# old
-# lm22 <- readRDS("/bigdata/almogangel/xCell2_data/dev_data/lm22.rds")
-# lm22.labels <- lm22$labels
-#
-# x <- read_tsv("/bigdata/almogangel/xCell2_data/dev_data/LM22.txt")
-# x <- colnames(x)[-1]
-# missing_cts <- unique(x[!x %in% lm22.labels])
-#
-#
-# lm22.labels2 <- plyr::mapvalues(lm22.labels, celltype_conversion_long$all_labels, celltype_conversion_long$xCell2_labels)
-# unique(lm22.labels2[lm22.labels2 %in% lm22.labels])
-#
-#
-# lm22.labels <- lm22.labels2
-# lm22.samples <- colnames(lm22$expr)
-#
-# lm22.dataset <- gsub(".CEL", "", lm22.samples)
-# lm22.dataset <- gsub("_.*", "", lm22.dataset)
-#
-#
-# x <- read_tsv("/bigdata/almogangel/xCell2_data/dev_data/lm22_datasets.txt")
-#
-# x$`Sample ID`[!x$`Sample ID` %in% lm22.dataset]
-#
-# unique(x$`Data set`[!x$`Data set` %in% lm22.dataset])
-#
-# which(startsWith(lm22.samples, "GSE4527"))
-#
-# lm22_labels <- tibble(ont = NA, label = lm22.labels, sample = lm22.samples, dataset = lm22.dataset)
-# lm22_labels$ont <- plyr::mapvalues(lm22_labels$label, celltype_conversion_long$xCell2_labels, celltype_conversion_long$ont)
-# lm22_labels[!lm22_labels$ont %in% celltype_conversion_long$ont,]$ont <- NA
-#
-# all(lm22_labels$sample == colnames(lm22$expr))
-#
-#
-# xCell2GetLineage(lm22_labels, out_file = "/bigdata/almogangel/xCell2_data/dev_data/lm22_dependencies.tsv")
-#
-# lm22_ref <- list(ref = as.matrix(lm22$expr),
-#                        labels = as.data.frame(lm22_labels),
-#                        lineage_file = "/bigdata/almogangel/xCell2_data/dev_data/lm22_dependencies.tsv")
-# saveRDS(lm22_ref, "/bigdata/almogangel/xCell2_data/dev_data/lm22_ref.rds")
+#old
+lm22 <- readRDS("/bigdata/almogangel/xCell2_data/dev_data/lm22.rds")
+lm22.labels <- lm22$labels
+
+x <- read_tsv("/bigdata/almogangel/xCell2_data/dev_data/LM22.txt")
+x <- colnames(x)[-1]
+missing_cts <- unique(x[!x %in% lm22.labels])
+
+
+lm22.labels2 <- plyr::mapvalues(lm22.labels, celltype_conversion_long$all_labels, celltype_conversion_long$xCell2_labels)
+unique(lm22.labels2[lm22.labels2 %in% lm22.labels])
+
+
+lm22.labels <- lm22.labels2
+lm22.samples <- colnames(lm22$expr)
+
+lm22.dataset <- gsub(".CEL", "", lm22.samples)
+lm22.dataset <- gsub("_.*", "", lm22.dataset)
+
+
+x <- read_tsv("/bigdata/almogangel/xCell2_data/dev_data/lm22_datasets.txt")
+
+x$`Sample ID`[!x$`Sample ID` %in% lm22.dataset]
+
+unique(x$`Data set`[!x$`Data set` %in% lm22.dataset])
+
+which(startsWith(lm22.samples, "GSE4527"))
+
+lm22_labels <- tibble(ont = NA, label = lm22.labels, sample = lm22.samples, dataset = lm22.dataset)
+lm22_labels$ont <- plyr::mapvalues(lm22_labels$label, celltype_conversion_long$xCell2_labels, celltype_conversion_long$ont)
+lm22_labels[!lm22_labels$ont %in% celltype_conversion_long$ont,]$ont <- NA
+
+all(lm22_labels$sample == colnames(lm22$expr))
+
+
+xCell2GetLineage(lm22_labels, out_file = "/bigdata/almogangel/xCell2_data/dev_data/lm22_dependencies_for_dtangle.tsv")
+
+lm22_ref <- list(ref = as.matrix(lm22$expr),
+                       labels = as.data.frame(lm22_labels),
+                       lineage_file = "/bigdata/almogangel/xCell2_data/dev_data/lm22_dependencies_for_dtangle.tsv")
+saveRDS(lm22_ref, "/bigdata/almogangel/xCell2_data/dev_data/lm22_ref_for_dtangle.rds")
 

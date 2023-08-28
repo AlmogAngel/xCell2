@@ -40,6 +40,8 @@ prepareRef <- function(ref, data_type, bulk_pseudo_count){
       if (!all(rownames(ref.norm) %in% genes_names)) {
         stop("Seurat genes name error")
       }
+
+
       return(ref.norm)
     }else{
       message("Assuming reference is already in log1p-space (maximum expression value < 50).")
@@ -58,6 +60,44 @@ prepareRef <- function(ref, data_type, bulk_pseudo_count){
     }
 
   }
+
+}
+# TODO: Fix 10 as magic number
+sc2pseudoBulk <- function(ref, labels, seed = 123){
+
+  celltypes <- unique(labels$label)
+
+  groups_list <- lapply(celltypes, function(ctoi){
+
+    # Generate 10 pseudo samples of CTOI
+    ctoi_samples <- labels[labels$label == ctoi,]$sample
+    if (length(ctoi_samples) > 10) {
+
+      set.seed(seed)
+      ctoi_samples_shuffled <- sample(ctoi_samples, length(ctoi_samples))
+      list_of_ctoi_samples_shuffled <- split(ctoi_samples_shuffled, ceiling(seq_along(ctoi_samples_shuffled) / (length(ctoi_samples_shuffled) / 10)))
+
+      sapply(list_of_ctoi_samples_shuffled, function(ctoi_group){
+        if("matrix" %in% class(ref)) Rfast::rowmeans(ref[,ctoi_group]) else Matrix::rowMeans(ref[,ctoi_group])
+      })
+
+    }else{
+      ref[,ctoi_samples]
+    }
+
+  })
+
+  names(groups_list) <- celltypes
+  pseudo_ref <- as.matrix(bind_cols(groups_list))
+  rownames(pseudo_ref) <- rownames(ref)
+
+  pseudo_label <- tibble(labels) %>%
+    select(ont, label) %>%
+    unique() %>%
+    right_join(., tibble(label = sub("\\.\\d+$", "", colnames(pseudo_ref)), sample = colnames(pseudo_ref), dataset = "pseudoBulk"), by = "label") %>%
+    as.data.frame()
+
+  return(list(ref = pseudo_ref, labels = pseudo_label))
 
 }
 makePureCTMat <- function(ref, labels, use_median){
@@ -419,7 +459,7 @@ scoreSimulations <- function(signatures, simulations, dep_list, n_sims){
   return(sims_scored)
 
 }
-getTranformationModels <- function(simulations_scored, params, modelType, seed){
+trainModels <- function(simulations_scored, params, modelType, seed){
 
   set.seed(seed)
 
@@ -626,6 +666,14 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, clean_genes
   # Prepare reference
   ref <- prepareRef(ref, data_type, bulk_pseudo_count = bulkPseudoCount)
 
+  # Generate pseudo bulk from scRNA-Seq reference
+  if (data_type == "sc") {
+    message("Converting scRNA-seq reference to pseudo bulk...")
+    ps_data <- sc2pseudoBulk(ref, labels, seed = 123)
+    ref <- ps_data$ref
+    labels <- ps_data$labels
+  }
+
   # Build cell types correlation matrix
   message("Calculating cell-type correlation matrix...")
   pure_ct_mat <- makePureCTMat(ref, labels, use_median = TRUE)
@@ -677,7 +725,7 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, clean_genes
 
   # Get transformation models
   message("Training models...")
-  trans_models <- getTranformationModels(simulations_scored, params, modelType, seed = 123)
+  trans_models <- trainModels(simulations_scored, params, modelType, seed = 123)
 
 
   # Get spillover matrix

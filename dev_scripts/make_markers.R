@@ -6,7 +6,9 @@ dir <- "/bigdata/almogangel/xCell2_data/benchmarking_data/references/"
 # ref_files <- list.files(dir, pattern = "*_ref.rds")
 ref_files <- list("bulk" = c("bp_ref.rds", "kass_blood_ref.rds", "kass_tumor_ref.rds", "lm22_ref.rds"), "sc" = c("ts_blood_ref.rds", "sc_pan_cancer_ref.rds"))
 
-ref_files <- list("sc" = c("ts_blood_ref.rds", "sc_pan_cancer_ref.rds"))
+# ref_files <- list("sc" = c("ts_blood_ref.rds", "sc_pan_cancer_ref.rds"))
+# ref_files <- list("bulk" = c("bp_ref.rds"))
+
 
 # Make markers from bulk references using method from dtangle/ABIS  ------------
 # Credit: https://github.com/gjhunt/dtangle
@@ -164,14 +166,17 @@ lapply(names(ref_files), function(ref_type){
       which(colnames(ref) == ct)
     })
 
-    # Remove cell types with a single sample -  cannot use p.value method
+
     if (any(lengths(pure_samples_list) == 1)) {
-      single_sample_celltypes <- names(which(lengths(pure_samples_list) == 1))
-      ref <- ref[,!colnames(ref) %in% single_sample_celltypes]
-      celltypes <- unique(colnames(ref))
-      pure_samples_list <- sapply(celltypes, function(ct){
-        which(colnames(ref) == ct)
-      })
+      markerMethod <- "ratio"
+
+      # # Remove cell types with a single sample -  cannot use p.value method
+      # single_sample_celltypes <- names(which(lengths(pure_samples_list) == 1))
+      # ref <- ref[,!colnames(ref) %in% single_sample_celltypes]
+      # celltypes <- unique(colnames(ref))
+      # pure_samples_list <- sapply(celltypes, function(ct){
+      #   which(colnames(ref) == ct)
+      # })
     }
 
     gma <- ifelse(ref.name == "lm22", dtangle:::gma$ma_gene, dtangle:::gma$rna_seq)
