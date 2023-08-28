@@ -64,13 +64,15 @@ prepareRef <- function(ref, data_type, bulk_pseudo_count){
 }
 sc2pseudoBulk <- function(ref, labels, min_n_cells = 40, min_groups = 10, seed = 123){
 
+  set.seed(seed)
+
   celltypes <- unique(labels$label)
 
   groups_list <- lapply(celltypes, function(ctoi){
-
+    print(ctoi)
     ctoi_samples <- labels[labels$label == ctoi,]$sample
 
-    # Calculate the number of groups
+    # Calculate maximum possible number of groups given min_n_cells
     num_groups <- ceiling(length(ctoi_samples) / min_n_cells)
     if (num_groups < min_groups) {
       num_groups <- min_groups
@@ -79,12 +81,15 @@ sc2pseudoBulk <- function(ref, labels, min_n_cells = 40, min_groups = 10, seed =
     # Generate min_groups pseudo samples of CTOI
     if (length(ctoi_samples) > min_groups) {
 
-      set.seed(seed)
       ctoi_samples_shuffled <- sample(ctoi_samples, length(ctoi_samples))
       list_of_ctoi_samples_shuffled <- split(ctoi_samples_shuffled, ceiling(seq_along(ctoi_samples_shuffled) / (length(ctoi_samples_shuffled) / num_groups)))
 
       sapply(list_of_ctoi_samples_shuffled, function(ctoi_group){
-        if("matrix" %in% class(ref)) Rfast::rowmeans(ref[,ctoi_group]) else Matrix::rowMeans(ref[,ctoi_group])
+        if (length(ctoi_group) == 1) {
+          ref[,ctoi_group]
+        }else{
+          if("matrix" %in% class(ref)) Rfast::rowmeans(ref[,ctoi_group]) else Matrix::rowMeans(ref[,ctoi_group])
+        }
       })
 
     }else{
