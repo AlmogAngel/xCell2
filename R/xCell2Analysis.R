@@ -14,7 +14,7 @@
 #' @param spillover Boolean - should we use spillover corretion on the transformed scores?
 #' @return A data frame containing the cell type enrichment for each sample in the input matrix, as estimated by xCell2.
 #' @export
-xCell2Analysis <- function(mix, xcell2sigs, min_intersect = 0.9, tranform, spillover, spillover_alpha = 0.5){
+xCell2Analysis <- function(mix, xcell2sigs, min_intersect = 0.9, tranform, spillover, spillover_alpha = 0.2){
 
   scoreMix <- function(ctoi, mix_ranked, xcell2sigs){
 

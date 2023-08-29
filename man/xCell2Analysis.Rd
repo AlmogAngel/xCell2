@@ -10,7 +10,7 @@ xCell2Analysis(
   min_intersect = 0.9,
   tranform,
   spillover,
-  spillover_alpha = 0.5
+  spillover_alpha = 0.2
 )
 }
 \arguments{

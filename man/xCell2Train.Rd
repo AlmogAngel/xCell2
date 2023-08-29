@@ -9,7 +9,7 @@ xCell2Train(
   labels,
   data_type,
   lineage_file = NULL,
-  clean_genes = TRUE,
+  weightGenes = FALSE,
   sim_fracs = c(0, 0.001, 0.002, 0.004, 0.006, 0.008, seq(0.01, 1, 0.01)),
   diff_vals = c(1, 1.32, 1.585, 2, 3, 4, 5),
   min_genes = 5,
@@ -19,7 +19,7 @@ xCell2Train(
   params = list(),
   modelType = "rf",
   bulkPseudoCount = 1,
-  minPBcells = 40,
+  minPBcells = 30,
   minPBgroups = 10
 )
 }
@@ -34,7 +34,9 @@ xCell2Train(
 
 \item{data_type}{Gene expression data type: "rnaseq", "array", or "sc".}
 
-\item{lineage_file}{Path to the cell type lineage file generated with `xCell2GetLineage` function (optional) .}
+\item{lineage_file}{Path to the cell type lineage file generated with `xCell2GetLineage` function (optional).}
+
+\item{weightGenes}{description}
 
 \item{sim_fracs}{A vector of mixture fractions to be used in signature filtering (optional).}
 
@@ -50,6 +52,8 @@ xCell2Train(
 
 \item{params}{description}
 
+\item{modelType}{description}
+
 \item{bulkPseudoCount}{description}
 
 \item{minPBcells}{description}
@@ -57,10 +61,6 @@ xCell2Train(
 \item{minPBgroups}{description}
 
 \item{probs}{A vector of probability thresholds to be used for generating signatures (optional).}
-
-\item{topCor}{description}
-
-\item{topDelta}{description}
 }
 \value{
 An S4 object containing the signatures, cell type labels, and cell type dependencies.

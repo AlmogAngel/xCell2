@@ -651,25 +651,25 @@ setClass("xCell2Signatures", slots = list(
 #'   "sample": the cell type sample should match the column name in ref.
 #'   "dataset": the cell type sample dataset or subject (for single-cell) as a character.
 #' @param data_type Gene expression data type: "rnaseq", "array", or "sc".
-#' @param lineage_file Path to the cell type lineage file generated with `xCell2GetLineage` function (optional) .
+#' @param lineage_file Path to the cell type lineage file generated with `xCell2GetLineage` function (optional).
+#' @param weightGenes description
 #' @param sim_fracs A vector of mixture fractions to be used in signature filtering (optional).
 #' @param probs A vector of probability thresholds to be used for generating signatures (optional).
 #' @param diff_vals A vector of delta values to be used for generating signatures (optional).
 #' @param min_genes The minimum number of genes to include in the signature (optional).
 #' @param max_genes The maximum number of genes to include in the signature (optional).
 #' @param params description
-#' @param topCor description
-#' @param topDelta description
 #' @param sigsFile description
 #' @param filter_sigs description
+#' @param modelType description
 #' @param bulkPseudoCount description
 #' @param minPBcells description
 #' @param minPBgroups description
 #' @return An S4 object containing the signatures, cell type labels, and cell type dependencies.
 #' @export
-xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, clean_genes = TRUE,
+xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, weightGenes = FALSE,
                         sim_fracs = c(0, 0.001, 0.002, 0.004, 0.006, 0.008, seq(0.01, 1, 0.01)), diff_vals = c(1, 1.32, 1.585, 2, 3, 4, 5),
-                        min_genes = 5, max_genes = 200, filter_sigs = TRUE, sigsFile = NULL, params = list(), modelType = "rf", bulkPseudoCount = 1, minPBcells = 40, minPBgroups = 10){
+                        min_genes = 5, max_genes = 200, filter_sigs = TRUE, sigsFile = NULL, params = list(), modelType = "rf", bulkPseudoCount = 1, minPBcells = 30, minPBgroups = 10){
 
 
   # Validate inputs
@@ -716,7 +716,7 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, clean_genes
     message("Calculating quantiles...")
     quantiles_matrix <- makeQuantiles(ref, labels, probs, dep_list, include_descendants = FALSE)
     message("Generating signatures...")
-    signatures <- createSignatures(ref, labels, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, weight_genes = TRUE)
+    signatures <- createSignatures(ref, labels, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, weight_genes = weightGenes)
 
     if (!filter_sigs) {
       return(signatures)
