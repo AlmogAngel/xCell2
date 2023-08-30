@@ -875,6 +875,10 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, weightGenes
     message("Calculating quantiles...")
     quantiles_matrix <- makeQuantiles(ref, labels, probs, dep_list, include_descendants = FALSE)
     message("Generating signatures...")
+    if (useOriginalMethod) {
+      message("using original method")
+
+    }
     signatures <- createSignatures(ref, labels, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, weight_genes = weightGenes, use_original = useOriginalMethod)
 
     if (!filter_sigs) {
