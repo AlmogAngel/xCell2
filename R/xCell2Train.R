@@ -650,7 +650,8 @@ trainModels <- function(simulations_scored, params, modelType, seed){
 
       RF <- RRF::RRF(train_mat[,-1], train_mat[,1], flagReg = 0, importance = TRUE, mtry = mtry2use, ntree = modelParams$ntree, nodesize = modelParams$nodesize)
       RF_imp <- RF$importance[,"%IncMSE"] / max(RF$importance[,"%IncMSE"])
-      RRF <- RRF::RRF(train_mat[,-1], train_mat[,1], flagReg = 1, coefReg = (1-gamma) + gamma*RF_imp)
+      RRF <- RRF::RRF(train_mat[,-1], train_mat[,1], flagReg = 1, coefReg = (1-gamma) + gamma*RF_imp,
+                      mtry = mtry2use, ntree = modelParams$ntree, nodesize = modelParams$nodesize)
       return(RRF)
     }
 
@@ -875,9 +876,11 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, weightGenes
     message("Calculating quantiles...")
     quantiles_matrix <- makeQuantiles(ref, labels, probs, dep_list, include_descendants = FALSE)
     message("Generating signatures...")
+
     if (useOriginalMethod) {
       message("using original method")
-
+    }else{
+      message("using xcell2 method")
     }
     signatures <- createSignatures(ref, labels, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, weight_genes = weightGenes, use_original = useOriginalMethod)
 
