@@ -218,11 +218,11 @@ makeQuantiles <- function(ref, labels, probs, dep_list, include_descendants){
 
   return(quantiles_mat_list)
 }
-# TODO: Check weight_genes = FALSE
-createSignatures <- function(ref, labels, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, weight_genes){
+# TODO: remove patch
+createSignatures <- function(ref, labels, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, weight_genes, use_original){
 
 
-  getSigs <- function(celltypes, type, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, weight_genes){
+  getSigs <- function(celltypes, type, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, weight_genes, original = use_original){
 
     # Remove dependent cell types
     not_dep_celltypes <- celltypes[!celltypes %in% c(type, unname(unlist(dep_list[[type]])))]
@@ -232,69 +232,228 @@ createSignatures <- function(ref, labels, dep_list, quantiles_matrix, probs, cor
 
     # Generate signatures
     type_sigs <- list()
-    for(i in 1:nrow(param.df)){
+    for (i in 1:nrow(param.df)){
 
       # Get a Boolean matrices with genes that pass the quantiles criteria
       diff <- param.df[i, ]$diff_vals # difference criteria
       lower_prob <- which(probs == param.df[i, ]$probs) # lower quantile criteria
       upper_prob <- nrow(quantiles_matrix[[1]])-lower_prob+1 # upper quantile criteria
-      diff_genes.mat <- sapply(not_dep_celltypes, function(x){
-        get(type, quantiles_matrix)[lower_prob,] > get(x, quantiles_matrix)[upper_prob,] + diff
-      })
 
 
-      if(weight_genes){
-        # Score genes using cell types correlations as weights
-        type_weights <- cor_mat[type, not_dep_celltypes]
-        type_weights[type_weights < 0.001] <- 0.001 # Fix minimum correlation to avoid zero and negative correlations
-        gene_scores <- apply(diff_genes.mat, 1, function(x){
-          sum(type_weights[which(x)])
+      # Original xCell signatures method
+      if (original) {
+
+
+        all_ct_upper_prob <- do.call(rbind, lapply(quantiles_matrix[not_dep_celltypes], function(x) x[upper_prob,]))
+        top_probs_values <- apply(all_ct_upper_prob, 2, function(x) {
+          sort(x, decreasing = TRUE)[1:min(3, nrow(all_ct_upper_prob))]
         })
+        genes_passed_mat <- t(apply(top_probs_values, 1, function(x){
+          get(type, quantiles_matrix)[lower_prob,] > x + diff
+        }))
+
+
+        # ctoi_lower <- get(type, quantiles_matrix)[lower_prob,]
+        # genes_passed_mat <- sapply(names(ctoi_lower), function(gene){
+        #   top3 <- sort(sapply(not_dep_celltypes, function(x){
+        #     get(x, quantiles_matrix)[upper_prob,][gene]
+        #   }), decreasing = TRUE)[1:3]
+        #   ctoi_lower[gene] > (top3 + diff)
+        # })
+
+
+        for (j in 1:nrow(genes_passed_mat)) {
+          genes_passed <- names(which(genes_passed_mat[j,]))
+          n_genes <- length(genes_passed)
+
+          if (n_genes < min_genes) {
+            next
+          }
+
+          if (n_genes > max_genes) {
+            break
+          }
+
+          sig_name <-  paste(paste0(type, "#"), param.df[i, ]$probs, diff, n_genes, sep = "_")
+          type_sigs[[sig_name]] <- genes_passed
+        }
+
+
 
       }else{
-        # All cell types scores are the same
-        gene_scores <- apply(diff_genes.mat, 1, function(x){
-          sum(x)
+        # xCell2's method
+        diff_genes.mat <- sapply(not_dep_celltypes, function(x){
+          get(type, quantiles_matrix)[lower_prob,] > get(x, quantiles_matrix)[upper_prob,] + diff
         })
 
-      }
+
+        if(weight_genes){
+          # Score genes using cell types correlations as weights
+          type_weights <- cor_mat[type, not_dep_celltypes]
+          type_weights[type_weights < 0.001] <- 0.001 # Fix minimum correlation to avoid zero and negative correlations
+          gene_scores <- apply(diff_genes.mat, 1, function(x){
+            sum(type_weights[which(x)])
+          })
+
+        }else{
+
+          # All cell types scores are the same
+          gene_scores <- apply(diff_genes.mat, 1, function(x){
+            sum(x)
+          })
+
+        }
 
 
-      gene_passed <- sort(gene_scores[gene_scores > 0], decreasing = TRUE)
+        gene_passed <- sort(gene_scores[gene_scores > 0], decreasing = TRUE)
 
-      # If less than min_genes passed move to next parameters
-      if (length(gene_passed) < min_genes) {
-        next
-      }
-
-
-      # Round and sort genes scores
-      top_scores <- sort(unique(round(gene_passed-0.5)), decreasing = TRUE)
-
-      # Take top 10 highest scores
-      # TODO: test different n_tops parameters (currently 10 is default)
-      n_top <- ifelse(length(top_scores) > 10, 10, length(top_scores))
-
-      for (score in top_scores[1:n_top]) {
-
-        n_genes <- sum(gene_passed >= score)
-
-        if (n_genes < min_genes) {
+        # If less than min_genes passed move to next parameters
+        if (length(gene_passed) < min_genes) {
           next
         }
 
-        if (n_genes > max_genes) {
-          break
+
+        # Round and sort genes scores
+        top_scores <- sort(unique(round(gene_passed-0.5)), decreasing = TRUE)
+
+        # Take top 10 highest scores
+        # TODO: test different n_tops parameters (currently 10 is default)
+        n_top <- ifelse(length(top_scores) > 10, 10, length(top_scores))
+
+        for (score in top_scores[1:n_top]) {
+
+          n_genes <- sum(gene_passed >= score)
+
+          if (n_genes < min_genes) {
+            next
+          }
+
+          if (n_genes > max_genes) {
+            break
+          }
+
+          sig_name <-  paste(paste0(type, "#"), param.df[i, ]$probs, diff, n_genes, sep = "_")
+          type_sigs[[sig_name]] <- names(which(gene_passed >= score))
         }
 
-        sig_name <-  paste(paste0(type, "#"), param.df[i, ]$probs, diff, n_genes, sep = "_")
-        type_sigs[[sig_name]] <- names(which(gene_passed >= score))
       }
 
     }
 
-    if (length(type_sigs) == 0) {
-      warning(paste0("No signatures found for ", type))
+    if (length(type_sigs) < 3) {
+      warnings(paste0("No signatures found for ", type))
+
+      # Patch to make sure each cell type have at least 3 signatures! (think about a better idea to relax diff)
+      param.df$diff_vals <- param.df$diff_vals - min(param.df$diff_vals)
+      type_sigs <- list()
+      for (i in 1:nrow(param.df)){
+
+        # Get a Boolean matrices with genes that pass the quantiles criteria
+        diff <- param.df[i, ]$diff_vals # difference criteria
+        lower_prob <- which(probs == param.df[i, ]$probs) # lower quantile criteria
+        upper_prob <- nrow(quantiles_matrix[[1]])-lower_prob+1 # upper quantile criteria
+
+
+        # Original xCell signatures method
+        if (original) {
+
+
+          all_ct_upper_prob <- do.call(rbind, lapply(quantiles_matrix[not_dep_celltypes], function(x) x[upper_prob,]))
+          top_probs_values <- apply(all_ct_upper_prob, 2, function(x) {
+            sort(x, decreasing = TRUE)[1:min(3, nrow(all_ct_upper_prob))]
+          })
+          genes_passed_mat <- t(apply(top_probs_values, 1, function(x){
+            get(type, quantiles_matrix)[lower_prob,] > x + diff
+          }))
+
+
+          # ctoi_lower <- get(type, quantiles_matrix)[lower_prob,]
+          # genes_passed_mat <- sapply(names(ctoi_lower), function(gene){
+          #   top3 <- sort(sapply(not_dep_celltypes, function(x){
+          #     get(x, quantiles_matrix)[upper_prob,][gene]
+          #   }), decreasing = TRUE)[1:3]
+          #   ctoi_lower[gene] > (top3 + diff)
+          # })
+
+
+          for (j in 1:nrow(genes_passed_mat)) {
+            genes_passed <- names(which(genes_passed_mat[j,]))
+            n_genes <- length(genes_passed)
+
+            if (n_genes < min_genes) {
+              next
+            }
+
+            if (n_genes > max_genes) {
+              break
+            }
+
+            sig_name <-  paste(paste0(type, "#"), param.df[i, ]$probs, diff, n_genes, sep = "_")
+            type_sigs[[sig_name]] <- genes_passed
+          }
+
+
+
+        }else{
+          # xCell2's method
+          diff_genes.mat <- sapply(not_dep_celltypes, function(x){
+            get(type, quantiles_matrix)[lower_prob,] > get(x, quantiles_matrix)[upper_prob,] + diff
+          })
+
+
+          if(weight_genes){
+            # Score genes using cell types correlations as weights
+            type_weights <- cor_mat[type, not_dep_celltypes]
+            type_weights[type_weights < 0.001] <- 0.001 # Fix minimum correlation to avoid zero and negative correlations
+            gene_scores <- apply(diff_genes.mat, 1, function(x){
+              sum(type_weights[which(x)])
+            })
+
+          }else{
+
+            # All cell types scores are the same
+            gene_scores <- apply(diff_genes.mat, 1, function(x){
+              sum(x)
+            })
+
+          }
+
+
+          gene_passed <- sort(gene_scores[gene_scores > 0], decreasing = TRUE)
+
+          # If less than min_genes passed move to next parameters
+          if (length(gene_passed) < min_genes) {
+            next
+          }
+
+
+          # Round and sort genes scores
+          top_scores <- sort(unique(round(gene_passed-0.5)), decreasing = TRUE)
+
+          # Take top 10 highest scores
+          # TODO: test different n_tops parameters (currently 10 is default)
+          n_top <- ifelse(length(top_scores) > 10, 10, length(top_scores))
+
+          for (score in top_scores[1:n_top]) {
+
+            n_genes <- sum(gene_passed >= score)
+
+            if (n_genes < min_genes) {
+              next
+            }
+
+            if (n_genes > max_genes) {
+              break
+            }
+
+            sig_name <-  paste(paste0(type, "#"), param.df[i, ]$probs, diff, n_genes, sep = "_")
+            type_sigs[[sig_name]] <- names(which(gene_passed >= score))
+          }
+
+        }
+
+      }
+
     }
 
 
@@ -318,7 +477,7 @@ createSignatures <- function(ref, labels, dep_list, quantiles_matrix, probs, cor
 
 
   if (length(all_sigs) == 0) {
-    warning("No signatures found for reference!")
+    stop("No signatures found for reference!")
   }
 
 
@@ -476,7 +635,6 @@ trainModels <- function(simulations_scored, params, modelType, seed){
   set.seed(seed)
 
   fitModel <- function(data, modelParams = params, model_type = modelType){
-
 
     train_mat <- data %>%
       select(signature, frac, score) %>%
@@ -653,6 +811,7 @@ setClass("xCell2Signatures", slots = list(
 #' @param data_type Gene expression data type: "rnaseq", "array", or "sc".
 #' @param lineage_file Path to the cell type lineage file generated with `xCell2GetLineage` function (optional).
 #' @param weightGenes description
+#' @param useOriginalMethod description
 #' @param sim_fracs A vector of mixture fractions to be used in signature filtering (optional).
 #' @param probs A vector of probability thresholds to be used for generating signatures (optional).
 #' @param diff_vals A vector of delta values to be used for generating signatures (optional).
@@ -667,7 +826,7 @@ setClass("xCell2Signatures", slots = list(
 #' @param minPBgroups description
 #' @return An S4 object containing the signatures, cell type labels, and cell type dependencies.
 #' @export
-xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, weightGenes = FALSE,
+xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, weightGenes = TRUE, useOriginalMethod = TRUE,
                         sim_fracs = c(0, 0.001, 0.002, 0.004, 0.006, 0.008, seq(0.01, 1, 0.01)), diff_vals = c(1, 1.32, 1.585, 2, 3, 4, 5),
                         min_genes = 5, max_genes = 200, filter_sigs = TRUE, sigsFile = NULL, params = list(), modelType = "rf", bulkPseudoCount = 1, minPBcells = 30, minPBgroups = 10){
 
@@ -716,7 +875,7 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, weightGenes
     message("Calculating quantiles...")
     quantiles_matrix <- makeQuantiles(ref, labels, probs, dep_list, include_descendants = FALSE)
     message("Generating signatures...")
-    signatures <- createSignatures(ref, labels, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, weight_genes = weightGenes)
+    signatures <- createSignatures(ref, labels, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, weight_genes = weightGenes, use_original = useOriginalMethod)
 
     if (!filter_sigs) {
       return(signatures)
