@@ -219,7 +219,7 @@ makeQuantiles <- function(ref, labels, probs, dep_list, include_descendants){
   return(quantiles_mat_list)
 }
 # TODO: remove patch
-createSignatures <- function(ref, labels, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, weight_genes, use_original){
+createSignatures <- function(ref, labels, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, weight_genes, use_original, n_top_scores){
 
 
   getSigs <- function(celltypes, type, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, weight_genes, original = use_original){
@@ -318,9 +318,9 @@ createSignatures <- function(ref, labels, dep_list, quantiles_matrix, probs, cor
 
         # Take top 10 highest scores
         # TODO: test different n_tops parameters (currently 10 is default)
-        n_top <- ifelse(length(top_scores) > 10, 10, length(top_scores))
+        n_top_scores <- ifelse(length(top_scores) > n_top_scores, n_top_scores, length(top_scores))
 
-        for (score in top_scores[1:n_top]) {
+        for (score in top_scores[1:n_top_scores]) {
 
           n_genes <- sum(gene_passed >= score)
 
@@ -813,6 +813,7 @@ setClass("xCell2Signatures", slots = list(
 #' @param lineage_file Path to the cell type lineage file generated with `xCell2GetLineage` function (optional).
 #' @param weightGenes description
 #' @param useOriginalMethod description
+#' @param nTopScores description
 #' @param sim_fracs A vector of mixture fractions to be used in signature filtering (optional).
 #' @param probs A vector of probability thresholds to be used for generating signatures (optional).
 #' @param diff_vals A vector of delta values to be used for generating signatures (optional).
@@ -827,7 +828,7 @@ setClass("xCell2Signatures", slots = list(
 #' @param minPBgroups description
 #' @return An S4 object containing the signatures, cell type labels, and cell type dependencies.
 #' @export
-xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, weightGenes = TRUE, useOriginalMethod = TRUE,
+xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, weightGenes = TRUE, useOriginalMethod = TRUE, nTopScores = 10,
                         sim_fracs = c(0, 0.001, 0.002, 0.004, 0.006, 0.008, seq(0.01, 1, 0.01)), diff_vals = c(1, 1.32, 1.585, 2, 3, 4, 5),
                         min_genes = 5, max_genes = 200, filter_sigs = TRUE, sigsFile = NULL, params = list(), modelType = "rf", bulkPseudoCount = 1, minPBcells = 30, minPBgroups = 10){
 
@@ -876,13 +877,7 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, weightGenes
     message("Calculating quantiles...")
     quantiles_matrix <- makeQuantiles(ref, labels, probs, dep_list, include_descendants = FALSE)
     message("Generating signatures...")
-
-    if (useOriginalMethod) {
-      message("using original method")
-    }else{
-      message("using xcell2 method")
-    }
-    signatures <- createSignatures(ref, labels, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, weight_genes = weightGenes, use_original = useOriginalMethod)
+    signatures <- createSignatures(ref, labels, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, weight_genes = weightGenes, use_original = useOriginalMethod, n_top_scores = nTopScores)
 
     if (!filter_sigs) {
       return(signatures)
