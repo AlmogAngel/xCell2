@@ -398,22 +398,9 @@ makeSimulations <- function(ref, labels, gep_mat, cor_mat, dep_list, sim_fracs, 
   return(sim_list)
 
 }
-filterSignatures <- function(simulations_scored){
-
-
-  top_cor_sigs <- bind_rows(simulations_scored) %>%
-    mutate(sim_frac = as.numeric(sim_frac)) %>%
-    group_by(celltype, signature, sim_id) %>%
-    summarise(cor = cor(sim_frac, score)) %>%
-    summarise(cor = mean(cor)) %>%
-    top_n(n = max(50, 0.5*n()), wt = cor) %>%
-    pull(signature)
-
-  return(top_cor_sigs)
-
-
-}
 scoreSimulations <- function(signatures, simulations, dep_list, n_sims){
+
+
 
 
   celltypes <- names(simulations)
@@ -459,11 +446,11 @@ scoreSimulations <- function(signatures, simulations, dep_list, n_sims){
   return(sims_scored)
 
 }
-trainModels <- function(simulations_scored, rf_params, seed2use){
+trainModels <- function(simulations_scored, seed2use){
 
   set.seed(seed2use)
 
-  fitModel <- function(data, modelParams = rf_params){
+  fitModel <- function(data){
 
     train_mat <- data %>%
       select(signature, frac, score) %>%
@@ -471,18 +458,63 @@ trainModels <- function(simulations_scored, rf_params, seed2use){
       pivot_wider(names_from = signature, values_from = score) %>%
       as.matrix()
 
+    #   rf_models_tuned <- lapply(unique(data$sim_id), function(id){
+    #     train_mat <- data %>%
+    #       filter(sim_id == id) %>%
+    #       select(signature, frac, score) %>%
+    #       mutate(frac = as.numeric(frac)) %>%
+    #       pivot_wider(names_from = signature, values_from = score) %>%
+    #       as.matrix()
+    #
+    #       # Tune mtry and build RF model
+    #       RRF::tuneRRF(x = train_mat[,-1], y = train_mat[,1], flagReg = 0, importance = TRUE, ntreeTry=1000, stepFactor=1.1, improve=0.001, trace=FALSE, plot=FALSE, doBest=TRUE)
+    #   })
+    #
+    #   best_mtry <- as.numeric(names(sort(table(sapply(rf_models_tuned, function(model){model$mtry})), decreasing = T))[1])
+    #
+    #   # Use importance for regularization
+    #   RF_imp <- sapply(rf_models_tuned, function(model){
+    #     model$importance[,"%IncMSE"] / max(model$importance[,"%IncMSE"])
+    #   })
+    #   RF_imp <- apply(RF_imp, 1, median)
+    #
+    #
+    #
+    #   best_gammas <- lapply(unique(data$sim_id), function(id){
+    #     train_mat <- data %>%
+    #       filter(sim_id == id) %>%
+    #       select(signature, frac, score) %>%
+    #       mutate(frac = as.numeric(frac)) %>%
+    #       pivot_wider(names_from = signature, values_from = score) %>%
+    #       as.matrix()
+    #
+    #     # Tune gamma
+    #     rrf_gammas <- lapply(seq(0, 1, 0.1), function(gamma){
+    #       RRF::RRF(train_mat[,-1], train_mat[,1], flagReg = 1, coefReg = (1-gamma) + gamma*RF_imp,
+    #                mtry = best_mtry, ntree = 1000)
+    #     })
+    #
+    #     seq(0, 1, 0.1)[which.min(sapply(rrf_gammas, function(model){model$mse[1000]}))]
+    #   })
+    #
+    #
+    # table(unlist(best_gammas))
 
-    gamma <- modelParams$gamma
-    mtry2use <- ncol(train_mat[,-1]) / modelParams$mtry
 
-    RF <- RRF::RRF(train_mat[,-1], train_mat[,1], flagReg = 0, importance = TRUE, mtry = mtry2use, ntree = modelParams$ntree, nodesize = modelParams$nodesize)
+
+    # gamma <- modelParams$gamma
+    # mtry2use <- ncol(train_mat[,-1]) / modelParams$mtry
+
+    gamma <- 0.5
+
+    RF <- RRF::RRF(train_mat[,-1], train_mat[,1], flagReg = 0, importance = TRUE)
     RF_imp <- RF$importance[,"%IncMSE"] / max(RF$importance[,"%IncMSE"])
-    RRF <- RRF::RRF(train_mat[,-1], train_mat[,1], flagReg = 1, coefReg = (1-gamma) + gamma*RF_imp,
-                    mtry = mtry2use, ntree = modelParams$ntree, nodesize = modelParams$nodesize)
+    RRF <- RRF::RRF(train_mat[,-1], train_mat[,1], flagReg = 1, coefReg = (1-gamma) + gamma*RF_imp)
     return(RRF)
 
 
   }
+
 
   enframe(simulations_scored, name = "celltype", value = "data") %>%
     rowwise() %>%
@@ -578,6 +610,7 @@ getSpillOverMat <- function(simulations, signatures, dep_list, trans_models, n_s
 
 
 }
+
 
 #' @slot signatures list of xCell2 signatures
 #' @slot dependencies list of cell type dependencies
@@ -699,13 +732,9 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, weightGenes
   simulations_scored <- scoreSimulations(signatures, simulations, dep_list, n_sims = 1)
 
 
-  # TODO: Filter signatures
-  message("Filtering signatures...")
-
-
   # Get transformation models
   message("Training models...")
-  trans_models <- trainModels(simulations_scored, rf_params, seed2use = seed)
+  trans_models <- trainModels(simulations_scored, seed2use = seed)
 
 
   # Get spillover matrix
