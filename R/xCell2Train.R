@@ -461,11 +461,11 @@ scoreSimulations <- function(signatures, simulations){
   return(sims_scored)
 
 }
-trainModels <- function(simulations_scored, seed2use){
+trainModels <- function(simulations_scored, regGamma, seed2use){
 
   set.seed(seed2use)
 
-  fitModel <- function(data){
+  fitModel <- function(data, gamma){
 
     # # Tune mtry
     # model.mtryTuned <- RRF::tuneRRF(x = data[,-ncol(data)], y = data[,ncol(data)], flagReg = 0, importance = TRUE, ntreeTry=500, stepFactor=1.1, improve=0.001, trace=FALSE, plot=FALSE, doBest=TRUE)
@@ -486,7 +486,6 @@ trainModels <- function(simulations_scored, seed2use){
 
 
 
-    gamma <- 0.5
     RF <- RRF::RRF(x = data[,-ncol(data)], y = data[,ncol(data)], flagReg = 0, importance = TRUE)
     RF_imp <- RF$importance[,"%IncMSE"] / max(RF$importance[,"%IncMSE"])
     RRF <- RRF::RRF(x = data[,-ncol(data)], y = data[,ncol(data)], flagReg = 1, coefReg = (1-gamma) + gamma*RF_imp)
@@ -496,7 +495,7 @@ trainModels <- function(simulations_scored, seed2use){
   }
 
   models_list <- pbapply::pblapply(simulations_scored, function(data){
-    fitModel(data)
+    fitModel(data, gamma = regGamma)
   })
 
   return(tibble(celltype = names(simulations_scored), model = models_list))
@@ -641,13 +640,14 @@ setClass("xCell2Signatures", slots = list(
 #' @param minPBgroups description
 #' @param sim_noise description
 #' @param ct_sims description
+#' @param regGamma description
 #' @param sims_sample_frac description
 #' @return An S4 object containing the signatures, cell type labels, and cell type dependencies.
 #' @export
 xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, weightGenes = TRUE, medianGEP = TRUE, seed = 123, probs = c(0.01, 0.05, 0.1, 0.25, 0.333, 0.49),
-                        sim_fracs = c(0, 0.001, 0.002, 0.004, 0.006, 0.008, seq(0.01, 1, 0.04), 1), diff_vals = c(1, 1.32, 1.585, 2, 3, 4, 5),
+                        sim_fracs = c(0, 0.001, 0.002, 0.004, 0.006, 0.008, seq(0.01, 1, 0.01)), diff_vals = c(1, 1.32, 1.585, 2, 3, 4, 5),
                         min_genes = 5, max_genes = 200, return_sigs = FALSE, sigsFile = NULL, minPBcells = 30, minPBsamples = 10,
-                        ct_sims = 10, sims_sample_frac = 0.33, sim_noise = NULL){
+                        ct_sims = 10, sims_sample_frac = 0.33, sim_noise = NULL, regGamma = 0.5){
 
 
   # Validate inputs
@@ -713,7 +713,7 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, weightGenes
 
   # Fit RRF models
   message("Training models...")
-  trans_models <- trainModels(simulations_scored, seed2use = seed)
+  trans_models <- trainModels(simulations_scored, regGamma, seed2use = seed)
 
 
   # Get spillover matrix
