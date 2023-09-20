@@ -26,39 +26,25 @@ validateInputs <- function(ref, labels, data_type){
   return(out)
 
 }
-prepareRef <- function(ref, data_type){
+# TODO: Write a function for TPM normalization for bulk reference
+normformRef <- function(ref, data_type){
 
-  if (data_type == "sc") {
-    if(max(ref) >= 50){
-      message("Normalizing and transforming scRNA-Seq reference to log1p-space (maximum expression value >= 50).")
-      genes_names <- rownames(ref)
-      ref.srt <- Seurat::CreateSeuratObject(counts = ref)
-      ref.srt <- Seurat::NormalizeData(ref.srt, normalization.method = "LogNormalize", scale.factor = 10000, verbose = FALSE)
-      ref.norm <-  ref.srt@assays$RNA@data
-
-      # Check if Seurat changed genes names
-      if (!all(rownames(ref.norm) %in% genes_names)) {
-        stop("Seurat genes name error")
-      }
-
-
-      return(ref.norm)
+  if(all(ref == floor(ref))){
+    if (data_type == "sc") {
+      message("Normalizing scRNA-Seq counts with a scale fractor of 10000.")
+      lib_sizes <- Matrix::colSums(ref)
+      norm_factor <- 10000 / lib_sizes
+      ref_norm <- ref %*% Matrix::Diagonal(x = norm_factor)
+      colnames(ref_norm) <- colnames(ref)
+      return(ref_norm)
     }else{
-      message("Assuming reference is already in log1p-space (maximum expression value < 50).")
-      return(ref)
+      # TODO: Write a function for TPM normalization for bulk reference
+      message("Normalizing counts to TPM.")
+      return(ref_norm)
     }
-
   }else{
-
-    if(max(ref) >= 50){
-      message("Transforming reference to log2-space (maximum expression value >= 50).")
-      ref.norm <- log2(ref+1)
-      return(ref.norm)
-    }else{
-      message("Assuming reference is already in log2-space (maximum expression value < 50).")
-      return(ref)
-    }
-
+    message("Assuming reference already normalized.")
+    return(ref)
   }
 
 }
@@ -88,7 +74,7 @@ sc2pseudoBulk <- function(ref, labels, min_n_cells, min_ps_samples, seed2use){
         if (length(ctoi_group) == 1) {
           ref[,ctoi_group]
         }else{
-          if("matrix" %in% class(ref)) Rfast::rowmeans(ref[,ctoi_group]) else Matrix::rowMeans(ref[,ctoi_group])
+          if("matrix" %in% class(ref)) Rfast::rowsums(ref[,ctoi_group]) else Matrix::rowSums(ref[,ctoi_group])
         }
       })
 
@@ -188,6 +174,18 @@ getDependencies <- function(lineage_file_checked){
 
   return(dep_list)
 }
+logTransformRef <- function(ref){
+
+  if(max(ref) >= 50){
+    message("Transforming reference to log2-space (maximum expression value >= 50).")
+    ref.log2 <- log2(ref+1)
+    return(ref.log2)
+  }else{
+    message("Assuming reference is already in log2-space (maximum expression value < 50).")
+    return(ref)
+  }
+
+}
 makeQuantiles <- function(ref, labels, probs, dep_list){
 
   celltypes <- unique(labels[,2])
@@ -211,7 +209,7 @@ makeQuantiles <- function(ref, labels, probs, dep_list){
 
   return(quantiles_mat_list)
 }
-createSignatures <- function(ref, labels, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, weight_genes){
+createSignatures <- function(labels, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, weight_genes){
 
 
   getSigs <- function(celltypes, type, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, weight_genes){
@@ -312,7 +310,9 @@ createSignatures <- function(ref, labels, dep_list, quantiles_matrix, probs, cor
 
   return(all_sigs)
 }
-makeSimulations <- function(ref, labels, gep_mat, cor_mat, dep_list, sim_fracs, ctoi_samples_frac = 1, n_sims = 1){
+makeSimulations <- function(ref, labels, gep_mat, cor_mat, dep_list, sim_fracs, ctoi_samples_frac, n_sims, noise, seed2use){
+
+  set.seed(seed2use)
 
   celltypes <- unique(labels$label)
 
@@ -335,17 +335,32 @@ makeSimulations <- function(ref, labels, gep_mat, cor_mat, dep_list, sim_fracs, 
     if (length(samples2use) == 1) {
       mean_expression <- ref[,samples2use]
     }else{
-      mean_expression <- if("matrix" %in% class(ref)) Rfast::rowmeans(ref[,samples2use]) else Matrix::rowMeans(ref[,samples2use])
+      mean_expression <- rowMeans(ref[,samples2use])
     }
 
     if (control) {
       sim_fracs <- 1-sim_fracs
     }
 
-    frac_mat <- matrix(rep(mean_expression, length(sim_fracs)), byrow = FALSE, ncol = length(sim_fracs)) %*% diag(sim_fracs)
-    rownames(frac_mat) <- rownames(ref)
+    mat <- matrix(rep(mean_expression, length(sim_fracs)), byrow = FALSE, ncol = length(sim_fracs))
+    rownames(mat) <- rownames(ref)
 
-    return(frac_mat)
+    # Thin expression matrix to simulate fractions
+    if (sum(sim_fracs == 0) != 0) {
+      zero_index <- which(sim_fracs == 0)
+      mat_thin <- seqgendiff::thin_lib(round(mat)[,-zero_index], thinlog2 = -log2(sim_fracs[-zero_index]), type = "thin")$mat
+      if (zero_index == 1) {
+        # Zero is  the first column
+        mat_thin <- cbind(mat[,1]*0, mat_thin)
+      }else{
+        # Zero is the last column
+        mat_thin <- cbind(mat_thin, mat[,1]*0)
+      }
+    }else{
+      mat_thin <- seqgendiff::thin_lib(round(mat), thinlog2 = -log2(sim_fracs), type = "thin")$mat
+    }
+
+    return(mat_thin)
   }
 
   sim_list <- pbapply::pblapply(celltypes, function(ctoi){
@@ -357,12 +372,9 @@ makeSimulations <- function(ref, labels, gep_mat, cor_mat, dep_list, sim_fracs, 
     n_samples_sim <- round(length(ctoi_samples_pool) * ctoi_samples_frac)
     n_samples_sim <- ifelse(n_samples_sim < 1, 1, n_samples_sim)
 
-
     # Get control cell types
     dep_cts <- unique(c(ctoi, unname(unlist(dep_list[[ctoi]]))))
     controls <- celltypes[!celltypes %in% dep_cts]
-    control <- names(sort(cor_mat[ctoi, controls])[1])
-
 
     # Generate n_sims simulations
     ctoi_sim_list <- lapply(1:n_sims, function(i){
@@ -375,70 +387,73 @@ makeSimulations <- function(ref, labels, gep_mat, cor_mat, dep_list, sim_fracs, 
       ctoi_samples_pool <- c(ctoi_samples_pool[!ctoi_samples_pool %in% samples2use], samples2use)
 
       # Make control(s) fractions matrix
-      samples2use <- labels[labels$label == control,]$sample
+      controls2use <- sample(controls, sample(1:length(controls), 1), replace = FALSE)
+      samples2use <- labels %>%
+        filter(label %in% controls2use) %>%
+        group_by(label) %>%
+        sample_n(1) %>%
+        pull(sample)
       control_frac_mat <- makeFractionMatrix(ref, sim_fracs, samples2use, control = TRUE)
-
 
       # Combine CTOI and control(s) fractions matrix
       simulation <- ctoi_frac_mat + control_frac_mat
-      colnames(simulation) <- paste0(control, "%%", sim_fracs)
+      colnames(simulation) <- paste0("mix", "%%", sim_fracs)
 
       simulation
+
+
     })
 
-    if (n_sims == 1) {
-      ctoi_sim_list[[1]]
+    # Noise
+    if (!is.null(noise)) {
+      ctoi_sim_list_noised <- lapply(ctoi_sim_list, function(sim){
+
+        random_ref_samples <- sample(1:ncol(ref), size = ncol(sim), replace = FALSE)
+
+        if (sum(sim_fracs == 0) != 0) {
+          zero_index <- which(sim_fracs == 0)
+          noiseLevel <- -log2(sim_fracs[-zero_index]/(1/noise)) # % noise is from the original frac
+          ref_noise <- seqgendiff::thin_lib(round(ref[,random_ref_samples])[,-zero_index], thinlog2 = noiseLevel, type = "thin")$mat
+          if (zero_index == 1) {
+            # Zero is  the first column
+            ref_noise <- cbind(sim[,1]*0, ref_noise)
+          }else{
+            # Zero is the last column
+            ref_noise <- cbind(ref_noise, sim[,1]*0)
+          }
+        }else{
+          ref_noise <- seqgendiff::thin_lib(round(ref[,random_ref_samples])[,-zero_index], thinlog2 = -log2(sim_fracs/(1/noise)), type = "thin")$mat
+        }
+
+        sim + ref_noise
+      })
+      do.call(cbind, ctoi_sim_list_noised)
     }else{
-      names(ctoi_sim_list) <- paste0("sim-", 1:n_sims)
-      ctoi_sim_list
+      do.call(cbind, ctoi_sim_list)
     }
+
   })
   names(sim_list) <- celltypes
 
   return(sim_list)
 
 }
-scoreSimulations <- function(signatures, simulations, dep_list, n_sims){
-
-
-
+scoreSimulations <- function(signatures, simulations){
 
   celltypes <- names(simulations)
   sims_scored <- pbapply::pblapply(celltypes, function(ctoi){
 
     signatures_ctoi <- signatures[gsub("#.*", "", names(signatures)) %in% ctoi]
+    ctoi_sim <- simulations[[ctoi]]
+    sim_ranked <- singscore::rankGenes(ctoi_sim)
+    colnames(sim_ranked) <- make.unique(colnames(sim_ranked), sep = "%")
 
-    if (n_sims == 1) {
-      sim_ranked <- singscore::rankGenes(simulations[[ctoi]])
+    scores <- sapply(signatures_ctoi, simplify = TRUE, function(sig){
+      singscore::simpleScore(sim_ranked, upSet = sig, centerScore = FALSE)$TotalScore
+    })
 
-      scores <- t(sapply(signatures_ctoi, simplify = TRUE, function(sig){
-        singscore::simpleScore(sim_ranked, upSet = sig, centerScore = FALSE)$TotalScore
-      }))
-      colnames(scores) <- colnames(sim_ranked)
-
-      as_tibble(scores, rownames = "signature") %>%
-        pivot_longer(cols = -signature, values_to = "score") %>%
-        separate(name, into = c("control", "frac"), sep = "%%") %>%
-        separate(signature, into = "celltype", sep = "#", remove = FALSE, extra = "drop")
-
-    }else{
-      lapply(simulations[[ctoi]], function(sim){
-
-        sim_ranked <- singscore::rankGenes(sim)
-
-        scores <- t(sapply(signatures_ctoi, simplify = TRUE, function(sig){
-          singscore::simpleScore(sim_ranked, upSet = sig, centerScore = FALSE)$TotalScore
-        }))
-        colnames(scores) <- colnames(sim)
-
-        as_tibble(scores, rownames = "signature") %>%
-          pivot_longer(cols = -signature, values_to = "score") %>%
-          separate(name, into = c("control", "frac"), sep = "%%") %>%
-          separate(signature, into = "celltype", sep = "#", remove = FALSE, extra = "drop")
-
-      }) %>%
-        bind_rows(., .id = "sim_id")
-    }
+    score <- cbind(scores, frac = as.numeric(gsub("mix%%", "", colnames(ctoi_sim))))
+    score
 
   })
   names(sims_scored) <- celltypes
@@ -452,76 +467,39 @@ trainModels <- function(simulations_scored, seed2use){
 
   fitModel <- function(data){
 
-    train_mat <- data %>%
-      select(signature, frac, score) %>%
-      mutate(frac = as.numeric(frac)) %>%
-      pivot_wider(names_from = signature, values_from = score) %>%
-      as.matrix()
-
-    #   rf_models_tuned <- lapply(unique(data$sim_id), function(id){
-    #     train_mat <- data %>%
-    #       filter(sim_id == id) %>%
-    #       select(signature, frac, score) %>%
-    #       mutate(frac = as.numeric(frac)) %>%
-    #       pivot_wider(names_from = signature, values_from = score) %>%
-    #       as.matrix()
+    # # Tune mtry
+    # model.mtryTuned <- RRF::tuneRRF(x = data[,-ncol(data)], y = data[,ncol(data)], flagReg = 0, importance = TRUE, ntreeTry=500, stepFactor=1.1, improve=0.001, trace=FALSE, plot=FALSE, doBest=TRUE)
     #
-    #       # Tune mtry and build RF model
-    #       RRF::tuneRRF(x = train_mat[,-1], y = train_mat[,1], flagReg = 0, importance = TRUE, ntreeTry=1000, stepFactor=1.1, improve=0.001, trace=FALSE, plot=FALSE, doBest=TRUE)
-    #   })
+    # # Get features importance for regularization
+    # RF_imp <- model.mtryTuned$importance[,"%IncMSE"] / max(model.mtryTuned$importance[,"%IncMSE"])
     #
-    #   best_mtry <- as.numeric(names(sort(table(sapply(rf_models_tuned, function(model){model$mtry})), decreasing = T))[1])
+    # # Tune gamma
+    # rrf_gammas <- lapply(seq(0, 1, 0.2), function(gamma){
+    #   RRF::RRF(data[,-ncol(data)], data[,ncol(data)], flagReg = 1, coefReg = (1-gamma) + gamma*RF_imp,
+    #   mtry = model.mtryTuned$mtry, ntree = 500)
+    # })
     #
-    #   # Use importance for regularization
-    #   RF_imp <- sapply(rf_models_tuned, function(model){
-    #     model$importance[,"%IncMSE"] / max(model$importance[,"%IncMSE"])
-    #   })
-    #   RF_imp <- apply(RF_imp, 1, median)
+    # best_gamma <- seq(0, 1, 0.2)[which.min(sapply(rrf_gammas, function(model){model$mse[500]}))]
     #
-    #
-    #
-    #   best_gammas <- lapply(unique(data$sim_id), function(id){
-    #     train_mat <- data %>%
-    #       filter(sim_id == id) %>%
-    #       select(signature, frac, score) %>%
-    #       mutate(frac = as.numeric(frac)) %>%
-    #       pivot_wider(names_from = signature, values_from = score) %>%
-    #       as.matrix()
-    #
-    #     # Tune gamma
-    #     rrf_gammas <- lapply(seq(0, 1, 0.1), function(gamma){
-    #       RRF::RRF(train_mat[,-1], train_mat[,1], flagReg = 1, coefReg = (1-gamma) + gamma*RF_imp,
-    #                mtry = best_mtry, ntree = 1000)
-    #     })
-    #
-    #     seq(0, 1, 0.1)[which.min(sapply(rrf_gammas, function(model){model$mse[1000]}))]
-    #   })
-    #
-    #
-    # table(unlist(best_gammas))
+    # RRF <- RRF::RRF(data[,-ncol(data)], data[,ncol(data)], flagReg = 1, coefReg = (1-best_gamma) + best_gamma*RF_imp,
+    #                 mtry = model.mtryTuned$mtry, ntree = 500)
 
 
-
-    # gamma <- modelParams$gamma
-    # mtry2use <- ncol(train_mat[,-1]) / modelParams$mtry
 
     gamma <- 0.5
-
-    RF <- RRF::RRF(train_mat[,-1], train_mat[,1], flagReg = 0, importance = TRUE)
+    RF <- RRF::RRF(x = data[,-ncol(data)], y = data[,ncol(data)], flagReg = 0, importance = TRUE)
     RF_imp <- RF$importance[,"%IncMSE"] / max(RF$importance[,"%IncMSE"])
-    RRF <- RRF::RRF(train_mat[,-1], train_mat[,1], flagReg = 1, coefReg = (1-gamma) + gamma*RF_imp)
-    return(RRF)
+    RRF <- RRF::RRF(x = data[,-ncol(data)], y = data[,ncol(data)], flagReg = 1, coefReg = (1-gamma) + gamma*RF_imp)
 
+    return(RRF)
 
   }
 
+  models_list <- pbapply::pblapply(simulations_scored, function(data){
+    fitModel(data)
+  })
 
-  enframe(simulations_scored, name = "celltype", value = "data") %>%
-    rowwise() %>%
-    mutate(model = list(fitModel(data))) %>%
-    dplyr::select(celltype, model) %>%
-    return(.)
-
+  return(tibble(celltype = names(simulations_scored), model = models_list))
 
 }
 getSpillOverMat <- function(simulations, signatures, dep_list, trans_models, n_sims, frac2use){
@@ -636,13 +614,12 @@ setClass("xCell2Signatures", slots = list(
 #' @import tibble
 #' @import tidyr
 #' @import readr
-#' @importFrom Seurat CreateSeuratObject NormalizeData FindVariableFeatures VariableFeatures
-#' @importFrom Rfast rowMedians rowmeans
+#' @importFrom Rfast rowMedians rowmeans rowsums
 #' @importFrom pbapply pblapply pbsapply
 #' @importFrom sparseMatrixStats rowMedians
 #' @importFrom RRF RRF
-#' @importFrom xgboost xgb.DMatrix xgb.train
-#' @importFrom Matrix rowMeans
+#' @importFrom seqgendiff thin_lib
+#' @importFrom Matrix rowMeans rowSums colSums
 #' @importFrom singscore rankGenes simpleScore
 #' @param ref A reference gene expression matrix.
 #' @param labels A data frame in which the rows correspond to samples in the ref. The data frame must have four columns:
@@ -663,11 +640,15 @@ setClass("xCell2Signatures", slots = list(
 #' @param return_sigs description
 #' @param minPBcells description
 #' @param minPBgroups description
+#' @param sim_noise description
+#' @param ct_sims description
+#' @param sims_sample_frac description
 #' @return An S4 object containing the signatures, cell type labels, and cell type dependencies.
 #' @export
 xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, weightGenes = TRUE, medianGEP = TRUE, seed = 123,
-                        sim_fracs = c(0, 0.001, 0.002, 0.004, 0.006, 0.008, seq(0.01, 1, 0.01)), diff_vals = c(1, 1.32, 1.585, 2, 3, 4, 5),
-                        min_genes = 5, max_genes = 200, return_sigs = FALSE, sigsFile = NULL, rf_params = list(), minPBcells = 30, minPBsamples = 10){
+                        sim_fracs = c(0, 0.001, 0.002, 0.004, 0.006, 0.008, seq(0.01, 1, 0.04), 1), diff_vals = c(1, 1.32, 1.585, 2, 3, 4, 5),
+                        min_genes = 5, max_genes = 200, return_sigs = FALSE, sigsFile = NULL, rf_params = list(), minPBcells = 30, minPBsamples = 10,
+                        ct_sims = 10, sims_sample_frac = 0.33, sim_noise = NULL){
 
 
   # Validate inputs
@@ -675,8 +656,10 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, weightGenes
   ref <- inputs_validated$ref
   labels <- inputs_validated$labels
 
-  # Prepare reference
-  ref <- prepareRef(ref, data_type)
+
+  # Normalize reference
+  ref <- normformRef(ref, data_type)
+
 
   # Generate pseudo bulk from scRNA-Seq reference
   if (data_type == "sc") {
@@ -686,10 +669,12 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, weightGenes
     labels <- ps_data$labels
   }
 
+
   # Build cell types correlation matrix
   message("Calculating cell-type correlation matrix...")
   gep_mat <- makeGEPMat(ref, labels, use_median = medianGEP)
   cor_mat <- getCellTypeCorrelation(gep_mat, data_type)
+
 
   # Get cell type dependencies list
   message("Loading dependencies...")
@@ -699,28 +684,22 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, weightGenes
     dep_list <- getDependencies(lineage_file)
   }
 
+
   # Generate/Load signatures
   if (is.null(sigsFile)) {
-
     # Generate signatures
-    if (data_type != "sc") {
-      probs <- c(0.01, 0.05, 0.1, 0.25, 0.333, 0.49)
-    }else{
-      probs <- c(0.1, 0.15, 0.2, 0.25, 0.333, 0.49)
-      # Adjust diff values to log1p
-      fold_change_vals <- round(2^diff_vals, 4)
-      diff_vals <- round(log1p(fold_change_vals - 1), 3)
-    }
     message("Calculating quantiles...")
-    quantiles_matrix <- makeQuantiles(ref, labels, probs, dep_list)
+    ref_log <- logTransformRef(ref) # Log2-transformation
+    quantiles_matrix <- makeQuantiles(ref_log, labels, probs = c(0.01, 0.05, 0.1, 0.25, 0.333, 0.49), dep_list)
     message("Generating signatures...")
-    signatures <- createSignatures(ref, labels, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, weight_genes = weightGenes)
+    signatures <- createSignatures(labels, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, weight_genes = weightGenes)
 
     if (return_sigs) {
       return(signatures)
     }
 
   }else{
+    # Load signatures
     message("Loading signatures...")
     signatures <- readRDS(sigsFile)
   }
@@ -728,18 +707,20 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, weightGenes
 
   # Make simulations
   message("Generating simulations...")
-  simulations <- makeSimulations(ref, labels, gep_mat, cor_mat, dep_list, sim_fracs, ctoi_samples_frac = 1, n_sims = 1)
-  simulations_scored <- scoreSimulations(signatures, simulations, dep_list, n_sims = 1)
+  simulations <- makeSimulations(ref, labels, gep_mat, cor_mat, dep_list, sim_fracs, ctoi_samples_frac = sims_sample_frac, n_sims = ct_sims, noise = sim_noise, seed2use = seed)
+  message("Scoring simulations...")
+  simulations_scored <- scoreSimulations(signatures, simulations)
 
 
-  # Get transformation models
+  # Fit RRF models
   message("Training models...")
   trans_models <- trainModels(simulations_scored, seed2use = seed)
 
 
   # Get spillover matrix
   message("Generating spillover matrix...")
-  spill_mat <- getSpillOverMat(simulations, signatures, dep_list, trans_models, n_sims = 1, frac2use = 0.25)
+  # spill_mat <- getSpillOverMat(simulations, signatures, dep_list, trans_models, n_sims = 1, frac2use = 0.25)
+  spill_mat <- matrix()
 
   # Save results in S4 object
   xCell2Sigs.S4 <- new("xCell2Signatures",
@@ -748,6 +729,7 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, weightGenes
                        transformation_models = trans_models,
                        spill_mat = spill_mat,
                        genes_used = rownames(ref))
+
 
   return(xCell2Sigs.S4)
 
