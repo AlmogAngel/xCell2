@@ -635,7 +635,6 @@ setClass("xCell2Signatures", slots = list(
 #' @param diff_vals A vector of delta values to be used for generating signatures (optional).
 #' @param min_genes The minimum number of genes to include in the signature (optional).
 #' @param max_genes The maximum number of genes to include in the signature (optional).
-#' @param rf_params description
 #' @param sigsFile description
 #' @param return_sigs description
 #' @param minPBcells description
@@ -645,9 +644,9 @@ setClass("xCell2Signatures", slots = list(
 #' @param sims_sample_frac description
 #' @return An S4 object containing the signatures, cell type labels, and cell type dependencies.
 #' @export
-xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, weightGenes = TRUE, medianGEP = TRUE, seed = 123,
+xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, weightGenes = TRUE, medianGEP = TRUE, seed = 123, probs = c(0.01, 0.05, 0.1, 0.25, 0.333, 0.49),
                         sim_fracs = c(0, 0.001, 0.002, 0.004, 0.006, 0.008, seq(0.01, 1, 0.04), 1), diff_vals = c(1, 1.32, 1.585, 2, 3, 4, 5),
-                        min_genes = 5, max_genes = 200, return_sigs = FALSE, sigsFile = NULL, rf_params = list(), minPBcells = 30, minPBsamples = 10,
+                        min_genes = 5, max_genes = 200, return_sigs = FALSE, sigsFile = NULL, minPBcells = 30, minPBsamples = 10,
                         ct_sims = 10, sims_sample_frac = 0.33, sim_noise = NULL){
 
 
@@ -690,7 +689,7 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, weightGenes
     # Generate signatures
     message("Calculating quantiles...")
     ref_log <- logTransformRef(ref) # Log2-transformation
-    quantiles_matrix <- makeQuantiles(ref_log, labels, probs = c(0.01, 0.05, 0.1, 0.25, 0.333, 0.49), dep_list)
+    quantiles_matrix <- makeQuantiles(ref_log, labels, probs, dep_list)
     message("Generating signatures...")
     signatures <- createSignatures(labels, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, weight_genes = weightGenes)
 
