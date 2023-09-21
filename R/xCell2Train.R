@@ -209,7 +209,7 @@ makeQuantiles <- function(ref, labels, probs, dep_list){
 
   return(quantiles_mat_list)
 }
-createSignatures <- function(labels, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, weight_genes){
+createSignatures <- function(labels, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, weight_genes, ncores){
 
 
   getSigs <- function(celltypes, type, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, weight_genes){
@@ -297,9 +297,11 @@ createSignatures <- function(labels, dep_list, quantiles_matrix, probs, cor_mat,
 
   celltypes <- unique(labels[,2])
 
-  all_sigs <- pbapply::pblapply(celltypes, function(type){
+  all_sigs <- parallel::mclapply(celltypes, function(type){
     getSigs(celltypes, type, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, weight_genes)
-  })
+  }, mc.cores = ncores, mc.set.seed = FALSE)
+
+
   all_sigs <- unlist(all_sigs, recursive = FALSE)
 
 
@@ -310,7 +312,7 @@ createSignatures <- function(labels, dep_list, quantiles_matrix, probs, cor_mat,
 
   return(all_sigs)
 }
-makeSimulations <- function(ref, labels, gep_mat, cor_mat, dep_list, sim_fracs, ctoi_samples_frac, n_sims, noise, seed2use){
+makeSimulations <- function(ref, labels, gep_mat, cor_mat, dep_list, sim_fracs, ctoi_samples_frac, n_sims, noise, ncores,seed2use){
 
   set.seed(seed2use)
 
@@ -363,7 +365,8 @@ makeSimulations <- function(ref, labels, gep_mat, cor_mat, dep_list, sim_fracs, 
     return(mat_thin)
   }
 
-  sim_list <- pbapply::pblapply(celltypes, function(ctoi){
+
+  sim_list <- parallel::mclapply(celltypes, function(ctoi){
 
     # Generate CTOI samples pool
     ctoi_samples_pool <- makeSamplesPool(labels, ctoi)
@@ -432,16 +435,17 @@ makeSimulations <- function(ref, labels, gep_mat, cor_mat, dep_list, sim_fracs, 
       do.call(cbind, ctoi_sim_list)
     }
 
-  })
+  }, mc.cores = ncores, mc.set.seed = FALSE)
   names(sim_list) <- celltypes
 
   return(sim_list)
 
 }
-scoreSimulations <- function(signatures, simulations){
+scoreSimulations <- function(signatures, simulations, ncores){
 
   celltypes <- names(simulations)
-  sims_scored <- pbapply::pblapply(celltypes, function(ctoi){
+
+  sims_scored <- parallel::mclapply(celltypes, function(ctoi){
 
     signatures_ctoi <- signatures[gsub("#.*", "", names(signatures)) %in% ctoi]
     ctoi_sim <- simulations[[ctoi]]
@@ -455,7 +459,8 @@ scoreSimulations <- function(signatures, simulations){
     score <- cbind(scores, frac = as.numeric(gsub("mix%%", "", colnames(ctoi_sim))))
     score
 
-  })
+  }, mc.cores = ncores, mc.set.seed = FALSE)
+
   names(sims_scored) <- celltypes
 
   return(sims_scored)
@@ -490,7 +495,6 @@ trainModels <- function(simulations_scored, regGamma, ncores, seed2use){
       fitModel(data, gamma = regGamma)
     })
   }else{
-    message(paste0("Using ", ncores, " cores to train RF models."))
     models_list <- parallel::mclapply(simulations_scored, function(data){
       fitModel(data, gamma = regGamma)
     }, mc.cores = ncores, mc.set.seed = FALSE)
@@ -693,7 +697,7 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, weightGenes
     ref_log <- logTransformRef(ref) # Log2-transformation
     quantiles_matrix <- makeQuantiles(ref_log, labels, probs, dep_list)
     message("Generating signatures...")
-    signatures <- createSignatures(labels, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, weight_genes = weightGenes)
+    signatures <- createSignatures(labels, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, weight_genes = weightGenes, ncores = nCores)
 
     if (return_sigs) {
       return(signatures)
@@ -708,9 +712,9 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, weightGenes
 
   # Make simulations
   message("Generating simulations...")
-  simulations <- makeSimulations(ref, labels, gep_mat, cor_mat, dep_list, sim_fracs, ctoi_samples_frac = sims_sample_frac, n_sims = ct_sims, noise = sim_noise, seed2use = seed)
+  simulations <- makeSimulations(ref, labels, gep_mat, cor_mat, dep_list, sim_fracs, ctoi_samples_frac = sims_sample_frac, n_sims = ct_sims, noise = sim_noise, ncores = nCores, seed2use = seed)
   message("Scoring simulations...")
-  simulations_scored <- scoreSimulations(signatures, simulations)
+  simulations_scored <- scoreSimulations(signatures, simulations, nCores)
 
 
   # Filter signatures and train RF model
