@@ -461,44 +461,44 @@ scoreSimulations <- function(signatures, simulations){
   return(sims_scored)
 
 }
-trainModels <- function(simulations_scored, regGamma, seed2use){
+trainModels <- function(simulations_scored, regGamma, ncores, seed2use){
 
   set.seed(seed2use)
 
   fitModel <- function(data, gamma){
 
-    # # Tune mtry
-    # model.mtryTuned <- RRF::tuneRRF(x = data[,-ncol(data)], y = data[,ncol(data)], flagReg = 0, importance = TRUE, ntreeTry=500, stepFactor=1.1, improve=0.001, trace=FALSE, plot=FALSE, doBest=TRUE)
-    #
-    # # Get features importance for regularization
-    # RF_imp <- model.mtryTuned$importance[,"%IncMSE"] / max(model.mtryTuned$importance[,"%IncMSE"])
-    #
-    # # Tune gamma
-    # rrf_gammas <- lapply(seq(0, 1, 0.2), function(gamma){
-    #   RRF::RRF(data[,-ncol(data)], data[,ncol(data)], flagReg = 1, coefReg = (1-gamma) + gamma*RF_imp,
-    #   mtry = model.mtryTuned$mtry, ntree = 500)
-    # })
-    #
-    # best_gamma <- seq(0, 1, 0.2)[which.min(sapply(rrf_gammas, function(model){model$mse[500]}))]
-    #
-    # RRF <- RRF::RRF(data[,-ncol(data)], data[,ncol(data)], flagReg = 1, coefReg = (1-best_gamma) + best_gamma*RF_imp,
-    #                 mtry = model.mtryTuned$mtry, ntree = 500)
+    if (gamma != 0) {
+      # Feature selection via GRRF
+      # https://sites.google.com/site/houtaodeng/rrf?authuser=0
+      RF <- RRF::RRF(x = data[,-ncol(data)], y = data[,ncol(data)], flagReg = 0, importance = TRUE, ntree = 1000)
+      RF_imp <- RF$importance[,"%IncMSE"] / max(RF$importance[,"%IncMSE"])
+      RRF <- RRF::RRF(x = data[,-ncol(data)], y = data[,ncol(data)], flagReg = 1, ntree = 1000, coefReg = (1-gamma) + gamma*RF_imp)
+      selected_features <- colnames(data)[RRF$feaSet]
+      data <- data[, c(selected_features, "frac")]
+    }
 
+    # Build model
+    # model <- RRF::tuneRRF(x = data[,-ncol(data)], y = data[,ncol(data)], flagReg = 0, importance = FALSE, ntreeTry=1000, stepFactor=1.1, improve=0.001, trace=FALSE, plot=FALSE, doBest=TRUE)
+    model <- RRF::RRF(x = data[,-ncol(data)], y = data[,ncol(data)], flagReg = 0, ntree = 1000)
 
-
-    RF <- RRF::RRF(x = data[,-ncol(data)], y = data[,ncol(data)], flagReg = 0, importance = TRUE)
-    RF_imp <- RF$importance[,"%IncMSE"] / max(RF$importance[,"%IncMSE"])
-    RRF <- RRF::RRF(x = data[,-ncol(data)], y = data[,ncol(data)], flagReg = 1, coefReg = (1-gamma) + gamma*RF_imp)
-
-    return(RRF)
-
+    return(tibble(model = list(model), sigs_filtered = list(selected_features)))
   }
 
-  models_list <- pbapply::pblapply(simulations_scored, function(data){
-    fitModel(data, gamma = regGamma)
-  })
+  if (ncores == 1) {
+    message("Using single core to train RF models (for faster run time use more cores).")
+    models_list <- pbapply::pblapply(simulations_scored, function(data){
+      fitModel(data, gamma = regGamma)
+    })
+  }else{
+    message(paste0("Using ", ncores, " cores to train RF models."))
+    models_list <- parallel::mclapply(simulations_scored, function(data){
+      fitModel(data, gamma = regGamma)
+    }, mc.cores = ncores, mc.set.seed = FALSE)
+  }
 
-  return(tibble(celltype = names(simulations_scored), model = models_list))
+  enframe(models_list, name = "celltype") %>%
+    unnest(value) %>%
+    return(.)
 
 }
 getSpillOverMat <- function(simulations, signatures, dep_list, trans_models, n_sims, frac2use){
@@ -591,7 +591,7 @@ getSpillOverMat <- function(simulations, signatures, dep_list, trans_models, n_s
 
 #' @slot signatures list of xCell2 signatures
 #' @slot dependencies list of cell type dependencies
-#' @slot transformation_models data frame of cell type transformation models
+#' @slot models data frame of cell type transformation models
 #' @slot spill_mat matrix of cell types spillover
 #' @slot genes_used character vector of genes names used to train the signatures
 #' @importFrom methods new
@@ -599,7 +599,7 @@ getSpillOverMat <- function(simulations, signatures, dep_list, trans_models, n_s
 setClass("xCell2Signatures", slots = list(
   signatures = "list",
   dependencies = "list",
-  transformation_models = "data.frame",
+  models = "data.frame",
   spill_mat = "matrix",
   genes_used = "character"
 ))
@@ -614,6 +614,7 @@ setClass("xCell2Signatures", slots = list(
 #' @import tidyr
 #' @import readr
 #' @importFrom Rfast rowMedians rowmeans rowsums
+#' @importFrom parallel mclapply
 #' @importFrom pbapply pblapply pbsapply
 #' @importFrom sparseMatrixStats rowMedians
 #' @importFrom RRF RRF
@@ -642,12 +643,13 @@ setClass("xCell2Signatures", slots = list(
 #' @param ct_sims description
 #' @param regGamma description
 #' @param sims_sample_frac description
+#' @param nCores description
 #' @return An S4 object containing the signatures, cell type labels, and cell type dependencies.
 #' @export
 xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, weightGenes = TRUE, medianGEP = TRUE, seed = 123, probs = c(0.01, 0.05, 0.1, 0.25, 0.333, 0.49),
                         sim_fracs = c(0, 0.001, 0.002, 0.004, 0.006, 0.008, seq(0.01, 1, 0.01)), diff_vals = c(1, 1.32, 1.585, 2, 3, 4, 5),
                         min_genes = 5, max_genes = 200, return_sigs = FALSE, sigsFile = NULL, minPBcells = 30, minPBsamples = 10,
-                        ct_sims = 10, sims_sample_frac = 0.33, sim_noise = NULL, regGamma = 0.5){
+                        ct_sims = 10, sims_sample_frac = 0.33, sim_noise = NULL, regGamma = 0.8, nCores = 1){
 
 
   # Validate inputs
@@ -711,9 +713,11 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, weightGenes
   simulations_scored <- scoreSimulations(signatures, simulations)
 
 
-  # Fit RRF models
-  message("Training models...")
-  trans_models <- trainModels(simulations_scored, regGamma, seed2use = seed)
+  # Filter signatures and train RF model
+  message("Filtering signatures and training models...")
+  models <- trainModels(simulations_scored, regGamma, nCores, seed2use = seed)
+  signatures <- signatures[unlist(models$sigs_filtered)]
+  models <- models[,-3]
 
 
   # Get spillover matrix
@@ -725,7 +729,7 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, weightGenes
   xCell2Sigs.S4 <- new("xCell2Signatures",
                        signatures = signatures,
                        dependencies = dep_list,
-                       transformation_models = trans_models,
+                       models = models,
                        spill_mat = spill_mat,
                        genes_used = rownames(ref))
 

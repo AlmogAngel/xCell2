@@ -29,14 +29,9 @@ xCell2Analysis <- function(mix, xcell2sigs, min_intersect = 0.9, tranform, spill
   }
   predictFracs <- function(ctoi, scores, xcell2sigs){
 
-    model <- filter(xcell2sigs@transformation_models, celltype == ctoi)$model[[1]]
-    if (class(model) == "xgb.Booster") {
-      predictions <- round(predict(model, newdata = xgboost::xgb.DMatrix(scores), type = "response"), 4)
-      names(predictions) <- rownames(scores)
-    }else{
-      predictions <- round(predict(model, newdata = scores, type = "response"), 4)
-      names(predictions) <- rownames(scores)
-    }
+    model <- filter(xcell2sigs@models, celltype == ctoi)$model[[1]]
+    predictions <- round(predict(model, newdata = scores, type = "response"), 3)
+    names(predictions) <- rownames(scores)
 
     return(predictions)
 
