@@ -472,15 +472,14 @@ trainModels <- function(simulations_scored, regGamma, ncores, seed2use){
 
   fitModel <- function(data, gamma){
 
-    if (gamma != 0) {
-      # Feature selection via GRRF
-      # https://sites.google.com/site/houtaodeng/rrf?authuser=0
-      RF <- RRF::RRF(x = data[,-ncol(data)], y = data[,ncol(data)], flagReg = 0, importance = TRUE, ntree = 1000)
-      RF_imp <- RF$importance[,"%IncMSE"] / max(RF$importance[,"%IncMSE"])
-      RRF <- RRF::RRF(x = data[,-ncol(data)], y = data[,ncol(data)], flagReg = 1, ntree = 1000, coefReg = (1-gamma) + gamma*RF_imp)
-      selected_features <- colnames(data)[RRF$feaSet]
-      data <- data[, c(selected_features, "frac")]
-    }
+    # Feature selection via GRRF
+    # https://sites.google.com/site/houtaodeng/rrf?authuser=0
+    RF <- RRF::RRF(x = data[,-ncol(data)], y = data[,ncol(data)], flagReg = 0, importance = TRUE, ntree = 1000)
+    RF_imp <- RF$importance[,"%IncMSE"] / max(RF$importance[,"%IncMSE"])
+    RRF <- RRF::RRF(x = data[,-ncol(data)], y = data[,ncol(data)], flagReg = 1, ntree = 1000, coefReg = (1-gamma) + gamma*RF_imp)
+    selected_features <- colnames(data)[RRF$feaSet]
+    data <- data[, c(selected_features, "frac")]
+
 
     # Build model
     # model <- RRF::tuneRRF(x = data[,-ncol(data)], y = data[,ncol(data)], flagReg = 0, importance = FALSE, ntreeTry=1000, stepFactor=1.1, improve=0.001, trace=FALSE, plot=FALSE, doBest=TRUE)
