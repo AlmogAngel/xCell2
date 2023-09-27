@@ -417,7 +417,7 @@ makeSimulations <- function(ref, labels, mix, gep_mat, cor_mat, dep_list, sim_fr
           sample_n(1) %>%
           pull(sample)
         ref_sub <- ref[,samples2use]
-        control_frac_mat <- makeFractionMatrix(ref_sub, sim_fracs, sim_method, control = TRUE)
+        control_frac_mat <- makeFractionMatrix(expr_mat = ref_sub, sim_fracs, sim_method, control = TRUE)
       }else{
         # Shuffle expression values between genes
         mix_shuffled <- t(apply(mix, 1, sample))
