@@ -26,16 +26,17 @@ validateInputs <- function(ref, labels, data_type){
   return(out)
 
 }
-# TODO: Write a function for TPM normalization for bulk reference
-normformRef <- function(ref, data_type){
+# TODO: Write a function for TPM/CPM normalization for bulk reference
+normRef <- function(ref, data_type){
 
   if(all(ref == floor(ref))){
     if (data_type == "sc") {
-      message("Normalizing scRNA-Seq counts with a scale fractor of 10000.")
+      message("Normalizing scRNA-Seq counts to CPM.")
       lib_sizes <- Matrix::colSums(ref)
-      norm_factor <- 10000 / lib_sizes
+      norm_factor <- 1000000 / lib_sizes
       ref_norm <- ref %*% Matrix::Diagonal(x = norm_factor)
       colnames(ref_norm) <- colnames(ref)
+      ref_norm <- as.matrix(ref_norm)
       return(ref_norm)
     }else{
       # TODO: Write a function for TPM normalization for bulk reference
@@ -107,9 +108,9 @@ makeGEPMat <- function(ref, labels, use_median){
       type_vec <- as.vector(ref[,type_samples])
     }else{
       if(use_median){
-        type_vec <- if("matrix" %in% class(ref)) Rfast::rowMedians(ref[,type_samples]) else sparseMatrixStats::rowMedians(ref[,type_samples])
+        type_vec <- Rfast::rowMedians(as.matrix(ref[,type_samples]))
       }else{
-        type_vec <- if("matrix" %in% class(ref)) Rfast::rowmeans(ref[,type_samples]) else Matrix::rowMeans(ref[,type_samples])
+        type_vec <- Rfast::rowmeans(as.matrix(ref[,type_samples]))
       }
     }
   })
@@ -177,11 +178,11 @@ getDependencies <- function(lineage_file_checked){
 logTransformRef <- function(ref){
 
   if(max(ref) >= 50){
-    message("Transforming reference to log2-space (maximum expression value >= 50).")
+    message("> Transforming reference to log2-space (maximum expression value >= 50).")
     ref.log2 <- log2(ref+1)
     return(ref.log2)
   }else{
-    message("Assuming reference is already in log2-space (maximum expression value < 50).")
+    message("> Assuming reference is already in log2-space (maximum expression value < 50).")
     return(ref)
   }
 
@@ -312,7 +313,7 @@ createSignatures <- function(labels, dep_list, quantiles_matrix, probs, cor_mat,
 
   return(all_sigs)
 }
-makeSimulations <- function(ref, labels, gep_mat, cor_mat, dep_list, sim_fracs, ctoi_samples_frac, n_sims, noise, ncores,seed2use){
+makeSimulations <- function(ref, labels, mix, gep_mat, cor_mat, dep_list, sim_fracs, sim_method, ctoi_samples_frac, n_sims, noise, ncores, seed2use){
 
   set.seed(seed2use)
 
@@ -332,37 +333,53 @@ makeSimulations <- function(ref, labels, gep_mat, cor_mat, dep_list, sim_fracs, 
 
     return(ctoi_samples_pool)
   }
-  makeFractionMatrix <- function(ref, sim_fracs, samples2use, control){
+  makeFractionMatrix <- function(expr_mat, sim_fracs, sim_method, control){
 
-    if (length(samples2use) == 1) {
-      mean_expression <- ref[,samples2use]
+    # Get mean expression vector
+    if (class(ref_sub)[1] == "numeric") {
+      mean_expression <- expr_mat
     }else{
-      mean_expression <- rowMeans(ref[,samples2use])
+      mean_expression <- rowMeans(expr_mat)
     }
 
+    # Check if data not in counts (all integers) because you can't thin fractions (?)
+    if (sim_method != "ref_multi") {
+      scale_factor <- 10000 # TODO: Ask Anna
+      mean_expression <- round(mean_expression * scale_factor)
+    }
+
+    # Adjust simulation fractions for controls
     if (control) {
       sim_fracs <- 1-sim_fracs
     }
 
+    # Build simulation matrix
     mat <- matrix(rep(mean_expression, length(sim_fracs)), byrow = FALSE, ncol = length(sim_fracs))
     rownames(mat) <- rownames(ref)
 
-    # Thin expression matrix to simulate fractions
-    if (sum(sim_fracs == 0) != 0) {
-      zero_index <- which(sim_fracs == 0)
-      mat_thin <- seqgendiff::thin_lib(round(mat)[,-zero_index], thinlog2 = -log2(sim_fracs[-zero_index]), type = "thin")$mat
-      if (zero_index == 1) {
-        # Zero is  the first column
-        mat_thin <- cbind(mat[,1]*0, mat_thin)
-      }else{
-        # Zero is the last column
-        mat_thin <- cbind(mat_thin, mat[,1]*0)
-      }
+
+    # Multiply reference matrix to simulate fractions
+    if (sim_method == "ref_multi") {
+      sim <- mat %*% diag(sim_fracs)
     }else{
-      mat_thin <- seqgendiff::thin_lib(round(mat), thinlog2 = -log2(sim_fracs), type = "thin")$mat
+      # Thin reference/mixture to simulate fractions
+      if (sum(sim_fracs == 0) != 0) { # Can't thin when frac = 0
+        zero_index <- which(sim_fracs == 0)
+        sim <- seqgendiff::thin_lib(mat[,-zero_index], thinlog2 = -log2(sim_fracs[-zero_index]), type = "thin")$mat
+        sim <- sim/scale_factor
+        if (zero_index == 1) {
+          # Zero is  the first column
+          sim <- cbind(mat[,1]*0, sim)
+        }else{
+          # Zero is the last column
+          sim <- cbind(sim, mat[,1]*0)
+        }
+      }else{
+        sim <- seqgendiff::thin_lib(mat, thinlog2 = -log2(sim_fracs), type = "thin")$mat
+      }
     }
 
-    return(mat_thin)
+    return(sim)
   }
 
 
@@ -375,28 +392,43 @@ makeSimulations <- function(ref, labels, gep_mat, cor_mat, dep_list, sim_fracs, 
     n_samples_sim <- round(length(ctoi_samples_pool) * ctoi_samples_frac)
     n_samples_sim <- ifelse(n_samples_sim < 1, 1, n_samples_sim)
 
-    # Get control cell types
-    dep_cts <- unique(c(ctoi, unname(unlist(dep_list[[ctoi]]))))
-    controls <- celltypes[!celltypes %in% dep_cts]
+    if (sim_method != "ref_mix_thin") {
+      # Get control cell types
+      dep_cts <- unique(c(ctoi, unname(unlist(dep_list[[ctoi]]))))
+      controls <- celltypes[!celltypes %in% dep_cts]
+    }
 
     # Generate n_sims simulations
     ctoi_sim_list <- lapply(1:n_sims, function(i){
-
+      print(i)
       # Make CTOI fraction matrix
       samples2use <- ctoi_samples_pool[1:n_samples_sim]
-      ctoi_frac_mat <- makeFractionMatrix(ref, sim_fracs, samples2use, control = FALSE)
+      ref_sub <- ref[,samples2use]
+      ctoi_frac_mat <- makeFractionMatrix(expr_mat = ref_sub, sim_fracs, sim_method, control = FALSE)
 
       # Move samples2use to the end of the vector
       ctoi_samples_pool <- c(ctoi_samples_pool[!ctoi_samples_pool %in% samples2use], samples2use)
 
       # Make control(s) fractions matrix
-      controls2use <- sample(controls, sample(1:length(controls), 1), replace = FALSE)
-      samples2use <- labels %>%
-        filter(label %in% controls2use) %>%
-        group_by(label) %>%
-        sample_n(1) %>%
-        pull(sample)
-      control_frac_mat <- makeFractionMatrix(ref, sim_fracs, samples2use, control = TRUE)
+      if (sim_method != "ref_mix_thin") {
+        controls2use <- sample(controls, sample(1:length(controls), 1), replace = FALSE)
+        samples2use <- labels %>%
+          filter(label %in% controls2use) %>%
+          group_by(label) %>%
+          sample_n(1) %>%
+          pull(sample)
+        ref_sub <- ref[,samples2use]
+        control_frac_mat <- makeFractionMatrix(ref_sub, sim_fracs, sim_method, control = TRUE)
+      }else{
+        # Shuffle expression values between genes
+        mix_shuffled <- t(apply(mix, 1, sample))
+        mix_shuffled <- mix_shuffled[rownames(mix),]
+        # Select random samples
+        num_columns_to_sample <- sample(2:ncol(mix_shuffled), 1)
+        mix_shuffled <- mix_shuffled[, sample(1:ncol(mix_shuffled), num_columns_to_sample)]
+        control_frac_mat <- makeFractionMatrix(mix_shuffled, sim_fracs, sim_method, control = TRUE)
+      }
+
 
       # Combine CTOI and control(s) fractions matrix
       simulation <- ctoi_frac_mat + control_frac_mat
@@ -407,7 +439,7 @@ makeSimulations <- function(ref, labels, gep_mat, cor_mat, dep_list, sim_fracs, 
 
     })
 
-    # Noise
+    # TODO: Noise
     if (!is.null(noise)) {
       ctoi_sim_list_noised <- lapply(ctoi_sim_list, function(sim){
 
@@ -619,7 +651,6 @@ setClass("xCell2Signatures", slots = list(
 #' @importFrom Rfast rowMedians rowmeans rowsums
 #' @importFrom parallel mclapply
 #' @importFrom pbapply pblapply pbsapply
-#' @importFrom sparseMatrixStats rowMedians
 #' @importFrom RRF RRF
 #' @importFrom seqgendiff thin_lib
 #' @importFrom Matrix rowMeans rowSums colSums
@@ -647,12 +678,14 @@ setClass("xCell2Signatures", slots = list(
 #' @param regGamma description
 #' @param sims_sample_frac description
 #' @param nCores description
+#' @param mix description
+#' @param simMethod description
 #' @return An S4 object containing the signatures, cell type labels, and cell type dependencies.
 #' @export
-xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, weightGenes = TRUE, medianGEP = TRUE, seed = 123, probs = c(0.01, 0.05, 0.1, 0.25, 0.333, 0.49),
+xCell2Train <- function(ref, labels, data_type, mix = NULL, lineage_file = NULL, weightGenes = TRUE, medianGEP = TRUE, seed = 123, probs = c(0.01, 0.05, 0.1, 0.25, 0.333, 0.49),
                         sim_fracs = c(0, 0.001, 0.002, 0.004, 0.006, 0.008, seq(0.01, 1, 0.01)), diff_vals = c(1, 1.32, 1.585, 2, 3, 4, 5),
                         min_genes = 5, max_genes = 200, return_sigs = FALSE, sigsFile = NULL, minPBcells = 30, minPBsamples = 10,
-                        ct_sims = 10, sims_sample_frac = 0.33, sim_noise = NULL, regGamma = 0.8, nCores = 1){
+                        ct_sims = 10, sims_sample_frac = 0.33, simMethod = "ref_thin", sim_noise = NULL, regGamma = 0.8, nCores = 1){
 
 
   # Validate inputs
@@ -660,10 +693,7 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, weightGenes
   ref <- inputs_validated$ref
   labels <- inputs_validated$labels
 
-
-  # Normalize reference
-  ref <- normformRef(ref, data_type)
-
+  # TODO: first sum counts and then normalize or vice versa?
 
   # Generate pseudo bulk from scRNA-Seq reference
   if (data_type == "sc") {
@@ -672,6 +702,9 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, weightGenes
     ref <- ps_data$ref
     labels <- ps_data$labels
   }
+
+  # Normalize reference
+  ref <- normRef(ref, data_type)
 
 
   # Build cell types correlation matrix
@@ -711,7 +744,7 @@ xCell2Train <- function(ref, labels, data_type, lineage_file = NULL, weightGenes
 
   # Make simulations
   message("Generating simulations...")
-  simulations <- makeSimulations(ref, labels, gep_mat, cor_mat, dep_list, sim_fracs, ctoi_samples_frac = sims_sample_frac, n_sims = ct_sims, noise = sim_noise, ncores = nCores, seed2use = seed)
+  simulations <- makeSimulations(ref, labels, mix, gep_mat, cor_mat, dep_list, sim_fracs, sim_method = simMethod, ctoi_samples_frac = sims_sample_frac, n_sims = ct_sims, noise = sim_noise, ncores = nCores, seed2use = seed)
   message("Scoring simulations...")
   simulations_scored <- scoreSimulations(signatures, simulations, nCores)
 
