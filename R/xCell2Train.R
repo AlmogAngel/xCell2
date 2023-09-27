@@ -336,7 +336,7 @@ makeSimulations <- function(ref, labels, mix, gep_mat, cor_mat, dep_list, sim_fr
   makeFractionMatrix <- function(expr_mat, sim_fracs, sim_method, control){
 
     # Get mean expression vector
-    if (class(ref_sub)[1] == "numeric") {
+    if (class(expr_mat)[1] == "numeric") {
       mean_expression <- expr_mat
     }else{
       mean_expression <- rowMeans(expr_mat)
