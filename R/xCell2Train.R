@@ -400,7 +400,6 @@ makeSimulations <- function(ref, labels, mix, gep_mat, cor_mat, dep_list, sim_fr
 
     # Generate n_sims simulations
     ctoi_sim_list <- lapply(1:n_sims, function(i){
-      print(i)
       # Make CTOI fraction matrix
       samples2use <- ctoi_samples_pool[1:n_samples_sim]
       ref_sub <- ref[,samples2use]
