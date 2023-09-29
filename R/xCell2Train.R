@@ -401,9 +401,9 @@ makeSimulations <- function(ref, labels, mix, gep_mat, cor_mat, dep_list, sim_me
     # Generate n_sims simulations
     ctoi_sim_list <- lapply(1:n_sims, function(i){
 
-      vec1 <- runif(100, min = 0, max = 0.1)
+      vec1 <- runif(100, min = 0.0001, max = 0.1)
       vec2 <- runif(50, min = 0.1, max = 0.25)
-      vec3 <- runif(10, min = 0.25, max = 1)
+      vec3 <- runif(10, min = 0.25, max = 0.9999)
       sim_fracs <- sort(round(c(0, vec1, vec2, vec3, 1), 4))
 
       # Make CTOI fraction matrix
@@ -690,7 +690,7 @@ setClass("xCell2Signatures", slots = list(
 xCell2Train <- function(ref, labels, data_type, mix = NULL, lineage_file = NULL, weightGenes = TRUE, medianGEP = TRUE, seed = 123,
                         probs = c(0.01, 0.05, 0.1, 0.25, 0.333, 0.49), diff_vals = c(1, 1.32, 1.585, 2, 3, 4, 5),
                         min_genes = 5, max_genes = 200, return_sigs = FALSE, sigsFile = NULL, minPBcells = 30, minPBsamples = 10,
-                        ct_sims = 10, sims_sample_frac = 0.33, simMethod = "ref_thin", sim_noise = NULL, regGamma = 0.8, nCores = 1){
+                        ct_sims = 20, sims_sample_frac = 0.33, simMethod = "ref_thin", sim_noise = NULL, regGamma = 0.8, nCores = 1){
 
 
   # Validate inputs
