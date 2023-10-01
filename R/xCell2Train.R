@@ -313,7 +313,7 @@ createSignatures <- function(labels, dep_list, quantiles_matrix, probs, cor_mat,
 
   return(all_sigs)
 }
-makeSimulations <- function(ref, labels, mix, gep_mat, cor_mat, dep_list, sim_method, ctoi_samples_frac, n_sims, noise, ncores, seed2use){
+makeSimulations <- function(ref, labels, mix, gep_mat, cor_mat, dep_list, sim_fracs, sim_method, ctoi_samples_frac, n_sims, noise, ncores, seed2use){
 
   set.seed(seed2use)
 
@@ -400,12 +400,6 @@ makeSimulations <- function(ref, labels, mix, gep_mat, cor_mat, dep_list, sim_me
 
     # Generate n_sims simulations
     ctoi_sim_list <- lapply(1:n_sims, function(i){
-
-      vec1 <- runif(100, min = 0.0001, max = 0.1)
-      vec2 <- runif(50, min = 0.1, max = 0.25)
-      vec3 <- runif(10, min = 0.25, max = 0.9999)
-      sim_fracs <- sort(round(c(0, vec1, vec2, vec3, 1), 4))
-
       # Make CTOI fraction matrix
       samples2use <- ctoi_samples_pool[1:n_samples_sim]
       ref_sub <- ref[,samples2use]
@@ -669,7 +663,7 @@ setClass("xCell2Signatures", slots = list(
 #' @param data_type Gene expression data type: "rnaseq", "array", or "sc".
 #' @param lineage_file Path to the cell type lineage file generated with `xCell2GetLineage` function (optional).
 #' @param weightGenes description
-#@param sim_fracs A vector of mixture fractions to be used in signature filtering (optional).
+#' @param sim_fracs A vector of mixture fractions to be used in signature filtering (optional).
 #' @param probs A vector of probability thresholds to be used for generating signatures (optional).
 #' @param diff_vals A vector of delta values to be used for generating signatures (optional).
 #' @param min_genes The minimum number of genes to include in the signature (optional).
@@ -687,8 +681,8 @@ setClass("xCell2Signatures", slots = list(
 #' @param simMethod description
 #' @return An S4 object containing the signatures, cell type labels, and cell type dependencies.
 #' @export
-xCell2Train <- function(ref, labels, data_type, mix = NULL, lineage_file = NULL, weightGenes = TRUE, medianGEP = TRUE, seed = 123,
-                        probs = c(0.01, 0.05, 0.1, 0.25, 0.333, 0.49), diff_vals = c(1, 1.32, 1.585, 2, 3, 4, 5),
+xCell2Train <- function(ref, labels, data_type, mix = NULL, lineage_file = NULL, weightGenes = TRUE, medianGEP = TRUE, seed = 123, probs = c(0.01, 0.05, 0.1, 0.25, 0.333, 0.49),
+                        sim_fracs = c(seq(0, 0.099, 0.001), seq(0.1, 1, 0.01)), diff_vals = c(1, 1.32, 1.585, 2, 3, 4, 5),
                         min_genes = 5, max_genes = 200, return_sigs = FALSE, sigsFile = NULL, minPBcells = 30, minPBsamples = 10,
                         ct_sims = 20, sims_sample_frac = 0.33, simMethod = "ref_thin", sim_noise = NULL, regGamma = 0.8, nCores = 1){
 
@@ -749,7 +743,7 @@ xCell2Train <- function(ref, labels, data_type, mix = NULL, lineage_file = NULL,
 
   # Make simulations
   message("Generating simulations...")
-  simulations <- makeSimulations(ref, labels, mix, gep_mat, cor_mat, dep_list, sim_method = simMethod, ctoi_samples_frac = sims_sample_frac, n_sims = ct_sims, noise = sim_noise, ncores = nCores, seed2use = seed)
+  simulations <- makeSimulations(ref, labels, mix, gep_mat, cor_mat, dep_list, sim_fracs, sim_method = simMethod, ctoi_samples_frac = sims_sample_frac, n_sims = ct_sims, noise = sim_noise, ncores = nCores, seed2use = seed)
   message("Scoring simulations...")
   simulations_scored <- scoreSimulations(signatures, simulations, nCores)
 
