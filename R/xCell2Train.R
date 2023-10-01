@@ -682,7 +682,7 @@ setClass("xCell2Signatures", slots = list(
 #' @return An S4 object containing the signatures, cell type labels, and cell type dependencies.
 #' @export
 xCell2Train <- function(ref, labels, data_type, mix = NULL, lineage_file = NULL, weightGenes = TRUE, medianGEP = TRUE, seed = 123, probs = c(0.01, 0.05, 0.1, 0.25, 0.333, 0.49),
-                        sim_fracs = c(seq(0, 0.099, 0.001), seq(0.1, 1, 0.01)), diff_vals = c(1, 1.32, 1.585, 2, 3, 4, 5),
+                        sim_fracs = c(0, seq(0.01, 0.099, 0.001), seq(0.1, 0.245, 0.005), seq(0.25, 1, 0.05)), diff_vals = c(1, 1.32, 1.585, 2, 3, 4, 5),
                         min_genes = 5, max_genes = 200, return_sigs = FALSE, sigsFile = NULL, minPBcells = 30, minPBsamples = 10,
                         ct_sims = 20, sims_sample_frac = 0.33, simMethod = "ref_thin", sim_noise = NULL, regGamma = 0.8, nCores = 1){
 
