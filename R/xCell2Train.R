@@ -319,43 +319,29 @@ makeSimulations <- function(ref, labels, mix, gep_mat, cor_mat, dep_list, sim_fr
 
   celltypes <- unique(labels$label)
 
-  makeSamplesPool <- function(labels, ctoi){
+  makeFractionMatrix <- function(expr_mat, n_samples_sim, sim_fracs, sim_method, control){
 
-    # Mix CTOI samples by datasets
-    ctoi_samples_pool <- c()
-    while(!all(labels[labels$label == ctoi,]$sample %in% ctoi_samples_pool)) {
-      ctoi_samples_pool <- c(ctoi_samples_pool,
-                             labels %>%
-                               filter(label == ctoi & !sample %in% ctoi_samples_pool) %>%
-                               slice_head(n = 1, by = dataset) %>%
-                               pull(sample))
-    }
 
-    return(ctoi_samples_pool)
-  }
-  makeFractionMatrix <- function(expr_mat, sim_fracs, sim_method, control){
+    mat <- sapply(1:length(sim_fracs), function(i){
+      mat_tmp <- expr_mat[,sample(1:ncol(expr_mat), n_samples_sim)]
+      if (class(mat_tmp)[1] == "numeric") {
+        mat_tmp
+      }else{
+        rowMeans(mat_tmp)
+      }
+    })
 
-    # Get mean expression vector
-    if (class(expr_mat)[1] == "numeric") {
-      mean_expression <- expr_mat
-    }else{
-      mean_expression <- rowMeans(expr_mat)
-    }
 
     # Check if data not in counts (all integers) because you can't thin fractions (?)
     if (sim_method != "ref_multi") {
       scale_factor <- 10000 # TODO: Ask Anna
-      mean_expression <- round(mean_expression * scale_factor)
+      mat <- round(mat * scale_factor)
     }
 
     # Adjust simulation fractions for controls
     if (control) {
       sim_fracs <- 1-sim_fracs
     }
-
-    # Build simulation matrix
-    mat <- matrix(rep(mean_expression, length(sim_fracs)), byrow = FALSE, ncol = length(sim_fracs))
-    rownames(mat) <- rownames(ref)
 
 
     # Multiply reference matrix to simulate fractions
@@ -400,32 +386,34 @@ makeSimulations <- function(ref, labels, mix, gep_mat, cor_mat, dep_list, sim_fr
 
     # Generate n_sims simulations
     ctoi_sim_list <- lapply(1:n_sims, function(i){
-      # Make CTOI fraction matrix
-      samples2use <- ctoi_samples_pool[1:n_samples_sim]
-      ref_sub <- ref[,samples2use]
-      ctoi_frac_mat <- makeFractionMatrix(expr_mat = ref_sub, sim_fracs, sim_method, control = FALSE)
 
-      # Move samples2use to the end of the vector
-      ctoi_samples_pool <- c(ctoi_samples_pool[!ctoi_samples_pool %in% samples2use], samples2use)
+      # Make CTOI fraction matrix
+      ctoi_frac_mat <- makeFractionMatrix(expr_mat = ref, n_samples_sim, sim_fracs, sim_method, control = FALSE)
 
       # Make control(s) fractions matrix
+
       if (sim_method != "ref_mix_thin") {
         controls2use <- sample(controls, sample(1:length(controls), 1), replace = FALSE)
         samples2use <- labels %>%
           filter(label %in% controls2use) %>%
-          group_by(label) %>%
-          sample_n(1) %>%
           pull(sample)
         ref_sub <- ref[,samples2use]
-        control_frac_mat <- makeFractionMatrix(expr_mat = ref_sub, sim_fracs, sim_method, control = TRUE)
+
+        # Number of control samples to use
+        n_samples_sim <- round(length(samples2use) * ctoi_samples_frac)
+        n_samples_sim <- ifelse(n_samples_sim < 1, 1, n_samples_sim)
+
+        control_frac_mat <- makeFractionMatrix(expr_mat = ref_sub, n_samples_sim, sim_fracs, sim_method, control = TRUE)
       }else{
         # Shuffle expression values between genes
         mix_shuffled <- t(apply(mix, 1, sample))
         mix_shuffled <- mix_shuffled[rownames(mix),]
-        # Select random samples
-        num_columns_to_sample <- sample(2:ncol(mix_shuffled), 1)
-        mix_shuffled <- mix_shuffled[, sample(1:ncol(mix_shuffled), num_columns_to_sample)]
-        control_frac_mat <- makeFractionMatrix(mix_shuffled, sim_fracs, sim_method, control = TRUE)
+
+        # Number of control samples to use
+        n_samples_sim <- round(ncol(mix_shuffled) * ctoi_samples_frac)
+        n_samples_sim <- ifelse(n_samples_sim < 1, 1, n_samples_sim)
+
+        control_frac_mat <- makeFractionMatrix(expr_mat = mix_shuffled, n_samples_sim, sim_fracs, sim_method, control = TRUE)
       }
 
 
@@ -682,9 +670,9 @@ setClass("xCell2Signatures", slots = list(
 #' @return An S4 object containing the signatures, cell type labels, and cell type dependencies.
 #' @export
 xCell2Train <- function(ref, labels, data_type, mix = NULL, lineage_file = NULL, weightGenes = TRUE, medianGEP = TRUE, seed = 123, probs = c(0.01, 0.05, 0.1, 0.25, 0.333, 0.49),
-                        sim_fracs = c(0, 0.001, 0.002, 0.004, 0.006, 0.008, seq(0.01, 1, 0.01)), diff_vals = c(1, 1.32, 1.585, 2, 3, 4, 5),
+                        sim_fracs = c(rep(0, 50), seq(0.01, 0.1, 0.002), seq(0.105, 0.25, 0.005), seq(0.3, 1, 0.1)), diff_vals = c(1, 1.32, 1.585, 2, 3, 4, 5),
                         min_genes = 5, max_genes = 200, return_sigs = FALSE, sigsFile = NULL, minPBcells = 30, minPBsamples = 10,
-                        ct_sims = 10, sims_sample_frac = 0.33, simMethod = "ref_thin", sim_noise = NULL, regGamma = 0.8, nCores = 1){
+                        ct_sims = 10, sims_sample_frac = 0.1, simMethod = "ref_thin", sim_noise = NULL, regGamma = 0.8, nCores = 1){
 
 
   # Validate inputs
