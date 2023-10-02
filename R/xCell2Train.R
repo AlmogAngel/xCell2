@@ -321,15 +321,21 @@ makeSimulations <- function(ref, labels, mix, gep_mat, cor_mat, dep_list, sim_fr
 
   makeFractionMatrix <- function(expr_mat, n_samples_sim, sim_fracs, sim_method, control){
 
+    if (class(expr_mat)[1] == "numeric") {
+      mat <- matrix(rep(expr_mat, length(sim_fracs)), byrow = FALSE, ncol = length(sim_fracs))
+      rownames(mat) <- rownames(expr_mat)
+    }else{
+      mat <- sapply(1:length(sim_fracs), function(i){
+        mat_tmp <- expr_mat[,sample(1:ncol(expr_mat), n_samples_sim)]
+        if (class(mat_tmp)[1] == "numeric") {
+          mat_tmp
+        }else{
+          rowMeans(mat_tmp)
+        }
+      })
+    }
 
-    mat <- sapply(1:length(sim_fracs), function(i){
-      mat_tmp <- expr_mat[,sample(1:ncol(expr_mat), n_samples_sim)]
-      if (class(mat_tmp)[1] == "numeric") {
-        mat_tmp
-      }else{
-        rowMeans(mat_tmp)
-      }
-    })
+
 
 
     # Check if data not in counts (all integers) because you can't thin fractions (?)
@@ -351,19 +357,17 @@ makeSimulations <- function(ref, labels, mix, gep_mat, cor_mat, dep_list, sim_fr
       # Thin reference/mixture to simulate fractions
       if (sum(sim_fracs == 0) != 0) { # Can't thin when frac = 0
         zero_index <- which(sim_fracs == 0)
-        sim <- seqgendiff::thin_lib(mat[,-zero_index], thinlog2 = -log2(sim_fracs[-zero_index]), type = "thin")$mat
+        sim_fracs[zero_index] <- 0.001
+        sim <- seqgendiff::thin_lib(mat, thinlog2 = -log2(sim_fracs), type = "thin")$mat
+        sim_fracs[zero_index] <- 0
         sim <- sim/scale_factor
-        if (zero_index == 1) {
-          # Zero is  the first column
-          sim <- cbind(mat[,1]*0, sim)
-        }else{
-          # Zero is the last column
-          sim <- cbind(sim, mat[,1]*0)
-        }
+        sim[,zero_index] <- 0
       }else{
         sim <- seqgendiff::thin_lib(mat, thinlog2 = -log2(sim_fracs), type = "thin")$mat
       }
     }
+
+    rownames(sim) <- rownames(mat)
 
     return(sim)
   }
@@ -371,11 +375,10 @@ makeSimulations <- function(ref, labels, mix, gep_mat, cor_mat, dep_list, sim_fr
 
   sim_list <- parallel::mclapply(celltypes, function(ctoi){
 
-    # Generate CTOI samples pool
-    ctoi_samples_pool <- makeSamplesPool(labels, ctoi)
+    ref_ctoi <- ref[,labels$label == ctoi]
 
     # Number of CTOI samples to use
-    n_samples_sim <- round(length(ctoi_samples_pool) * ctoi_samples_frac)
+    n_samples_sim <- round(ncol(ref_ctoi) * ctoi_samples_frac)
     n_samples_sim <- ifelse(n_samples_sim < 1, 1, n_samples_sim)
 
     if (sim_method != "ref_mix_thin") {
@@ -388,7 +391,7 @@ makeSimulations <- function(ref, labels, mix, gep_mat, cor_mat, dep_list, sim_fr
     ctoi_sim_list <- lapply(1:n_sims, function(i){
 
       # Make CTOI fraction matrix
-      ctoi_frac_mat <- makeFractionMatrix(expr_mat = ref, n_samples_sim, sim_fracs, sim_method, control = FALSE)
+      ctoi_frac_mat <- makeFractionMatrix(expr_mat = ref_ctoi, n_samples_sim, sim_fracs, sim_method, control = FALSE)
 
       # Make control(s) fractions matrix
 
