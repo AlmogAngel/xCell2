@@ -319,14 +319,13 @@ makeSimulations <- function(ref, labels, mix, gep_mat, cor_mat, dep_list, sim_fr
 
   celltypes <- unique(labels$label)
 
-  makeFractionMatrix <- function(expr_mat, n_samples_sim, sim_fracs, sim_method, control){
-
-    if (class(expr_mat)[1] == "numeric") {
-      mat <- matrix(rep(expr_mat, length(sim_fracs)), byrow = FALSE, ncol = length(sim_fracs))
-      rownames(mat) <- rownames(expr_mat)
+  getSubMatrix <- function(mat, sim_fracs, n_samples_sim){
+    if (class(mat)[1] == "numeric") {
+      mat_sub <- matrix(rep(mat, length(sim_fracs)), byrow = FALSE, ncol = length(sim_fracs))
+      rownames(mat_sub) <- rownames(mat)
     }else{
-      mat <- sapply(1:length(sim_fracs), function(i){
-        mat_tmp <- expr_mat[,sample(1:ncol(expr_mat), n_samples_sim)]
+      mat_sub <- sapply(1:length(sim_fracs), function(i){
+        mat_tmp <- mat[,sample(1:ncol(mat), n_samples_sim)]
         if (class(mat_tmp)[1] == "numeric") {
           mat_tmp
         }else{
@@ -335,7 +334,35 @@ makeSimulations <- function(ref, labels, mix, gep_mat, cor_mat, dep_list, sim_fr
       })
     }
 
+    rownames(mat_sub) <- rownames(mat)
 
+    return(mat_sub)
+  }
+  adjustLibSize <- function(ctoi_mat, controls_mat){
+
+    # Scale to simulate counts data
+    scale_factor <- 10000
+    ctoi_mat_scaled <- round(ctoi_mat * scale_factor)
+    controls_mat_scaled <- round(controls_mat * scale_factor)
+
+    # Adjust reference-controls library size
+    min_lib_size <- min(min(colSums(ctoi_mat_scaled)), min(colSums(controls_mat_scaled)))
+    ref_ctoi_sub_lib_fracs <- min_lib_size/colSums(ctoi_mat_scaled)
+    ref_controls_sub_lib_fracs <- min_lib_size/colSums(controls_mat_scaled)
+
+    # Thin data to adjust lib size
+    ctoi_mat_scaled_thin <- seqgendiff::thin_lib(ctoi_mat_scaled, thinlog2 = -log2(ref_ctoi_sub_lib_fracs), type = "thin")$mat
+    controls_mat_scaled_thin <- seqgendiff::thin_lib(controls_mat_scaled, thinlog2 = -log2(ref_controls_sub_lib_fracs), type = "thin")$mat
+
+    # Unscale
+    ctoi_mat_thin <- ctoi_mat_scaled_thin/scale_factor
+    rownames(ctoi_mat_thin) <- rownames(ctoi_mat)
+    controls_mat_thin <- controls_mat_scaled_thin/scale_factor
+    rownames(controls_mat_thin) <- rownames(controls_mat)
+
+    return(list(ctoi_mat_thin = ctoi_mat_thin, controls_mat_thin = controls_mat_thin))
+  }
+  makeFractionMatrix <- function(mat, sim_fracs, sim_method, control){
 
 
     # Check if data not in counts (all integers) because you can't thin fractions (?)
@@ -377,7 +404,7 @@ makeSimulations <- function(ref, labels, mix, gep_mat, cor_mat, dep_list, sim_fr
 
     ref_ctoi <- ref[,labels$label == ctoi]
 
-    # Number of CTOI samples to use
+    # Number of CTOI samples to use for each simulation
     n_samples_sim <- round(ncol(ref_ctoi) * ctoi_samples_frac)
     n_samples_sim <- ifelse(n_samples_sim < 1, 1, n_samples_sim)
 
@@ -390,24 +417,24 @@ makeSimulations <- function(ref, labels, mix, gep_mat, cor_mat, dep_list, sim_fr
     # Generate n_sims simulations
     ctoi_sim_list <- lapply(1:n_sims, function(i){
 
-      # Make CTOI fraction matrix
-      ctoi_frac_mat <- makeFractionMatrix(expr_mat = ref_ctoi, n_samples_sim, sim_fracs, sim_method, control = FALSE)
+      # Use n_samples_sim random samples for CTOI
+      ref_ctoi_sub <- getSubMatrix(mat = ref_ctoi, sim_fracs, n_samples_sim)
 
-      # Make control(s) fractions matrix
-
+      # Use n_samples_sim random samples for controls
       if (sim_method != "ref_mix_thin") {
+
         controls2use <- sample(controls, sample(1:length(controls), 1), replace = FALSE)
         samples2use <- labels %>%
           filter(label %in% controls2use) %>%
           pull(sample)
-        ref_sub <- ref[,samples2use]
+        ref_controls <- ref[,samples2use]
 
-        # Number of control samples to use
-        n_samples_sim <- round(length(samples2use) * ctoi_samples_frac)
+        n_samples_sim <- round(ncol(ref_controls) * ctoi_samples_frac)
         n_samples_sim <- ifelse(n_samples_sim < 1, 1, n_samples_sim)
 
-        control_frac_mat <- makeFractionMatrix(expr_mat = ref_sub, n_samples_sim, sim_fracs, sim_method, control = TRUE)
+        ref_controls_sub <- getSubMatrix(mat = ref_controls, sim_fracs, n_samples_sim)
       }else{
+
         # Shuffle expression values between genes
         mix_shuffled <- t(apply(mix, 1, sample))
         mix_shuffled <- mix_shuffled[rownames(mix),]
@@ -416,8 +443,19 @@ makeSimulations <- function(ref, labels, mix, gep_mat, cor_mat, dep_list, sim_fr
         n_samples_sim <- round(ncol(mix_shuffled) * ctoi_samples_frac)
         n_samples_sim <- ifelse(n_samples_sim < 1, 1, n_samples_sim)
 
-        control_frac_mat <- makeFractionMatrix(expr_mat = mix_shuffled, n_samples_sim, sim_fracs, sim_method, control = TRUE)
+        ref_controls_sub <- getSubMatrix(mat = mix_shuffled, sim_fracs, n_samples_sim)
       }
+
+      # Thin to adjust library size
+      data_adjusted <- adjustLibSize(ctoi_mat = ref_ctoi_sub, controls_mat = ref_controls_sub)
+      ref_ctoi_sub <- data_adjusted$ctoi_mat_thin
+      ref_controls_sub <- data_adjusted$controls_mat_thin
+
+
+      # Make fraction matrices
+      ctoi_frac_mat <- makeFractionMatrix(mat = ref_ctoi_sub, sim_fracs, sim_method, control = FALSE)
+      control_frac_mat <- makeFractionMatrix(mat = ref_controls_sub, sim_fracs, sim_method, control = TRUE)
+
 
 
       # Combine CTOI and control(s) fractions matrix
