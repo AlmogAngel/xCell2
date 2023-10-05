@@ -187,11 +187,11 @@ logTransformRef <- function(ref){
   }
 
 }
-makeQuantiles <- function(ref, labels, probs, dep_list){
+makeQuantiles <- function(ref, labels, probs, dep_list, ncores){
 
   celltypes <- unique(labels[,2])
 
-  quantiles_mat_list <-  pbapply::pblapply(celltypes, function(type){
+  quantiles_mat_list <-  parallel::mclapply(celltypes, function(type){
 
     type_samples <- labels[,2] == type
 
@@ -205,7 +205,7 @@ makeQuantiles <- function(ref, labels, probs, dep_list){
     # Calculate quantiles
     # TODO: Balance quantiles by dataset
     type_quantiles_matrix <- apply(type.df, 1, function(x) quantile(x, unique(c(probs, rev(1-probs))), na.rm=TRUE))
-  })
+  }, mc.cores = ncores, mc.set.seed = FALSE)
   names(quantiles_mat_list) <- celltypes
 
   return(quantiles_mat_list)
@@ -530,22 +530,70 @@ trainModels <- function(simulations_scored, regGamma, ncores, seed2use){
 
   set.seed(seed2use)
 
-  fitModel <- function(data, gamma){
+  fitModel <- function(data, gamma = 1){
 
-    # Feature selection via GRRF
+    # Feature selection
+
+    # GRRF
     # https://sites.google.com/site/houtaodeng/rrf?authuser=0
-    RF <- RRF::RRF(x = data[,-ncol(data)], y = data[,ncol(data)], flagReg = 0, importance = TRUE, ntree = 1000)
-    RF_imp <- RF$importance[,"%IncMSE"] / max(RF$importance[,"%IncMSE"])
-    RRF <- RRF::RRF(x = data[,-ncol(data)], y = data[,ncol(data)], flagReg = 1, ntree = 1000, coefReg = (1-gamma) + gamma*RF_imp)
-    selected_features <- colnames(data)[RRF$feaSet]
-    data <- data[, c(selected_features, "frac")]
+    # RF <- RRF::RRF(x = data[,-ncol(data)], y = data[,ncol(data)], flagReg = 0, importance = TRUE, ntree = 1000)
+    # RF_imp <- RF$importance[,"%IncMSE"] / max(RF$importance[,"%IncMSE"])
+    # RRF <- RRF::RRF(x = data[,-ncol(data)], y = data[,ncol(data)], flagReg = 1, ntree = 1000, coefReg = (1-gamma) + gamma*RF_imp)
+    # selected_features <- colnames(data)[RRF$feaSet]
+    # data <- data[, c(selected_features, "frac")]
+
+
+    # # Feature selection
+    # if (fsMethod == "GRRF") {
+    #   # GRRF
+    #   # https://sites.google.com/site/houtaodeng/rrf?authuser=0
+    #   RF <- RRF::RRF(x = data[,-ncol(data)], y = data[,ncol(data)], flagReg = 0, importance = TRUE, ntree = 1000)
+    #   RF_imp <- RF$importance[,"%IncMSE"] / max(RF$importance[,"%IncMSE"])
+    #   RRF <- RRF::RRF(x = data[,-ncol(data)], y = data[,ncol(data)], flagReg = 1, ntree = 1000, coefReg = (1-gamma) + gamma*RF_imp)
+    #   selected_features <- colnames(data)[RRF$feaSet]
+    #   data <- data[, c(selected_features, "frac")]
+    #
+    # }else if (fsMethod == "PCA") {
+    #   # Assuming your data is already normalized, if not you should scale it
+    #   data_scaled <- scale(data[,-ncol(data)])
+    #
+    #   # Perform PCA
+    #   pca_result <- prcomp(data_scaled, center = TRUE, scale. = TRUE)
+    #
+    #   # Scree plot to visualize variance explained by each PC
+    #   scree_plot <- function(pca){
+    #     var_exp <- (pca$sdev^2)/sum(pca$sdev^2)
+    #     plot(var_exp, xlab = "Principal Component",
+    #          ylab = "Proportion of Variance Explained",
+    #          type = "b")
+    #     title("Scree Plot")
+    #   }
+    #
+    #   scree_plot(pca_result)
+    #
+    #   # Create a scatter plot
+    #   variance_explained <- (pca_result$sdev^2) / sum(pca_result$sdev^2)
+    #   pc1_var <- round(variance_explained[1] * 100, 2)  # proportion for PC1
+    #   pc2_var <- round(variance_explained[2] * 100, 2)  # proportion for PC2
+    #
+    #   plot(pca_result$x[,1], pca_result$x[,2],
+    #        xlab=paste("PC1: ", pc1_var, "% variance"),
+    #        ylab=paste("PC2: ", pc2_var, "% variance"),
+    #        main="PCA Plot")
+    #
+    #
+    # }
 
 
     # Build model
     # model <- RRF::tuneRRF(x = data[,-ncol(data)], y = data[,ncol(data)], flagReg = 0, importance = FALSE, ntreeTry=1000, stepFactor=1.1, improve=0.001, trace=FALSE, plot=FALSE, doBest=TRUE)
-    model <- RRF::RRF(x = data[,-ncol(data)], y = data[,ncol(data)], flagReg = 0, ntree = 1000)
+    # model <- RRF::RRF(x = data[,-ncol(data)], y = data[,ncol(data)], flagReg = 0, ntree = 1000)
 
-    return(tibble(model = list(model), sigs_filtered = list(selected_features)))
+
+    model <- randomForestSRC::var.select(frac ~ ., as.data.frame(data), method = "md", conservative = "high", verbose = FALSE, refit = TRUE)
+    filtered_sigs <- model$topvars
+
+    return(tibble(model = list(model$rfsrc.refit.obj), sigs_filtered = list(filtered_sigs)))
   }
 
   if (ncores == 1) {
@@ -676,6 +724,7 @@ setClass("xCell2Signatures", slots = list(
 #' @import tibble
 #' @import tidyr
 #' @import readr
+#' @importFrom randomForestSRC var.select
 #' @importFrom Rfast rowMedians rowmeans rowsums
 #' @importFrom parallel mclapply
 #' @importFrom pbapply pblapply pbsapply
@@ -711,7 +760,7 @@ setClass("xCell2Signatures", slots = list(
 #' @return An S4 object containing the signatures, cell type labels, and cell type dependencies.
 #' @export
 xCell2Train <- function(ref, labels, data_type, mix = NULL, lineage_file = NULL, weightGenes = TRUE, medianGEP = TRUE, seed = 123, probs = c(0.01, 0.05, 0.1, 0.25, 0.333, 0.49),
-                        sim_fracs = c(0, seq(0.01, 0.1, 0.002), seq(0.105, 0.25, 0.005), seq(0.3, 1, 0.1)), diff_vals = c(1, 1.32, 1.585, 2, 3, 4, 5),
+                        sim_fracs = c(0, seq(0.01, 0.25, 0.005), seq(0.3, 1, 0.05)), diff_vals = c(1, 1.32, 1.585, 2, 3, 4, 5),
                         min_genes = 5, max_genes = 200, return_sigs = FALSE, sigsFile = NULL, minPBcells = 30, minPBsamples = 10,
                         ct_sims = 10, sims_sample_frac = 0.1, simMethod = "ref_thin", sim_noise = NULL, regGamma = 0.8, nCores = 1){
 
@@ -755,7 +804,7 @@ xCell2Train <- function(ref, labels, data_type, mix = NULL, lineage_file = NULL,
     # Generate signatures
     message("Calculating quantiles...")
     ref_log <- logTransformRef(ref) # Log2-transformation
-    quantiles_matrix <- makeQuantiles(ref_log, labels, probs, dep_list)
+    quantiles_matrix <- makeQuantiles(ref_log, labels, probs, dep_list, ncores = nCores)
     message("Generating signatures...")
     signatures <- createSignatures(labels, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, weight_genes = weightGenes, ncores = nCores)
 

@@ -3,6 +3,7 @@
 #' This function takes a matrix of mix gene expression data and a `xCell2Signatures` object containing a set of signatures as input. It performs downstream analysis to identify enriched cell types in the mix sample.
 #'
 #' @importFrom singscore rankGenes simpleScore
+#' @importFrom randomForestSRC predict.rfsrc
 #' @import dplyr
 #' @import tibble
 #' @import purrr
@@ -30,7 +31,7 @@ xCell2Analysis <- function(mix, xcell2sigs, min_intersect = 0.9, tranform, spill
   predictFracs <- function(ctoi, scores, xcell2sigs){
 
     model <- filter(xcell2sigs@models, celltype == ctoi)$model[[1]]
-    predictions <- round(predict(model, newdata = scores, type = "response"), 4)
+    predictions <- round(randomForestSRC::predict.rfsrc(model, newdata = as.data.frame(scores))$predicted, 4)
     names(predictions) <- rownames(scores)
 
     return(predictions)
