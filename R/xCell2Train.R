@@ -526,86 +526,35 @@ scoreSimulations <- function(signatures, simulations, ncores){
   return(sims_scored)
 
 }
-trainModels <- function(simulations_scored, regGamma, ncores, seed2use){
+trainModels <- function(simulations_scored, consLvl, ncores, seed2use){
 
   set.seed(seed2use)
 
-  fitModel <- function(data, gamma = 1){
+  fitModel <- function(data, nRFcores, consLvl){
 
-    # Feature selection
+    options(rf.cores=nRFcores, mc.cores=1)
+    model <- randomForestSRC::var.select(frac ~ ., as.data.frame(data), method = "md", conservative = consLvl, verbose = FALSE, refit = TRUE)
+    selected_features <- model$topvars
 
-    # GRRF
-    # https://sites.google.com/site/houtaodeng/rrf?authuser=0
-    # RF <- RRF::RRF(x = data[,-ncol(data)], y = data[,ncol(data)], flagReg = 0, importance = TRUE, ntree = 1000)
-    # RF_imp <- RF$importance[,"%IncMSE"] / max(RF$importance[,"%IncMSE"])
-    # RRF <- RRF::RRF(x = data[,-ncol(data)], y = data[,ncol(data)], flagReg = 1, ntree = 1000, coefReg = (1-gamma) + gamma*RF_imp)
-    # selected_features <- colnames(data)[RRF$feaSet]
-    # data <- data[, c(selected_features, "frac")]
+    return(tibble(model = list(model$rfsrc.refit.obj), sigs_filtered = list(selected_features)))
 
-
-    # # Feature selection
-    # if (fsMethod == "GRRF") {
-    #   # GRRF
-    #   # https://sites.google.com/site/houtaodeng/rrf?authuser=0
-    #   RF <- RRF::RRF(x = data[,-ncol(data)], y = data[,ncol(data)], flagReg = 0, importance = TRUE, ntree = 1000)
-    #   RF_imp <- RF$importance[,"%IncMSE"] / max(RF$importance[,"%IncMSE"])
-    #   RRF <- RRF::RRF(x = data[,-ncol(data)], y = data[,ncol(data)], flagReg = 1, ntree = 1000, coefReg = (1-gamma) + gamma*RF_imp)
-    #   selected_features <- colnames(data)[RRF$feaSet]
-    #   data <- data[, c(selected_features, "frac")]
-    #
-    # }else if (fsMethod == "PCA") {
-    #   # Assuming your data is already normalized, if not you should scale it
-    #   data_scaled <- scale(data[,-ncol(data)])
-    #
-    #   # Perform PCA
-    #   pca_result <- prcomp(data_scaled, center = TRUE, scale. = TRUE)
-    #
-    #   # Scree plot to visualize variance explained by each PC
-    #   scree_plot <- function(pca){
-    #     var_exp <- (pca$sdev^2)/sum(pca$sdev^2)
-    #     plot(var_exp, xlab = "Principal Component",
-    #          ylab = "Proportion of Variance Explained",
-    #          type = "b")
-    #     title("Scree Plot")
-    #   }
-    #
-    #   scree_plot(pca_result)
-    #
-    #   # Create a scatter plot
-    #   variance_explained <- (pca_result$sdev^2) / sum(pca_result$sdev^2)
-    #   pc1_var <- round(variance_explained[1] * 100, 2)  # proportion for PC1
-    #   pc2_var <- round(variance_explained[2] * 100, 2)  # proportion for PC2
-    #
-    #   plot(pca_result$x[,1], pca_result$x[,2],
-    #        xlab=paste("PC1: ", pc1_var, "% variance"),
-    #        ylab=paste("PC2: ", pc2_var, "% variance"),
-    #        main="PCA Plot")
-    #
-    #
-    # }
-
-
-    # Build model
-    # model <- RRF::tuneRRF(x = data[,-ncol(data)], y = data[,ncol(data)], flagReg = 0, importance = FALSE, ntreeTry=1000, stepFactor=1.1, improve=0.001, trace=FALSE, plot=FALSE, doBest=TRUE)
-    # model <- RRF::RRF(x = data[,-ncol(data)], y = data[,ncol(data)], flagReg = 0, ntree = 1000)
-
-
-    model <- randomForestSRC::var.select(frac ~ ., as.data.frame(data), method = "md", conservative = "high", verbose = FALSE, refit = TRUE)
-    filtered_sigs <- model$topvars
-
-    return(tibble(model = list(model$rfsrc.refit.obj), sigs_filtered = list(filtered_sigs)))
   }
 
-  if (ncores == 1) {
-    message("Using single core to train RF models (for faster run time use more cores).")
-    models_list <- pbapply::pblapply(simulations_scored, function(data){
-      fitModel(data, gamma = regGamma)
-    })
+  if (ncores < 4) {
+    mcCores <- round(ncores*(3/4))
+    rfCores <- round(ncores*(1/4))
   }else{
-    models_list <- parallel::mclapply(simulations_scored, function(data){
-      fitModel(data, gamma = regGamma)
-    }, mc.cores = ncores, mc.set.seed = FALSE)
+    mcCores <- ncores
+    rfCores <- 1
   }
+
+  #start <- Sys.time()
+  models_list <- parallel::mclapply(simulations_scored, function(data){
+    fitModel(data, rfCores, consLvl)
+  }, mc.cores = mcCores, mc.set.seed = FALSE)
+  #end <- Sys.time()
+  #print(end-start)
+
 
   enframe(models_list, name = "celltype") %>%
     unnest(value) %>%
@@ -724,6 +673,7 @@ setClass("xCell2Signatures", slots = list(
 #' @import tibble
 #' @import tidyr
 #' @import readr
+#' @import parallel
 #' @importFrom randomForestSRC var.select
 #' @importFrom Rfast rowMedians rowmeans rowsums
 #' @importFrom parallel mclapply
@@ -752,7 +702,7 @@ setClass("xCell2Signatures", slots = list(
 #' @param minPBgroups description
 #' @param sim_noise description
 #' @param ct_sims description
-#' @param regGamma description
+#' @param filtLevel description
 #' @param sims_sample_frac description
 #' @param nCores description
 #' @param mix description
@@ -762,7 +712,7 @@ setClass("xCell2Signatures", slots = list(
 xCell2Train <- function(ref, labels, data_type, mix = NULL, lineage_file = NULL, weightGenes = TRUE, medianGEP = TRUE, seed = 123, probs = c(0.01, 0.05, 0.1, 0.25, 0.333, 0.49),
                         sim_fracs = c(0, seq(0.01, 0.25, 0.005), seq(0.3, 1, 0.05)), diff_vals = c(1, 1.32, 1.585, 2, 3, 4, 5),
                         min_genes = 5, max_genes = 200, return_sigs = FALSE, sigsFile = NULL, minPBcells = 30, minPBsamples = 10,
-                        ct_sims = 10, sims_sample_frac = 0.1, simMethod = "ref_thin", sim_noise = NULL, regGamma = 0.8, nCores = 1){
+                        ct_sims = 10, sims_sample_frac = 0.1, simMethod = "ref_thin", sim_noise = NULL, filtLevel = "high", nCores = 1){
 
 
   # Validate inputs
@@ -828,7 +778,7 @@ xCell2Train <- function(ref, labels, data_type, mix = NULL, lineage_file = NULL,
 
   # Filter signatures and train RF model
   message("Filtering signatures and training models...")
-  models <- trainModels(simulations_scored, regGamma, nCores, seed2use = seed)
+  models <- trainModels(simulations_scored, consLvl = filtLevel, ncores = nCores, seed2use = seed)
   signatures <- signatures[unlist(models$sigs_filtered)]
   models <- models[,-3]
 
