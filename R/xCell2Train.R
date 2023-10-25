@@ -187,7 +187,7 @@ logTransformRef <- function(ref){
   }
 
 }
-makeQuantiles <- function(ref, labels, probs, dep_list, ncores){
+makeQuantiles <- function(ref, labels, probs, ncores){
 
   celltypes <- unique(labels[,2])
 
@@ -313,7 +313,7 @@ createSignatures <- function(labels, dep_list, quantiles_matrix, probs, cor_mat,
 
   return(all_sigs)
 }
-makeSimulations <- function(ref, labels, mix, gep_mat, cor_mat, dep_list, sim_fracs, sim_method, ctoi_samples_frac, n_sims, noise, ncores, seed2use){
+makeSimulations <- function(ref, labels, mix, gep_mat, cor_mat, dep_list, sim_fracs, sim_method, ctoi_samples_frac, n_sims, ncores, seed2use){
 
   set.seed(seed2use)
 
@@ -467,33 +467,10 @@ makeSimulations <- function(ref, labels, mix, gep_mat, cor_mat, dep_list, sim_fr
 
     })
 
-    # TODO: Noise
-    if (!is.null(noise)) {
-      ctoi_sim_list_noised <- lapply(ctoi_sim_list, function(sim){
 
-        random_ref_samples <- sample(1:ncol(ref), size = ncol(sim), replace = FALSE)
 
-        if (sum(sim_fracs == 0) != 0) {
-          zero_index <- which(sim_fracs == 0)
-          noiseLevel <- -log2(sim_fracs[-zero_index]/(1/noise)) # % noise is from the original frac
-          ref_noise <- seqgendiff::thin_lib(round(ref[,random_ref_samples])[,-zero_index], thinlog2 = noiseLevel, type = "thin")$mat
-          if (zero_index == 1) {
-            # Zero is  the first column
-            ref_noise <- cbind(sim[,1]*0, ref_noise)
-          }else{
-            # Zero is the last column
-            ref_noise <- cbind(ref_noise, sim[,1]*0)
-          }
-        }else{
-          ref_noise <- seqgendiff::thin_lib(round(ref[,random_ref_samples])[,-zero_index], thinlog2 = -log2(sim_fracs/(1/noise)), type = "thin")$mat
-        }
+    do.call(cbind, ctoi_sim_list)
 
-        sim + ref_noise
-      })
-      do.call(cbind, ctoi_sim_list_noised)
-    }else{
-      do.call(cbind, ctoi_sim_list)
-    }
 
   }, mc.cores = ncores, mc.set.seed = FALSE)
   names(sim_list) <- celltypes
@@ -700,7 +677,6 @@ setClass("xCell2Signatures", slots = list(
 #' @param return_sigs description
 #' @param minPBcells description
 #' @param minPBgroups description
-#' @param sim_noise description
 #' @param ct_sims description
 #' @param filtLevel description
 #' @param sims_sample_frac description
@@ -712,7 +688,7 @@ setClass("xCell2Signatures", slots = list(
 xCell2Train <- function(ref, labels, data_type, mix = NULL, lineage_file = NULL, weightGenes = TRUE, medianGEP = TRUE, seed = 123, probs = c(0.01, 0.05, 0.1, 0.25, 0.333, 0.49),
                         sim_fracs = c(0, seq(0.01, 0.25, 0.005), seq(0.3, 1, 0.05)), diff_vals = c(1, 1.32, 1.585, 2, 3, 4, 5),
                         min_genes = 5, max_genes = 200, return_sigs = FALSE, sigsFile = NULL, minPBcells = 30, minPBsamples = 10,
-                        ct_sims = 10, sims_sample_frac = 0.1, simMethod = "ref_thin", sim_noise = NULL, filtLevel = "high", nCores = 1){
+                        ct_sims = 10, sims_sample_frac = 0.1, simMethod = "ref_thin", filtLevel = "high", nCores = 1){
 
 
   # Validate inputs
@@ -741,20 +717,23 @@ xCell2Train <- function(ref, labels, data_type, mix = NULL, lineage_file = NULL,
 
 
   # Get cell type dependencies list
-  message("Loading dependencies...")
-  if (is.null(lineage_file)) {
-    dep_list <- xCell2::xCell2GetLineage(labels, out_file = NULL)
+  if (all(is.na(labels.noont[,1]))) {
+    message("Cannot find cell types dependencies - no ontologies provided")
   }else{
-    dep_list <- getDependencies(lineage_file)
+    message("Loading dependencies...")
+    if (is.null(lineage_file)) {
+      dep_list <- xCell2::xCell2GetLineage(labels, out_file = NULL)
+    }else{
+      dep_list <- getDependencies(lineage_file)
+    }
   }
-
 
   # Generate/Load signatures
   if (is.null(sigsFile)) {
     # Generate signatures
     message("Calculating quantiles...")
     ref_log <- logTransformRef(ref) # Log2-transformation
-    quantiles_matrix <- makeQuantiles(ref_log, labels, probs, dep_list, ncores = nCores)
+    quantiles_matrix <- makeQuantiles(ref_log, labels, probs, ncores = nCores)
     message("Generating signatures...")
     signatures <- createSignatures(labels, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, weight_genes = weightGenes, ncores = nCores)
 
@@ -771,13 +750,14 @@ xCell2Train <- function(ref, labels, data_type, mix = NULL, lineage_file = NULL,
 
   # Make simulations
   message("Generating simulations...")
-  simulations <- makeSimulations(ref, labels, mix, gep_mat, cor_mat, dep_list, sim_fracs, sim_method = simMethod, ctoi_samples_frac = sims_sample_frac, n_sims = ct_sims, noise = sim_noise, ncores = nCores, seed2use = seed)
+  simulations <- makeSimulations(ref, labels, mix, gep_mat, cor_mat, dep_list, sim_fracs, sim_method = simMethod, ctoi_samples_frac = sims_sample_frac, n_sims = ct_sims, ncores = nCores, seed2use = seed)
   message("Scoring simulations...")
   simulations_scored <- scoreSimulations(signatures, simulations, nCores)
 
 
   # Filter signatures and train RF model
   message("Filtering signatures and training models...")
+  # TODO: remove sim_noise
   models <- trainModels(simulations_scored, consLvl = filtLevel, ncores = nCores, seed2use = seed)
   signatures <- signatures[unlist(models$sigs_filtered)]
   models <- models[,-3]
