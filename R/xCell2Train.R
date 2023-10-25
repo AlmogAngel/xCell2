@@ -717,7 +717,7 @@ xCell2Train <- function(ref, labels, data_type, mix = NULL, lineage_file = NULL,
 
 
   # Get cell type dependencies list
-  if (all(is.na(labels.noont[,1]))) {
+  if (all(is.na(labels[,1]))) {
     message("Cannot find cell types dependencies - no ontologies provided")
   }else{
     message("Loading dependencies...")
@@ -757,7 +757,6 @@ xCell2Train <- function(ref, labels, data_type, mix = NULL, lineage_file = NULL,
 
   # Filter signatures and train RF model
   message("Filtering signatures and training models...")
-  # TODO: remove sim_noise
   models <- trainModels(simulations_scored, consLvl = filtLevel, ncores = nCores, seed2use = seed)
   signatures <- signatures[unlist(models$sigs_filtered)]
   models <- models[,-3]
@@ -780,3 +779,4 @@ xCell2Train <- function(ref, labels, data_type, mix = NULL, lineage_file = NULL,
   return(xCell2Sigs.S4)
 
 }
+
