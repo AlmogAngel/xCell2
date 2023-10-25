@@ -717,15 +717,11 @@ xCell2Train <- function(ref, labels, data_type, mix = NULL, lineage_file = NULL,
 
 
   # Get cell type dependencies list
-  if (all(is.na(labels[,1]))) {
-    message("Cannot find cell types dependencies - no ontologies provided")
+  message("Loading dependencies...")
+  if (is.null(lineage_file)) {
+    dep_list <- xCell2::xCell2GetLineage(labels, out_file = NULL)
   }else{
-    message("Loading dependencies...")
-    if (is.null(lineage_file)) {
-      dep_list <- xCell2::xCell2GetLineage(labels, out_file = NULL)
-    }else{
-      dep_list <- getDependencies(lineage_file)
-    }
+    dep_list <- getDependencies(lineage_file)
   }
 
   # Generate/Load signatures
@@ -779,4 +775,3 @@ xCell2Train <- function(ref, labels, data_type, mix = NULL, lineage_file = NULL,
   return(xCell2Sigs.S4)
 
 }
-

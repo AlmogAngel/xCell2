@@ -13,20 +13,30 @@
 #' @export
 xCell2GetLineage <- function(labels, out_file){
 
-  cl <- ontoProc::getOnto(ontoname = "cellOnto", year_added = "2023")
-
   labels_uniq <- labels %>%
     as_tibble() %>%
     select(ont, label) %>%
     unique()
 
-  lineage.out <- labels_uniq %>%
-    rowwise() %>%
-    mutate(descendants = list(ontologyIndex::get_descendants(cl, roots = ont, exclude_roots = TRUE)),
-           ancestors = list(ontologyIndex::get_ancestors(cl, terms = ont))) %>%
-    mutate(ancestors = list(ancestors[ancestors != ont])) %>%
-    mutate(descendants = paste(pull(labels_uniq[pull(labels_uniq[,1]) %in% descendants, 2]), collapse = ";"),
-           ancestors = paste(pull(labels_uniq[pull(labels_uniq[,1]) %in% ancestors, 2]), collapse = ";"))
+
+  if (all(is.na(labels_uniq[,1]))) {
+    message("Cannot find cell types dependencies - no ontologies provided")
+    lineage.out <- labels_uniq %>%
+      mutate(descendants = "",
+             ancestors = "")
+
+  }else{
+    cl <- ontoProc::getOnto(ontoname = "cellOnto", year_added = "2023")
+
+    lineage.out <- labels_uniq %>%
+      rowwise() %>%
+      mutate(descendants = list(ontologyIndex::get_descendants(cl, roots = ont, exclude_roots = TRUE)),
+             ancestors = list(ontologyIndex::get_ancestors(cl, terms = ont))) %>%
+      mutate(ancestors = list(ancestors[ancestors != ont])) %>%
+      mutate(descendants = paste(pull(labels_uniq[pull(labels_uniq[,1]) %in% descendants, 2]), collapse = ";"),
+             ancestors = paste(pull(labels_uniq[pull(labels_uniq[,1]) %in% ancestors, 2]), collapse = ";"))
+  }
+
 
   # If not output provided xCell2GetLineage will return dependencies right away
   if (is.null(out_file)) {
