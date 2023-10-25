@@ -259,9 +259,9 @@ createSignatures <- function(labels, dep_list, quantiles_matrix, probs, cor_mat,
       # Round and sort top genes scores
       top_scores <- sort(unique(round(gene_passed-0.5)), decreasing = TRUE)
 
-      # Take top n_top_scores highest scores
-      # n_top_scores <- ifelse(length(top_scores) > n_top_scores, n_top_scores, length(top_scores))
-      # for (score in top_scores[1:n_top_scores])
+      # Take top 50% highest scores from top_scores
+      top_scores <- top_scores[top_scores >= median(top_scores)]
+
 
       for (score in top_scores) {
 
