@@ -1,97 +1,196 @@
-# # Load parameters
-# ref.in <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/references/ts_blood_ref.rds")
-# ref = ref.in$ref
-# labels = ref.in$labels
-# data_type = "sc"
-# lineage_file = ref.in$lineage_file
-# mixture_fractions = c(0, 0.001, 0.005, seq(0.01, 0.25, 0.03))
-# probs = seq(0.25, 0.5, 0.05)
-# diff_vals = c(0, 0.25, 0.5, 1, 1.5, 2, 3, 4, 5, 10, 12, 15, 17)
-# min_genes = 2
-# max_genes = 200
+library(tidyverse)
+library(xCell2)
+library(parallel)
+
+# Load reference
+ref.in <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/references/kass_tumor_ref.rds")
+ref = ref.in$ref
+labels = ref.in$labels
+
+# Load mixture
+cyto.vals <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/ref_val_pairs/cyto.vals.rds")
+val_dataset = "ccRCC_cytof_CD45+"
+val_type = "tumor"
+mix <- cyto.vals$mixtures[[val_type]][[val_dataset]]
+
+# Set data type
+data_type = "rnaseq"
+
+# Get shared genes
+if (data_type == "sc") {
+  shared_clean_genes <- xCell2CleanGenes(ref = ref, mix = mix, top_var_genes = TRUE, use_protein_coding = TRUE, n_var_genes = 5000)
+}else{
+  shared_clean_genes <- xCell2CleanGenes(ref = ref, mix = mix, top_var_genes = FALSE, use_protein_coding = FALSE, n_var_genes = 5000)
+}
+ref <- shared_clean_genes$ref
+mix <- shared_clean_genes$mix
+
+# Load parameters
+lineage_file = ref.in$lineage_file
+sim_fracs = c(0, seq(0.01, 0.25, 0.002), seq(0.3, 1, 0.05))
+diff_vals = c(1, 1.32, 1.585, 2, 3, 4, 5)
+probs = c(0.01, 0.05, 0.1, 0.25, 0.333, 0.49)
+min_genes = 5
+max_genes = 200
+return_sigs = FALSE
+sigsFile = NULL
+minPBcells = 30
+minPBsamples = 10
+weightGenes = TRUE
+medianGEP = TRUE
+sim_noise = NULL
+ct_sims = 10
+sims_sample_frac = 0.1
+filtLevel = "high"
+# high, medium, low
+seed = 123
+nCores = 20
+# mix = NULL
+simMethod = "ref_mix_thin"
+# c("ref_multi", "ref_thin", "ref_mix_thin")
+
+
+# Load signature
+# sigsFile = "/bigdata/almogangel/xCell2_data/dev_data/sigs/BG_blood_ts_blood_sigs.rds"
+
 
 validateInputs <- function(ref, labels, data_type){
   if (length(unique(labels$label)) < 3) {
-    stop("Reference must have at least 3 different cell types")
+    stop("Reference must have at least 3 cell types")
   }
 
   if (!any(class(ref) %in% c("matrix", "dgCMatrix", "Matrix"))) {
-    stop("ref should be as matrix.")
+    stop("ref must be one of those classes: matrix, dgCMatrix, Matrix")
   }
 
   if (!"data.frame" %in% class(labels)) {
-    stop("labels should be as dataframe.")
+    stop("labels must be a dataframe.")
   }
 
   if (!data_type %in% c("rnaseq", "array", "sc")) {
-    stop("data_type should be rnaseq, array or scrnaseq.")
+    stop("data_type should be 'rnaseq', 'array' or 'sc'.")
   }
-
-  # if (sum(grepl("_", labels$label)) != 0 | sum(grepl("_", rownames(ref))) != 0) {
-  #   message("Changing underscores to dashes in genes / cell-types labels!")
-  #   labels$label <- gsub("_", "-", labels$label)
-  #   rownames(ref) <- gsub("_", "-", rownames(ref))
-  # }
 
   if (sum(grepl("_", labels$label)) != 0) {
     message("Changing underscores to dashes in cell-types labels!")
     labels$label <- gsub("_", "-", labels$label)
   }
 
+
   out <- list(ref = ref,
               labels = labels)
   return(out)
 
 }
-getTopVariableGenes <- function(ref, max_genes){
+# TODO: Write a function for TPM/CPM normalization for bulk reference
+normRef <- function(ref, data_type){
 
-  ref.srt <- Seurat::CreateSeuratObject(counts = ref)
-  ref.srt <- Seurat::FindVariableFeatures(ref.srt, selection.method = "vst")
-  plot1 <- Seurat::VariableFeaturePlot(ref.srt)
-  genesVar <- plot1$data$variance.standardized
-  names(genesVar) <- rownames(plot1$data)
-  genesVar <- sort(genesVar, decreasing = TRUE)
-  genesVar <- genesVar[genesVar > 0]
-  genes <- names(genesVar[1:max_genes])
+  if(all(ref == floor(ref))){
+    if (data_type == "sc") {
+      message("Normalizing scRNA-Seq counts to CPM.")
+      lib_sizes <- Matrix::colSums(ref)
+      norm_factor <- 1000000 / lib_sizes
+      ref_norm <- ref %*% Matrix::Diagonal(x = norm_factor)
+      colnames(ref_norm) <- colnames(ref)
+      ref_norm <- as.matrix(ref_norm)
+      return(ref_norm)
+    }else{
+      # TODO: Write a function for TPM normalization for bulk reference
+      message("Normalizing counts to TPM.")
+      return(ref_norm)
+    }
+  }else{
+    message("Assuming reference already normalized.")
+    return(ref)
+  }
 
-  return(genes)
 }
-makePureCTMat <- function(ref, labels, use_median){
+sc2pseudoBulk <- function(ref, labels, min_n_cells, min_ps_samples, seed2use){
+
+  set.seed(seed2use)
 
   celltypes <- unique(labels$label)
 
-  pure_ct_mat <- sapply(celltypes, function(type){
+  groups_list <- lapply(celltypes, function(ctoi){
+
+    ctoi_samples <- labels[labels$label == ctoi,]$sample
+
+    # Calculate maximum possible number of groups given min_n_cells
+    num_groups <- ceiling(length(ctoi_samples) / min_n_cells)
+    if (num_groups < min_ps_samples) {
+      num_groups <- min_ps_samples
+    }
+
+    # Generate min_ps_samples pseudo samples of CTOI
+    if (length(ctoi_samples) > min_ps_samples) {
+
+      ctoi_samples_shuffled <- sample(ctoi_samples, length(ctoi_samples))
+      list_of_ctoi_samples_shuffled <- split(ctoi_samples_shuffled, ceiling(seq_along(ctoi_samples_shuffled) / (length(ctoi_samples_shuffled) / num_groups)))
+
+      sapply(list_of_ctoi_samples_shuffled, function(ctoi_group){
+        if (length(ctoi_group) == 1) {
+          ref[,ctoi_group]
+        }else{
+          if("matrix" %in% class(ref)) Rfast::rowsums(ref[,ctoi_group]) else Matrix::rowSums(ref[,ctoi_group])
+        }
+      })
+
+    }else{
+      ref[,ctoi_samples]
+    }
+
+  })
+
+  names(groups_list) <- celltypes
+  pseudo_ref <- as.matrix(bind_cols(groups_list))
+  rownames(pseudo_ref) <- rownames(ref)
+
+  pseudo_label <- tibble(labels) %>%
+    select(ont, label) %>%
+    unique() %>%
+    right_join(., tibble(label = sub("\\.\\d+$", "", colnames(pseudo_ref)), sample = colnames(pseudo_ref), dataset = "pseudoBulk"), by = "label") %>%
+    as.data.frame()
+
+  return(list(ref = pseudo_ref, labels = pseudo_label))
+
+}
+makeGEPMat <- function(ref, labels, use_median){
+
+  celltypes <- unique(labels$label)
+
+  gep_mat <- sapply(celltypes, function(type){
     type_samples <- labels[,2] == type
     if (sum(type_samples) == 1) {
       type_vec <- as.vector(ref[,type_samples])
     }else{
       if(use_median){
-        type_vec <- if("matrix" %in% class(ref)) Rfast::rowMedians(ref[,type_samples]) else sparseMatrixStats::rowMedians(ref[,type_samples])
+        type_vec <- Rfast::rowMedians(as.matrix(ref[,type_samples]))
       }else{
-        type_vec <- if("matrix" %in% class(ref)) Rfast::rowmeans(ref[,type_samples]) else Matrix::rowMeans(ref[,type_samples])
+        type_vec <- Rfast::rowmeans(as.matrix(ref[,type_samples]))
       }
     }
   })
-  rownames(pure_ct_mat) <- rownames(ref)
+  rownames(gep_mat) <- rownames(ref)
 
-  return(pure_ct_mat)
+  return(gep_mat)
 }
-getCellTypeCorrelation <- function(pure_ct_mat, data_type){
+getCellTypeCorrelation <- function(gep_mat, data_type){
 
-  celltypes <- colnames(pure_ct_mat)
+  celltypes <- colnames(gep_mat)
 
   if (data_type != "sc") {
 
     # Use top 10% most variable genes
-    genes_var <- apply(pure_ct_mat, 1, var)
+    genes_var <- apply(gep_mat, 1, var)
     most_var_genes_cutoff <- quantile(genes_var, 0.9, na.rm=TRUE)
-    pure_ct_mat <- pure_ct_mat[genes_var > most_var_genes_cutoff,]
+    gep_mat <- gep_mat[genes_var > most_var_genes_cutoff,]
 
   }else{
+
     # Use top 1% most variable genes
-    genes_var <- apply(pure_ct_mat, 1, var)
+    genes_var <- apply(gep_mat, 1, var)
     most_var_genes_cutoff <- quantile(genes_var, 0.99, na.rm=TRUE)
-    pure_ct_mat <- pure_ct_mat[genes_var > most_var_genes_cutoff,]
+    gep_mat <- gep_mat[genes_var > most_var_genes_cutoff,]
 
   }
 
@@ -104,8 +203,8 @@ getCellTypeCorrelation <- function(pure_ct_mat, data_type){
   for (i in 1:nrow(lower_tri_coord)) {
     celltype_i <- rownames(cor_mat)[lower_tri_coord[i, 1]]
     celltype_j <- colnames(cor_mat)[lower_tri_coord[i, 2]]
-    cor_mat[lower_tri_coord[i, 1], lower_tri_coord[i, 2]] <- cor(pure_ct_mat[,celltype_i], pure_ct_mat[,celltype_j], method = "spearman")
-    cor_mat[lower_tri_coord[i, 2], lower_tri_coord[i, 1]] <- cor(pure_ct_mat[,celltype_i], pure_ct_mat[,celltype_j], method = "spearman")
+    cor_mat[lower_tri_coord[i, 1], lower_tri_coord[i, 2]] <- cor(gep_mat[,celltype_i], gep_mat[,celltype_j], method = "spearman")
+    cor_mat[lower_tri_coord[i, 2], lower_tri_coord[i, 1]] <- cor(gep_mat[,celltype_i], gep_mat[,celltype_j], method = "spearman")
   }
 
   return(cor_mat)
@@ -132,35 +231,42 @@ getDependencies <- function(lineage_file_checked){
 
   return(dep_list)
 }
-makeQuantiles <- function(ref, labels, probs, dep_list, include_descendants){
+logTransformRef <- function(ref){
+
+  if(max(ref) >= 50){
+    message("> Transforming reference to log2-space (maximum expression value >= 50).")
+    ref.log2 <- log2(ref+1)
+    return(ref.log2)
+  }else{
+    message("> Assuming reference is already in log2-space (maximum expression value < 50).")
+    return(ref)
+  }
+
+}
+makeQuantiles <- function(ref, labels, probs, ncores){
 
   celltypes <- unique(labels[,2])
 
-  quantiles_matrix <-  pbapply::pblapply(celltypes, function(type){
+  quantiles_mat_list <-  parallel::mclapply(celltypes, function(type){
 
-    # Include all the descendants of the cell type in the quantiles calculations
-    if (include_descendants) {
-      descen_cells <- dep_list[[type]]$descendants
-      type_samples <- labels[,2] == type | labels[,2] %in% descen_cells
-    }else{
-      type_samples <- labels[,2] == type
-    }
+    type_samples <- labels[,2] == type
 
-    # If there is one sample for this cell type -> duplicate the sample to make a data frame
     if (sum(type_samples) == 1) {
+      # If there is one sample for this cell type -> duplicate the sample to make a data frame
       type.df <- cbind(ref[,type_samples], ref[,type_samples])
     }else{
       type.df <- ref[,type_samples]
     }
 
     # Calculate quantiles
-    quantiles_matrix <- apply(type.df, 1, function(x) quantile(x, unique(c(probs, rev(1-probs))), na.rm=TRUE))
-  })
-  names(quantiles_matrix) <- celltypes
+    # TODO: Balance quantiles by dataset
+    type_quantiles_matrix <- apply(type.df, 1, function(x) quantile(x, unique(c(probs, rev(1-probs))), na.rm=TRUE))
+  }, mc.cores = ncores, mc.set.seed = FALSE)
+  names(quantiles_mat_list) <- celltypes
 
-  return(quantiles_matrix)
+  return(quantiles_mat_list)
 }
-createSignatures <- function(ref, labels, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, weight_genes){
+createSignatures <- function(labels, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, weight_genes, ncores){
 
 
   getSigs <- function(celltypes, type, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, weight_genes){
@@ -168,17 +274,17 @@ createSignatures <- function(ref, labels, dep_list, quantiles_matrix, probs, cor
     # Remove dependent cell types
     not_dep_celltypes <- celltypes[!celltypes %in% c(type, unname(unlist(dep_list[[type]])))]
 
-    # Signature parameters
+    # Set signature thresholds grid
     param.df <- expand.grid("diff_vals" = diff_vals, "probs" = probs)
 
     # Generate signatures
     type_sigs <- list()
-    for(i in 1:nrow(param.df)){
+    for (i in 1:nrow(param.df)){
 
       # Get a Boolean matrices with genes that pass the quantiles criteria
-      diff <- param.df[i, ]$diff_vals # diffrence criteria
-      lower_prob <- which(probs == param.df[i, ]$probs) # lower quantile criteria
-      upper_prob <- nrow(quantiles_matrix[[1]])-lower_prob+1 # upper quantile criteria
+      diff <- param.df[i, ]$diff_vals # difference threshold
+      lower_prob <- which(probs == param.df[i, ]$probs) # lower quantile cutoff
+      upper_prob <- nrow(quantiles_matrix[[1]])-lower_prob+1 # upper quantile cutoff
 
       diff_genes.mat <- sapply(not_dep_celltypes, function(x){
         get(type, quantiles_matrix)[lower_prob,] > get(x, quantiles_matrix)[upper_prob,] + diff
@@ -186,540 +292,409 @@ createSignatures <- function(ref, labels, dep_list, quantiles_matrix, probs, cor
 
 
       if(weight_genes){
-        # Score genes using weights
+        # Score genes using cell types correlations as weights
         type_weights <- cor_mat[type, not_dep_celltypes]
-        type_weights[type_weights < 0.001] <- 0.001 # Minimum correlation to fix zero and negative correlations
-
+        type_weights[type_weights < 0.001] <- 0.001 # Fix minimum correlation to avoid zero and negative correlations
         gene_scores <- apply(diff_genes.mat, 1, function(x){
           sum(type_weights[which(x)])
         })
       }else{
+        # All cell types scores are the same
         gene_scores <- apply(diff_genes.mat, 1, function(x){
           sum(x)
         })
       }
 
-
-      gene_passed <- gene_scores[gene_scores > 0]
+      gene_passed <- sort(gene_scores[gene_scores > 0], decreasing = TRUE)
 
       # If less than min_genes passed move to next parameters
       if (length(gene_passed) < min_genes) {
         next
       }
 
-      # Save signatures
-      gene_passed <- sort(gene_passed, decreasing = TRUE)
-      gaps <- seq(0, 1, length.out = 40)
-      n_sig_genes <- unique(round(min_genes + (gaps ^ 2) * (max_genes - min_genes)))
-      for (n_genes in n_sig_genes) {
+      # Round and sort top genes scores
+      top_scores <- sort(unique(round(gene_passed-0.5)), decreasing = TRUE)
 
-        if (length(gene_passed) < n_genes) {
+      # Take top n_top_scores highest scores
+      # n_top_scores <- ifelse(length(top_scores) > n_top_scores, n_top_scores, length(top_scores))
+      # for (score in top_scores[1:n_top_scores])
+
+      for (score in top_scores) {
+
+        n_genes <- sum(gene_passed >= score)
+
+        if (n_genes < min_genes) {
+          next
+        }
+
+        if (n_genes > max_genes) {
           break
         }
 
         sig_name <-  paste(paste0(type, "#"), param.df[i, ]$probs, diff, n_genes, sep = "_")
-        type_sigs[[sig_name]] <- GSEABase::GeneSet(names(gene_passed[1:n_genes]), setName = sig_name)
+        type_sigs[[sig_name]] <- names(which(gene_passed >= score))
       }
 
     }
 
-    if (length(type_sigs) == 0) {
-      warning(paste0("No signatures found for ", type))
+
+    # Remove duplicate signatures
+    type_sigs_sorted <- lapply(type_sigs, function(x) sort(x))
+    type_sigs_sorted_collapsed <- sapply(type_sigs_sorted, paste, collapse = ",")
+    duplicated_sigs <- duplicated(type_sigs_sorted_collapsed)
+    type_sigs <- type_sigs[!duplicated_sigs]
+
+    if (length(type_sigs) < 3) {
+      warnings(paste0("Not enough signatures found for ", type))
     }
 
     return(type_sigs)
   }
 
+
   celltypes <- unique(labels[,2])
 
-  all_sigs <- pbapply::pblapply(celltypes, function(type){
+  all_sigs <- parallel::mclapply(celltypes, function(type){
     getSigs(celltypes, type, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, weight_genes)
-  })
-  all_sigs <- unlist(all_sigs)
+  }, mc.cores = ncores, mc.set.seed = FALSE)
+
+
+  all_sigs <- unlist(all_sigs, recursive = FALSE)
 
 
   if (length(all_sigs) == 0) {
-    warning("No signatures found for reference!")
+    stop("No signatures found for reference!")
   }
 
-  # Make GeneSetCollection object
-  signatures_collection <- GSEABase::GeneSetCollection(all_sigs)
 
-
-  return(signatures_collection)
+  return(all_sigs)
 }
-filterSignatures <- function(ref, labels, mixture_fractions, dep_list, cor_mat, pure_ct_mat, signatures_collection, use_median, data_type){
+makeSimulations <- function(ref, labels, mix, gep_mat, cor_mat, dep_list, sim_fracs, sim_method, ctoi_samples_frac, n_sims, ncores, seed2use){
 
-  # Make mixture matrix (from pure_ct_mat) for the first filtering criteria
-  makeMixture <- function(pure_ct_mat, cor_mat, dep_list, mix_frac){
+  set.seed(seed2use)
 
-    # Make fractional CTOI and control matrices
-    ctoi_mat <- pure_ct_mat * mix_frac
-    celltypes <- colnames(pure_ct_mat)
-
-    controls <- unname(sapply(celltypes, function(ctoi){
-      dep_cts <- unname(unlist(dep_list[[ctoi]]))
-      not_dep_cts <- celltypes[!celltypes %in% dep_cts]
-      names(sort(cor_mat[ctoi, not_dep_cts])[1])
-    }))
-
-    controls_mat <- sapply(controls, function(ctrl){
-      pure_ct_mat[,ctrl] * (1-mix_frac)
-    })
-
-    # Combine fractional matrices to a mixture
-    mix_names <- paste0(colnames(ctoi_mat), "%%", colnames(controls_mat))
-    mix_mat <- ctoi_mat + controls_mat
-    colnames(mix_mat) <- mix_names
-
-    # In case there is one control for all other cell types -> make a second controls matrix just for him
-    controls_abundance <- sort(table(controls), decreasing = TRUE)
-    if(controls_abundance[1] == length(celltypes)-1){
-      abundant_control <- names(controls_abundance[1])
-      controls2 <- unname(sapply(celltypes, function(ctoi){
-        dep_cts <- unname(unlist(dep_list[[ctoi]]))
-        not_dep_cts <- celltypes[!celltypes %in% dep_cts]
-        not_dep_cts <- not_dep_cts[not_dep_cts != abundant_control]
-        names(sort(cor_mat[ctoi, not_dep_cts])[1])
-      }))
-      controls_mat2 <- sapply(controls2, function(ctrl){
-        pure_ct_mat[,ctrl] * (1-mix_frac)
-      })
-
-      mix_names2 <- paste0(colnames(ctoi_mat), "%%", colnames(controls_mat2))
-      mix_mat2 <- ctoi_mat + controls_mat2
-      colnames(mix_mat2) <- mix_names2
-
-      mixtures_list <- list(mix1 = list(mix_mat = mix_mat, controls_mat = controls_mat),  mix2 = mix_mat2)
-
-    }else{
-      mixtures_list <- list(mix1 = list(mix_mat = mix_mat, controls_mat = controls_mat), mix2 = NULL)
-
-    }
-
-    return(mixtures_list)
-
-  }
-  scoreMixture <- function(mix, signatures_collection, dep_list){
-
-    # Score
-    mix_ranked <- singscore::rankGenes(mix)
-    scores <- sapply(signatures_collection, simplify = TRUE, function(sig){
-      singscore::simpleScore(mix_ranked, upSet = sig, centerScore = FALSE)$TotalScore
-    })
-    rownames(scores) <- colnames(mix)
-    colnames(scores) <- names(signatures_collection)
-
-    # Make tidy
-    scores_tidy <- as_tibble(scores, rownames = "cts_sims") %>%
-      pivot_longer(cols = -cts_sims, names_to = "signature", values_to = "score") %>%
-      separate(cts_sims, into = c("mix_celltype", "mix_control"), sep = "%%") %>%
-      separate(signature, into = "sig_celltype", sep = "#", extra = "drop", remove = FALSE)
-
-    # Clean scores
-    scores_tidy_clean <- scores_tidy %>%
-      filter(sig_celltype != mix_control) %>% # Signature cell type cannot be the same as the control
-      rowwise() %>%
-      filter(!mix_celltype %in% unname(unlist(dep_list[[sig_celltype]])) & !mix_control %in% unname(unlist(dep_list[[sig_celltype]])))  # Simulation CTOI/control cannot be dependent on signature cell type
-
-    return(scores_tidy_clean)
-
-  }
-
-
-  # (1) First filtering - Top of delta score between CTOI and median score (of all other cell types)
-
-  mix_frac <- mixture_fractions[length(mixture_fractions)] # Use the highest fraction
-  mix_list <- makeMixture(pure_ct_mat, cor_mat, dep_list, mix_frac)
-  mix_scores_tidy_clean <- scoreMixture(mix_list$mix1$mix_mat, signatures_collection, dep_list)
-
-  median_sig_score <- mix_scores_tidy_clean %>%
-    ungroup() %>%
-    filter(sig_celltype != mix_celltype) %>%
-    group_by(signature) %>%
-    summarise(median_score = median(score))
-
-  sigsPassed <- mix_scores_tidy_clean %>%
-    ungroup() %>%
-    filter(sig_celltype == mix_celltype) %>%
-    left_join(median_sig_score, by = "signature") %>%
-    drop_na() %>%  # Some CTOI might not have scores with other cell types (because of controls)
-    ungroup() %>%
-    mutate(delta_score = score - median_score) %>%
-    group_by(sig_celltype) %>%
-    top_frac(n=0.2, wt=delta_score) %>%
-    pull(signature)
-
-  # If a cell types lost in this filtering step because it is the control of all others
-  if(!is.null(mix_list$mix2)){
-
-    celltypes <- unique(labels$label)
-    lost_ct <- celltypes[!celltypes %in% gsub("#.*", "", sigsPassed)]
-
-    mix_scores_tidy_clean_lost_ct <- scoreMixture(mix_list$mix2, signatures_collection[startsWith(names(signatures_collection), paste0(lost_ct, "#"))], dep_list)
-
-    median_sig_score_lost_ct <- mix_scores_tidy_clean_lost_ct %>%
-      ungroup() %>%
-      filter(sig_celltype != mix_celltype) %>%
-      group_by(signature) %>%
-      summarise(median_score = median(score))
-
-    sigsPassed_lost_ct <- mix_scores_tidy_clean_lost_ct %>%
-      ungroup() %>%
-      filter(sig_celltype == mix_celltype) %>%
-      left_join(median_sig_score_lost_ct, by = "signature") %>%
-      mutate(delta_score = score - median_score) %>%
-      group_by(sig_celltype) %>%
-      top_frac(n=0.2, wt=delta_score) %>%
-      pull(signature)
-
-    sigsPassed <- c(sigsPassed, sigsPassed_lost_ct)
-  }
-
-  # If a cell types lost in this filtering step because every other cell types in dependencies
   celltypes <- unique(labels$label)
-  lost_ct <- celltypes[!celltypes %in% gsub("#.*", "", sigsPassed)]
-  if(length(lost_ct) > 0){
-    lost_sigs <- names(signatures_collection)[startsWith(names(signatures_collection), paste0(lost_ct, "#"))]
-    sigsPassed <- c(sigsPassed, lost_sigs)
+
+  getSubMatrix <- function(mat, sim_fracs, n_samples_sim){
+    if (class(mat)[1] == "numeric") {
+      mat_sub <- matrix(rep(mat, length(sim_fracs)), byrow = FALSE, ncol = length(sim_fracs))
+      rownames(mat_sub) <- rownames(mat)
+    }else{
+      mat_sub <- sapply(1:length(sim_fracs), function(i){
+        mat_tmp <- mat[,sample(1:ncol(mat), n_samples_sim)]
+        if (class(mat_tmp)[1] == "numeric") {
+          mat_tmp
+        }else{
+          rowMeans(mat_tmp)
+        }
+      })
+    }
+
+    rownames(mat_sub) <- rownames(mat)
+
+    return(mat_sub)
+  }
+  adjustLibSize <- function(ctoi_mat, controls_mat){
+
+    # Scale to simulate counts data
+    scale_factor <- 10000
+    ctoi_mat_scaled <- round(ctoi_mat * scale_factor)
+    controls_mat_scaled <- round(controls_mat * scale_factor)
+
+    # Adjust reference-controls library size
+    min_lib_size <- min(min(colSums(ctoi_mat_scaled)), min(colSums(controls_mat_scaled)))
+    ref_ctoi_sub_lib_fracs <- min_lib_size/colSums(ctoi_mat_scaled)
+    ref_controls_sub_lib_fracs <- min_lib_size/colSums(controls_mat_scaled)
+
+    # Thin data to adjust lib size
+    ctoi_mat_scaled_thin <- seqgendiff::thin_lib(ctoi_mat_scaled, thinlog2 = -log2(ref_ctoi_sub_lib_fracs), type = "thin")$mat
+    controls_mat_scaled_thin <- seqgendiff::thin_lib(controls_mat_scaled, thinlog2 = -log2(ref_controls_sub_lib_fracs), type = "thin")$mat
+
+    # Unscale
+    ctoi_mat_thin <- ctoi_mat_scaled_thin/scale_factor
+    rownames(ctoi_mat_thin) <- rownames(ctoi_mat)
+    controls_mat_thin <- controls_mat_scaled_thin/scale_factor
+    rownames(controls_mat_thin) <- rownames(controls_mat)
+
+    return(list(ctoi_mat_thin = ctoi_mat_thin, controls_mat_thin = controls_mat_thin))
+  }
+  makeFractionMatrix <- function(mat, sim_fracs, sim_method, control){
+
+
+    # Check if data not in counts (all integers) because you can't thin fractions (?)
+    if (sim_method != "ref_multi") {
+      scale_factor <- 10000 # TODO: Ask Anna
+      mat <- round(mat * scale_factor)
+    }
+
+    # Adjust simulation fractions for controls
+    if (control) {
+      sim_fracs <- 1-sim_fracs
+    }
+
+
+    # Multiply reference matrix to simulate fractions
+    if (sim_method == "ref_multi") {
+      sim <- mat %*% diag(sim_fracs)
+    }else{
+      # Thin reference/mixture to simulate fractions
+      if (sum(sim_fracs == 0) != 0) { # Can't thin when frac = 0
+        zero_index <- which(sim_fracs == 0)
+        sim_fracs[zero_index] <- 0.001
+        sim <- seqgendiff::thin_lib(mat, thinlog2 = -log2(sim_fracs), type = "thin")$mat
+        sim_fracs[zero_index] <- 0
+        sim <- sim/scale_factor
+        sim[,zero_index] <- 0
+      }else{
+        sim <- seqgendiff::thin_lib(mat, thinlog2 = -log2(sim_fracs), type = "thin")$mat
+      }
+    }
+
+    rownames(sim) <- rownames(mat)
+
+    return(sim)
   }
 
-  # Second filtering - Top Spearman correlation with simulations
-  signatures_filtered <- signatures_collection[names(signatures_collection) %in% sigsPassed]
 
-  # Make simulations
-  makeSimulations <- function(ref, labels, mixture_fractions, dep_list, cor_mat, n_ct_sim, add_noise, use_median = FALSE, seed = 123){
+  sim_list <- parallel::mclapply(celltypes, function(ctoi){
 
-    set.seed(seed)
+    ref_ctoi <- ref[,labels$label == ctoi]
 
-    makeFractionMatrixCTOI <- function(ref, mixture_fractions, ctoi_samples2use, use_median){
+    # Number of CTOI samples to use for each simulation
+    n_samples_sim <- round(ncol(ref_ctoi) * ctoi_samples_frac)
+    n_samples_sim <- ifelse(n_samples_sim < 1, 1, n_samples_sim)
 
-      if (use_median) {
-        ctoi_median_expression <- if("matrix" %in% class(ref)) Rfast::rowMedians(ref[,ctoi_samples2use]) else sparseMatrixStats::rowMedians(ref[,ctoi_samples2use])
-      }else{
-        ctoi_median_expression <- if("matrix" %in% class(ref)) Rfast::rowmeans(ref[,ctoi_samples2use]) else Matrix::rowMeans(ref[,ctoi_samples2use])
-      }
-      ctoi_frac_mat <- matrix(rep(ctoi_median_expression, length(mixture_fractions)), byrow = FALSE, ncol = length(mixture_fractions)) %*% diag(mixture_fractions)
-      rownames(ctoi_frac_mat) <- rownames(ref)
-
-      # # Make CTOI fraction matrix
-      # ctoi_frac_mat <- matrix(NA, nrow = nrow(ref), ncol = length(mixture_fractions), dimnames = list(rownames(ref), mixture_fractions))
-      # for (i in 1:length(mixture_fractions)) {
-      #   frac <- mixture_fractions[i]
-      #   frac_fracs <- diff(c(0, sort(runif(length(ctoi_samples2use)-1, min = 0, max = frac)), frac)) # Generate random fraction for each sample to sum to frac in mixture_fractions
-      #   ctoi_frac_mat[,i] <- Rfast::rowsums(ref[,ctoi_samples2use] %*% diag(frac_fracs)) # Sum all fractions
-      # }
-
-      return(ctoi_frac_mat)
-    }
-    makeFractionMatrixControls <- function(ref, labels, mixture_fractions, control_ct, use_median){
-
-
-      # Pick control samples
-      control_samples <- labels %>%
-        filter(label == control_ct) %>%
-        slice_sample(n=length(mixture_fractions)) %>%
-        pull(sample)
-
-      if (length(control_samples) == 1) {
-        controls_median_expression <- ref[,control_samples]
-      }else{
-        if (use_median) {
-          controls_median_expression <- if("matrix" %in% class(ref)) Rfast::rowMedians(ref[,control_samples]) else sparseMatrixStats::rowMedians(ref[,control_samples])
-        }else{
-          controls_median_expression <- if("matrix" %in% class(ref)) Rfast::rowmeans(ref[,control_samples]) else Matrix::rowMeans(ref[,control_samples])
-        }
-      }
-
-      controls_mat <- matrix(rep(controls_median_expression, length(mixture_fractions)), byrow = FALSE, ncol = length(mixture_fractions)) %*% diag(1-mixture_fractions)
-      rownames(controls_mat) <- rownames(ref)
-
-
-      # controls_mat <- sapply(1-mixture_fractions, function(frac){
-      #   random_fracs <- diff(c(0, sort(runif(ncol(controls_expression)-1, min = 0, max = frac)), frac)) # Generate random numbers from the controls from a uniform distribution that sum to frac
-      #   Rfast::rowsums(controls_expression %*% diag(random_fracs))
-      # })
-
-      return(controls_mat)
-
-    }
-
-
-    sim_list <- pbapply::pblapply(celltypes, function(ctoi){
-      # Sort CTOI samples to be homogeneous by datasets
-      ctoi_samples_pool <- c()
-      while(!all(labels[labels$label == ctoi,]$sample %in% ctoi_samples_pool)) {
-        ctoi_samples_pool <- c(ctoi_samples_pool,
-                               labels %>%
-                                 filter(label == ctoi & !sample %in% ctoi_samples_pool) %>%
-                                 slice_head(n = 1, by = dataset) %>%
-                                 pull(sample))
-      }
-
-      if (length(ctoi_samples_pool) < length(mixture_fractions)) {
-        ctoi_samples_pool <- rep(ctoi_samples_pool, length(mixture_fractions))
-      }
-
-      # Get dependent cell types
+    if (sim_method != "ref_mix_thin") {
+      # Get control cell types
       dep_cts <- unique(c(ctoi, unname(unlist(dep_list[[ctoi]]))))
-
-      # Get number of available datasets of this cell type (for adding noise)...
-      n_ctoi_ds <- length(unique(labels[labels$label == ctoi,]$dataset))
-
-
-      ctoi_sim_list <- lapply(1:n_ct_sim, function(i){
-
-        ctoi_samples2use <- ctoi_samples_pool[1:length(mixture_fractions)] # Choose the first samples (homogeneous by datasets)
-        ctoi_frac_mat <- makeFractionMatrixCTOI(ref, mixture_fractions, ctoi_samples2use, use_median)
-        ctoi_samples_pool <- c(ctoi_samples_pool[!ctoi_samples_pool %in% ctoi_samples2use], ctoi_samples2use) # Move ctoi_samples2use to be last
-
-        # Make Controls fraction matrix
-        if(sum(!colnames(cor_mat) %in% dep_cts) == 1){
-          control_ct <- colnames(cor_mat)[!colnames(cor_mat) %in% dep_cts]
-        }else{
-          control_ct <- names(sort(cor_mat[ctoi, !colnames(cor_mat) %in% dep_cts])[1])
-        }
-
-        controls_frac_mat <- makeFractionMatrixControls(ref, labels, mixture_fractions, control_ct, use_median)
-
-        # Combine CTOI and controls fractions matrix
-        simulation <- ctoi_frac_mat + controls_frac_mat
-        colnames(simulation) <- paste0(control_ct, "%%", mixture_fractions)
-
-        # Add noise
-        if (add_noise) {
-          noise_sd <- 1/n_ctoi_ds
-          noise <- matrix(rnorm(nrow(simulation) * ncol(simulation), mean = 0, sd = noise_sd),
-                          nrow = nrow(simulation), ncol = ncol(simulation))
-          simulation <- simulation + noise
-          simulation <- pmax(simulation, 0)
-        }
-
-        simulation
-      })
-      names(ctoi_sim_list) <- paste0("sim-", 1:n_ct_sim)
-
-      ctoi_sim_list
-
-    })
-    names(sim_list) <- celltypes
-
-    return(sim_list)
-
-  }
-  # Score CTOI simulations
-  scoreCTOISimulations <- function(signatures, sim_list){
-
-    celltypes <- names(sim_list)
-    out <- pbapply::pblapply(celltypes, function(ctoi){
-
-      signatures_ctoi <- signatures[startsWith(names(signatures), paste0(ctoi, "#"))]
-
-      scores_ctoi <- lapply(sim_list[[ctoi]], function(sim){
-        sim_ranked <- singscore::rankGenes(sim)
-        scores <- t(sapply(signatures_ctoi, simplify = TRUE, function(sig){
-          singscore::simpleScore(sim_ranked, upSet = sig, centerScore = FALSE)$TotalScore
-        }))
-
-        rownames(scores) <- names(signatures_ctoi)
-        colnames(scores) <- colnames(sim)
-
-        scores
-      })
-      scores_ctoi
-
-    })
-    names(out) <- celltypes
-    return(out)
-  }
-  # Get simulation correlations results
-  mat2tidy <- function(mat){
-    names <- rownames(mat)
-    as_tibble(mat) %>%
-      mutate(signature=names) %>%
-      relocate(signature) %>%
-      pivot_longer(-signature, names_to = "fraction", values_to = "score") %>%
-      #mutate(fraction = as.numeric(fraction)) %>%
-      return(.)
-  }
-
-  noise <- ifelse(data_type == "sc", TRUE, FALSE)
-  sim_list <- makeSimulations(ref, labels, mixture_fractions, dep_list, cor_mat, n_ct_sim = 10, add_noise = noise)
-  scores_list <- scoreCTOISimulations(signatures = signatures_filtered, sim_list)
-
-  scores_all_sims_tidy <- enframe(scores_list, name = "celltype") %>%
-    unnest_longer(value, indices_to = "sim_id", values_to = "scores") %>%
-    rowwise() %>%
-    mutate(scores = list(mat2tidy(scores))) %>%
-    unnest(scores) %>%
-    separate(fraction, into = c("control", "fraction"), sep = "%%") %>%
-    mutate(fraction = as.numeric(fraction))
-
-  # Filter signatures
-  finalSigsPasses <- scores_all_sims_tidy %>%
-    group_by(celltype, signature, sim_id) %>%
-    summarise(cor = cor(fraction, score, method = "spearman")) %>%
-    group_by(celltype, signature) %>%
-    summarise(mean_cor = mean(cor)) %>%
-    top_frac(n=0.2, wt=mean_cor) %>%
-    pull(signature)
-
-
-  scores_all_sims_tidy_filtered <- scores_all_sims_tidy %>%
-    filter(signature %in% finalSigsPasses)
-
-
-  out <- list(mixtures = mix_list,
-              simulations = scores_all_sims_tidy_filtered)
-
-  return(out)
-}
-getTranformationModels <- function(simulations){
-
-
-  fitPolyModel <- function(data, celltype, max_degree = 2){
-
-    df <- data.frame(data)
-
-    models <- list()
-    for (degree in 1:max_degree) {
-      #model <- lm(fraction ~ poly(shifted_score, degree), data = df)
-      model <- suppressWarnings(glm(fraction ~ poly(shifted_score, degree), data = df, family = binomial(link = "logit")))
-      models[[degree]] <- model
+      controls <- celltypes[!celltypes %in% dep_cts]
     }
 
-    bic_values <- sapply(models, BIC)
-    best_degree <- which.min(bic_values)
+    # Generate n_sims simulations
+    ctoi_sim_list <- lapply(1:n_sims, function(i){
 
-    #final_model <- lm(fraction ~ poly(shifted_score, best_degree), data = df)
-    final_model <- suppressWarnings(glm(fraction ~ poly(shifted_score, best_degree), data = df, family = binomial(link = "logit")))
+      # Use n_samples_sim random samples for CTOI
+      ref_ctoi_sub <- getSubMatrix(mat = ref_ctoi, sim_fracs, n_samples_sim)
+
+      # Use n_samples_sim random samples for controls
+      if (sim_method != "ref_mix_thin") {
+
+        controls2use <- sample(controls, sample(1:length(controls), 1), replace = FALSE)
+        samples2use <- labels %>%
+          filter(label %in% controls2use) %>%
+          pull(sample)
+        ref_controls <- ref[,samples2use]
+
+        n_samples_sim <- round(ncol(ref_controls) * ctoi_samples_frac)
+        n_samples_sim <- ifelse(n_samples_sim < 1, 1, n_samples_sim)
+
+        ref_controls_sub <- getSubMatrix(mat = ref_controls, sim_fracs, n_samples_sim)
+      }else{
+
+        # Shuffle expression values between genes
+        mix_shuffled <- t(apply(mix, 1, sample))
+        mix_shuffled <- mix_shuffled[rownames(mix),]
+
+        # Number of control samples to use
+        n_samples_sim <- round(ncol(mix_shuffled) * ctoi_samples_frac)
+        n_samples_sim <- ifelse(n_samples_sim < 1, 1, n_samples_sim)
+
+        ref_controls_sub <- getSubMatrix(mat = mix_shuffled, sim_fracs, n_samples_sim)
+      }
+
+      # Thin to adjust library size
+      data_adjusted <- adjustLibSize(ctoi_mat = ref_ctoi_sub, controls_mat = ref_controls_sub)
+      ref_ctoi_sub <- data_adjusted$ctoi_mat_thin
+      ref_controls_sub <- data_adjusted$controls_mat_thin
 
 
-    # Create a sequence of x values for the prediction
-    x_pred <- seq(min(df$shifted_score), max(df$shifted_score), length.out = 100)
-    # Predict y values using the model
-    y_pred <- predict(model, newdata = data.frame(shifted_score = x_pred), type="response")
-    # Plot the original data
-    plot(df$shifted_score, df$fraction, main = paste0("Polynomial Regression ", best_degree ," degree(s) - ", celltype), xlab = "shifted_score", ylab = "fraction", pch = 19)
-    # Add the fitted line
-    lines(x_pred, y_pred, col = "red", lwd = 2)
+      # Make fraction matrices
+      ctoi_frac_mat <- makeFractionMatrix(mat = ref_ctoi_sub, sim_fracs, sim_method, control = FALSE)
+      control_frac_mat <- makeFractionMatrix(mat = ref_controls_sub, sim_fracs, sim_method, control = TRUE)
 
 
-    return(final_model)
-  }
+
+      # Combine CTOI and control(s) fractions matrix
+      simulation <- ctoi_frac_mat + control_frac_mat
+      colnames(simulation) <- paste0("mix", "%%", sim_fracs)
+
+      simulation
 
 
-  simulations %>%
-    # Median of simulations
-    group_by(celltype, signature, fraction) %>%
-    summarise(mean_sim_score = median(score)) %>%
-    # Mean of signatures
-    group_by(celltype, fraction) %>%
-    summarise(mean_ct_score = mean(mean_sim_score)) %>%
-    # Get shift values
-    mutate(shift_value = min(mean_ct_score)) %>%
-    # Shift scores
-    mutate(shifted_score = mean_ct_score - shift_value) %>%
-    select(-mean_ct_score) %>%
-    nest(data = c(shifted_score, fraction)) %>%
-    rowwise() %>%
-    mutate(model = list(fitPolyModel(data, celltype))) %>%
-    select(-data) %>%
+    })
+
+
+
+    do.call(cbind, ctoi_sim_list)
+
+
+  }, mc.cores = ncores, mc.set.seed = FALSE)
+  names(sim_list) <- celltypes
+
+  return(sim_list)
+
+}
+scoreSimulations <- function(signatures, simulations, ncores){
+
+  celltypes <- names(simulations)
+
+  sims_scored <- parallel::mclapply(celltypes, function(ctoi){
+
+    signatures_ctoi <- signatures[gsub("#.*", "", names(signatures)) %in% ctoi]
+    ctoi_sim <- simulations[[ctoi]]
+    sim_ranked <- singscore::rankGenes(ctoi_sim)
+    colnames(sim_ranked) <- make.unique(colnames(sim_ranked), sep = "%")
+
+    scores <- sapply(signatures_ctoi, simplify = TRUE, function(sig){
+      singscore::simpleScore(sim_ranked, upSet = sig, centerScore = FALSE)$TotalScore
+    })
+
+    score <- cbind(scores, frac = as.numeric(gsub("mix%%", "", colnames(ctoi_sim))))
+    score
+
+  }, mc.cores = ncores, mc.set.seed = FALSE)
+
+  names(sims_scored) <- celltypes
+
+  return(sims_scored)
+
+}
+trainModels <- function(simulations_scored, consLvl, ncores, seed2use){
+
+  set.seed(seed2use)
+
+  fitModel <- function(data, nRFcores, consLvl){
+
+      options(rf.cores=nRFcores, mc.cores=1)
+      model <- randomForestSRC::var.select(frac ~ ., as.data.frame(data), method = "md", conservative = consLvl, verbose = FALSE, refit = TRUE)
+      selected_features <- model$topvars
+
+      return(tibble(model = list(model$rfsrc.refit.obj), sigs_filtered = list(selected_features)))
+
+    }
+
+    if (ncores < 4) {
+      mcCores <- round(ncores*(3/4))
+      rfCores <- round(ncores*(1/4))
+    }else{
+      mcCores <- ncores
+      rfCores <- 1
+    }
+
+    #start <- Sys.time()
+    models_list <- parallel::mclapply(simulations_scored, function(data){
+      fitModel(data, rfCores, consLvl)
+    }, mc.cores = mcCores, mc.set.seed = FALSE)
+    #end <- Sys.time()
+    #print(end-start)
+
+
+  enframe(models_list, name = "celltype") %>%
+    unnest(value) %>%
     return(.)
 
-
 }
-getSpillOverMat <- function(mixtures, signatures_filtered, dep_list, trans_parameters){
+getSpillOverMat <- function(simulations, signatures, dep_list, trans_models, n_sims, frac2use){
 
-  scoreTransform <- function(mat, signatures_filtered, is_controls){
+  scoreTransform <- function(mat, signatures, trans_models, is_controls){
 
     # Score
     mat_ranked <- singscore::rankGenes(mat)
-    scores <- t(sapply(signatures_filtered, simplify = TRUE, function(sig){
+    scores <- sapply(signatures, simplify = TRUE, function(sig){
       singscore::simpleScore(mat_ranked, upSet = sig, centerScore = FALSE)$TotalScore
-    }))
-    colnames(scores) <- colnames(mat)
-    rownames(scores) <- names(signatures_filtered)
+    })
+    rownames(scores) <- colnames(mat)
 
-    transfomed_scores <- as_tibble(scores, rownames = "signatures") %>%
-      pivot_longer(cols = -signatures, names_to = "mix_ctoi", values_to = "score") %>%
-      separate(signatures, into = "sig_celltype", sep = "#", extra = "drop") %>%
-      group_by(sig_celltype, mix_ctoi) %>%
-      summarise(mean_score = mean(score)) %>%
-      # Transform
-      left_join(trans_parameters, by = c("sig_celltype" = "celltype")) %>%
-      rowwise() %>%
-      mutate(shifted_score = mean_score - shift_value) %>%
-      mutate(transformed_score = round(predict(model, newdata = data.frame("shifted_score" = shifted_score), type = "response"), 2)) %>%
-      select(sig_celltype, mix_ctoi, transformed_score) %>%
-      pivot_wider(names_from = mix_ctoi, values_from = transformed_score)
 
-    # mutate(transformed_score = round(predict(model, newdata = data.frame("shifted_score" = shifted_score)) * scaling_value, 2)) %>%
-    # select(sig_celltype, mix_ctoi, transformed_score) %>%
-    # pivot_wider(names_from = mix_ctoi, values_from = transformed_score)
+    transfomed_tbl <- trans_models %>%
+      mutate(predictions = list(round(predict(model, newdata = scores[,startsWith(colnames(scores), paste0(celltype, "#"))], type = "response"), 4))) %>%
+      select(celltype, predictions) %>%
+      unnest_longer(predictions, indices_to = "sim_celltype") %>%
+      pivot_wider(names_from = sim_celltype, values_from = predictions)
 
-    # TODO: Inset
 
     # Convert to matrix
-    transfomed_scores_mat <- as.matrix(transfomed_scores[,-1])
-    rownames(transfomed_scores_mat) <- pull(transfomed_scores[,1])
+    transfomed_mat <- as.matrix(transfomed_tbl[,-1])
+    rownames(transfomed_mat) <- pull(transfomed_tbl[,1])
+
     if (!is_controls) {
-      transfomed_scores_mat <- transfomed_scores_mat[colnames(mat), colnames(mat)]
+      transfomed_mat <- transfomed_mat[colnames(mat), colnames(mat)]
     }
 
-    return(transfomed_scores_mat)
+    return(transfomed_mat)
 
   }
 
-  mix_mat <- mixtures$mix_mat
-  colnames(mix_mat) <- gsub("%%.*", "", colnames(mix_mat))
-  controls_mat <- mixtures$controls_mat
+  if (n_sims == 1) {
 
-  # Score and transform mixtures
-  mix_mat_transformed <- scoreTransform(mat = mix_mat, signatures_filtered, is_controls = FALSE)
-  controls_mat_uniq <- controls_mat[,!duplicated(colnames(controls_mat))]
-  controls_mat_transformed <- scoreTransform(mat = controls_mat_uniq, signatures_filtered, is_controls = TRUE)
-  # Undo unique
-  controls_mat_transformed <- sapply(colnames(controls_mat), function(ctrl){
-    controls_mat_transformed[,ctrl]
-  })
-  controls_mat_transformed <- controls_mat_transformed[colnames(mix_mat), ]
+    # Get CTOIs  matrix with frac2use fraction
+    frac_col <- which(endsWith(colnames(simulations[[1]]), paste0("%%", frac2use)))
+    ctoi_mat <- sapply(simulations, function(sim){
+      sim[,frac_col]
+    })
 
-  # Remove control signal from the transformed mixture
-  spill_mat <- mix_mat_transformed - controls_mat_transformed
 
-  # Clean and normalize spill matrix
-  spill_mat[spill_mat < 0] <- 0
-  spill_mat <- spill_mat / diag(spill_mat)
+    # Get control matrix with CTOI fraction = 0
+    frac_col <- which(endsWith(colnames(simulations[[1]]), paste0("%%", 0)))
+    controls_mat <- sapply(simulations, function(sim){
+      sim[,frac_col]
+    })
+    colnames(controls_mat) <- unname(sapply(simulations, function(sim){
+      gsub("%%*.", "", colnames(sim)[frac_col])
+    }))
 
-  # Insert zero to dependent cell types
-  for(ctoi in rownames(spill_mat)){
-    dep_cts <- unname(unlist(dep_list[[ctoi]]))
-    dep_cts <- dep_cts[dep_cts != ctoi]
-    spill_mat[ctoi, dep_cts] <- 0
+
+    # Score and transform simulations
+    sim_transformed <- scoreTransform(mat = ctoi_mat, signatures, trans_models, is_controls = FALSE)
+    controls_mat_uniq <- controls_mat[,!duplicated(colnames(controls_mat))]
+    controls_mat_transformed <- scoreTransform(mat = controls_mat_uniq, signatures, trans_models, is_controls = TRUE)
+    # Undo unique
+    controls_mat_transformed <- sapply(colnames(controls_mat), function(ctrl){
+      controls_mat_transformed[,ctrl]
+    })
+    controls_mat_transformed <- controls_mat_transformed[colnames(sim_transformed), ]
+
+    # Remove control signal from the transformed mixture
+    spill_mat <- sim_transformed - controls_mat_transformed
+
+    # Clean and normalize spill matrix
+    spill_mat[spill_mat < 0] <- 0
+    spill_mat <- spill_mat / diag(spill_mat)
+
+    # Insert zero to dependent cell types
+    for(ctoi in rownames(spill_mat)){
+      dep_cts <- unname(unlist(dep_list[[ctoi]]))
+      dep_cts <- dep_cts[dep_cts != ctoi]
+      spill_mat[ctoi, dep_cts] <- 0
+    }
+
+    # TODO: Check this parameter
+    spill_mat[spill_mat > 0.5] <- 0.5
+    diag(spill_mat) <- 1
+
+    # pheatmap::pheatmap(spill_mat, cluster_rows = F, cluster_cols = F)
+
+    return(spill_mat)
+
   }
 
-  # TODO: Check this parameter
-  spill_mat[spill_mat > 0.5] <- 0.5
-  diag(spill_mat) <- 1
-
-  # pheatmap::pheatmap(spill_mat, cluster_rows = F, cluster_cols = F)
-
-  return(spill_mat)
 
 }
 
-#' @slot signatures ...
-#' @slot dependencies ...
-#' @slot transformation_models ...
-#' @slot spill_mat ...
+
+#' @slot signatures list of xCell2 signatures
+#' @slot dependencies list of cell type dependencies
+#' @slot models data frame of cell type transformation models
+#' @slot spill_mat matrix of cell types spillover
+#' @slot genes_used character vector of genes names used to train the signatures
 #' @importFrom methods new
 # Create S4 object for the new reference
 setClass("xCell2Signatures", slots = list(
-  signatures = "GeneSetCollection",
+  signatures = "list",
   dependencies = "list",
-  transformation_models = "data.frame",
-  spill_mat = "matrix"
+  models = "data.frame",
+  spill_mat = "matrix",
+  genes_used = "character"
 ))
 
 
@@ -731,34 +706,45 @@ setClass("xCell2Signatures", slots = list(
 #' @import tibble
 #' @import tidyr
 #' @import readr
-#' @import Seurat
-#' @importFrom Rfast rowMedians
-#' @importFrom Rfast rowmeans
-#' @import pbapply
-#' @importFrom sparseMatrixStats rowMedians
-#' @importFrom Matrix rowMeans
-#' @importFrom  GSEABase GeneSetCollection
-#' @importFrom  GSEABase GeneSet
-#' @import singscore
+#' @import parallel
+#' @importFrom randomForestSRC var.select
+#' @importFrom Rfast rowMedians rowmeans rowsums
+#' @importFrom parallel mclapply
+#' @importFrom pbapply pblapply pbsapply
+#' @importFrom RRF RRF
+#' @importFrom seqgendiff thin_lib
+#' @importFrom Matrix rowMeans rowSums colSums
+#' @importFrom singscore rankGenes simpleScore
 #' @param ref A reference gene expression matrix.
 #' @param labels A data frame in which the rows correspond to samples in the ref. The data frame must have four columns:
-#'   "ont": the cell type ontology as a character (i.e., "CL:0000545").
+#'   "ont": the cell type ontology as a character (i.e., "CL:0000545" or NA if there is no ontology).
 #'   "label": the cell type name as a character (i.e., "T-helper 1 cell").
 #'   "sample": the cell type sample should match the column name in ref.
 #'   "dataset": the cell type sample dataset or subject (for single-cell) as a character.
 #' @param data_type Gene expression data type: "rnaseq", "array", or "sc".
-#' @param lineage_file (Optional) Path to the cell type lineage file generated with `xCell2GetLineage` function.
-#' @param mixture_fractions A vector of mixture fractions to be used in signature filtering.
-#' @param probs A vector of probability thresholds to be used for generating signatures.
-#' @param diff_vals A vector of delta values to be used for generating signatures.
-#' @param min_genes The minimum number of genes to include in the signature.
-#' @param max_genes The maximum number of genes to include in the signature.
-#' @param return_unfiltered_signatures for development (remove)!
+#' @param lineage_file Path to the cell type lineage file generated with `xCell2GetLineage` function (optional).
+#' @param weightGenes description
+#' @param sim_fracs A vector of mixture fractions to be used in signature filtering (optional).
+#' @param probs A vector of probability thresholds to be used for generating signatures (optional).
+#' @param diff_vals A vector of delta values to be used for generating signatures (optional).
+#' @param min_genes The minimum number of genes to include in the signature (optional).
+#' @param max_genes The maximum number of genes to include in the signature (optional).
+#' @param sigsFile description
+#' @param return_sigs description
+#' @param minPBcells description
+#' @param minPBgroups description
+#' @param ct_sims description
+#' @param filtLevel description
+#' @param sims_sample_frac description
+#' @param nCores description
+#' @param mix description
+#' @param simMethod description
 #' @return An S4 object containing the signatures, cell type labels, and cell type dependencies.
 #' @export
-xCell2Train_tmp <- function(ref, labels, data_type, lineage_file = NULL, mixture_fractions = c(0, 0.001, 0.005, seq(0.01, 0.25, 0.03)),
-                        probs = seq(0.25, 0.5, 0.05), diff_vals = c(0, 0.25, 0.5, 1, 1.5, 2, 3, 4, 5, 10, 12, 15, 17),
-                        min_genes = 2, max_genes = 200){
+xCell2Train <- function(ref, labels, data_type, mix = NULL, lineage_file = NULL, weightGenes = TRUE, medianGEP = TRUE, seed = 123, probs = c(0.01, 0.05, 0.1, 0.25, 0.333, 0.49),
+                        sim_fracs = c(0, seq(0.01, 0.25, 0.005), seq(0.3, 1, 0.05)), diff_vals = c(1, 1.32, 1.585, 2, 3, 4, 5),
+                        min_genes = 5, max_genes = 200, return_sigs = FALSE, sigsFile = NULL, minPBcells = 30, minPBsamples = 10,
+                        ct_sims = 10, sims_sample_frac = 0.1, simMethod = "ref_thin", filtLevel = "high", nCores = 1){
 
 
   # Validate inputs
@@ -766,19 +752,25 @@ xCell2Train_tmp <- function(ref, labels, data_type, lineage_file = NULL, mixture
   ref <- inputs_validated$ref
   labels <- inputs_validated$labels
 
-  # Use only most variable genes for single-cell data
+  # TODO: first sum counts and then normalize or vice versa?
+
+  # Generate pseudo bulk from scRNA-Seq reference
   if (data_type == "sc") {
-    message("Looking for most variable genes with Seurat...")
-    topVarGenes <- getTopVariableGenes(ref, max_genes = nrow(ref))
-    tmp <- topVarGenes[!topVarGenes %in% rownames(ref)]
-    topVarGenes <- c(topVarGenes, gsub("-", "_", tmp)) # Because Seurat change genes names from "_" to "-"
-    ref <- ref[rownames(ref) %in% topVarGenes,]
+    message("Converting scRNA-seq reference to pseudo bulk...")
+    ps_data <- sc2pseudoBulk(ref, labels, min_n_cells = minPBcells, min_ps_samples = minPBsamples, seed2use = seed)
+    ref <- ps_data$ref
+    labels <- ps_data$labels
   }
+
+  # Normalize reference
+  ref <- normRef(ref, data_type)
+
 
   # Build cell types correlation matrix
   message("Calculating cell-type correlation matrix...")
-  pure_ct_mat <- makePureCTMat(ref, labels, use_median = TRUE)
-  cor_mat <- getCellTypeCorrelation(pure_ct_mat, data_type)
+  gep_mat <- makeGEPMat(ref, labels, use_median = medianGEP)
+  cor_mat <- getCellTypeCorrelation(gep_mat, data_type)
+
 
   # Get cell type dependencies list
   message("Loading dependencies...")
@@ -788,29 +780,55 @@ xCell2Train_tmp <- function(ref, labels, data_type, lineage_file = NULL, mixture
     dep_list <- getDependencies(lineage_file)
   }
 
-  # Generate signatures for each cell type
-  message("Calculating quantiles...")
-  quantiles_matrix <- makeQuantiles(ref, labels, probs, dep_list, include_descendants = FALSE)
-  message("Generating signatures...")
-  signatures_collection <- createSignatures(ref, labels, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, weight_genes = TRUE)
 
-  # Filter signatures
-  message("Filtering signatures...")
-  filterSignatures.out <- filterSignatures(ref, labels, mixture_fractions, dep_list, cor_mat, pure_ct_mat, signatures_collection, use_median = FALSE, data_type)
-  signatures_filtered <- signatures_collection[names(signatures_collection) %in% filterSignatures.out$simulations$signature]
-  mixtures <- filterSignatures.out$mixtures$mix1
+  # Generate/Load signatures
+  if (is.null(sigsFile)) {
+    # Generate signatures
+    message("Calculating quantiles...")
+    ref_log <- logTransformRef(ref) # Log2-transformation
+    quantiles_matrix <- makeQuantiles(ref_log, labels, probs, ncores = nCores)
+    message("Generating signatures...")
+    signatures <- createSignatures(labels, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, weight_genes = weightGenes, ncores = nCores)
 
-  # Get transformation models
-  trans_models <- getTranformationModels(simulations = filterSignatures.out$simulations)
+    if (return_sigs) {
+      return(signatures)
+    }
+
+  }else{
+    # Load signatures
+    message("Loading signatures...")
+    signatures <- readRDS(sigsFile)
+  }
+
+
+  # Make simulations
+  message("Generating simulations...")
+  simulations <- makeSimulations(ref, labels, mix, gep_mat, cor_mat, dep_list, sim_fracs, sim_method = simMethod, ctoi_samples_frac = sims_sample_frac, n_sims = ct_sims, ncores = nCores, seed2use = seed)
+  message("Scoring simulations...")
+  simulations_scored <- scoreSimulations(signatures, simulations, nCores)
+
+
+  # Filter signatures and train RF model
+  message("Filtering signatures and training models...")
+  # TODO: remove sim_noise
+  models <- trainModels(simulations_scored, consLvl = filtLevel, ncores = nCores, seed2use = seed)
+  signatures <- signatures[unlist(models$sigs_filtered)]
+  models <- models[,-3]
+
 
   # Get spillover matrix
-  spill_mat <- getSpillOverMat(mixtures, signatures_filtered, dep_list, trans_models)
+  message("Generating spillover matrix...")
+  # spill_mat <- getSpillOverMat(simulations, signatures, dep_list, trans_models, n_sims = 1, frac2use = 0.25)
+  spill_mat <- matrix()
 
+  # Save results in S4 object
   xCell2Sigs.S4 <- new("xCell2Signatures",
-                       signatures = signatures_filtered,
+                       signatures = signatures,
                        dependencies = dep_list,
-                       transformation_models = trans_models,
-                       spill_mat = spill_mat)
+                       models = models,
+                       spill_mat = spill_mat,
+                       genes_used = rownames(ref))
+
 
   return(xCell2Sigs.S4)
 

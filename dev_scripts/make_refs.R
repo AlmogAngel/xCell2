@@ -379,6 +379,54 @@ saveRDS(bp_ref, "/bigdata/almogangel/xCell2_data/dev_data/bp_ref.rds")
 
 
 
+# DICE ----
+
+dice <- celldex::DatabaseImmuneCellExpressionData()
+
+dice_ref <- as.matrix(dice@assays@data$logcounts)
+dice_labels <- as.data.frame(dice@colData)
+dice_labels$sample <- make.unique(rownames(dice_labels))
+colnames(dice_ref) <- dice_labels$sample
+
+cl <- ontoProc::getOnto(ontoname = "cellOnto", year_added = "2023")
+
+dice_labels$label.fine <- unname(cl$name[dice_labels$label.ont])
+
+dice_labels <- dice_labels %>%
+  as_tibble() %>%
+  dplyr::rename("ont" = "label.ont",
+                "label" = "label.fine") %>%
+  ungroup() %>%
+  mutate(dataset = "DICE") %>%
+  select(ont, label, sample, dataset)
+
+# Switch labels
+dice_labels[dice_labels$label == "activated CD4-positive, alpha-beta T cell", ]$ont <- "CL:0000624"
+dice_labels[dice_labels$label == "activated CD4-positive, alpha-beta T cell", ]$label <- "CD4-positive, alpha-beta T cell"
+dice_labels[dice_labels$label == "activated CD8-positive, alpha-beta T cell", ]$ont <- "CL:0000625"
+dice_labels[dice_labels$label == "activated CD8-positive, alpha-beta T cell", ]$label <- "CD8-positive, alpha-beta T cell"
+
+# Remove labels
+labels2remove <- !dice_labels$label %in% c("CD14-positive, CD16-negative classical monocyte", "CD14-low, CD16-positive monocyte",
+                                          "naive CCR4-positive regulatory T cell")
+dice_labels <- dice_labels[labels2remove,]
+dice_ref <- dice_ref[,labels2remove]
+
+xCell2GetLineage(labels = dice_labels, out_file = "/bigdata/almogangel/xCell2_data/dev_data/dice_dependencies.tsv")
+
+
+all(dice_labels$sample == colnames(dice_ref))
+
+dice_ref <- list(ref = as.matrix(dice_ref),
+               labels = as.data.frame(dice_labels),
+               lineage_file = "/bigdata/almogangel/xCell2_data/dev_data/dice_dependencies.tsv")
+
+saveRDS(dice_ref, "/bigdata/almogangel/xCell2_data/dev_data/dice_ref.rds")
+
+
+
+
+
 # Super reference -----
 
 sref.labels <- readRDS("/bigdata/almogangel/xCell2_data/data/sref_labels.rds")
