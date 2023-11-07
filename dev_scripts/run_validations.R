@@ -5,6 +5,7 @@ library(MCPcounter)
 library(dtangle)
 library(DeconRNASeq)
 
+setwd("/bigdata/almogangel/xCell2_data/benchmarking_data")
 
 # "/bigdata/almogangel/xCell2/dev_scripts/prep_ref_val_pairs.R"
 # Read reference-validation pairs
@@ -16,6 +17,14 @@ sc.refval.tbl.nodeps <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_da
 cyto.vals <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/ref_val_pairs/cyto.vals.rds")
 sc.vals <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/ref_val_pairs/sc.vals.rds")
 
+refList <- list(rna_seq = c(blood = "kass_blood", tumor = "kass_tumor", mixed = "bp"),
+                array = c(mixed = "lm22"),
+                sc = c(blood = "ts_blood", tumor = "sc_pan_cancer"))
+
+celltype_conversion <- read_tsv("/bigdata/almogangel/xCell2_data/dev_data/celltype_conversion_with_ontology.txt") %>%
+  rowwise() %>%
+  mutate(all_labels = str_split(all_labels, ";")) %>%
+  unnest(cols = c(all_labels))
 
 # Method functions
 
@@ -163,6 +172,7 @@ getEPICRes <- function(ref_val_table, vals, celltype_conversion){
         rep(0, length(ref.raw[,colnames(ref.raw) == ct]))
       }
     })
+    rownames(ref.raw.var) <- rownames(ref.raw)
     ref.raw.var <- ref.raw.var[rownames(gep), colnames(gep)]
 
     epic_ref <- list("sigGenes" = sigGenes,
@@ -266,7 +276,7 @@ getBayesPrismRes <- function(ref_val_table, vals, celltype_conversion){
     }else{
 
       # Subset marker genes from the signature matrix
-      markers <- read.csv(paste0("references/markers/", refName, "_markers.txt"), sep = "\t", header = T, check.names = F)
+      markers <- read.csv(paste0("/bigdata/almogangel/xCell2_data/benchmarking_data/references/markers/", refName, "_markers.txt"), sep = "\t", header = T, check.names = F)
       shared_markers <- intersect(unique(markers$marker), colnames(ref.filtered.pc))
       ref.filtered.pc <- ref.filtered.pc[,shared_markers]
     }
@@ -287,6 +297,7 @@ getBayesPrismRes <- function(ref_val_table, vals, celltype_conversion){
 
     bp.res <- run.prism(prism = myPrism, n.cores = CPUs)
 
+
     res <- t(get.fraction (bp=bp.res,
                            which.theta="final",
                            state.or.type="type"))
@@ -306,6 +317,9 @@ getBayesPrismRes <- function(ref_val_table, vals, celltype_conversion){
     refs
   })
 
+# i = 1
+# x = ref_val_table
+# valType = x[i,]$val_type[[1]]; valName = x[i,]$val_dataset[[1]]; refName = x[i,]$ref_name[[1]]; refType = x[i,]$ref_type[[1]]; celltypes2use = x[i,]$celltype_classes[[1]]
 
 
   vals.refs.res <- ref_val_table %>%
@@ -388,11 +402,11 @@ getdtangleRes <- function(ref_val_table, vals, celltype_conversion){
 
     # Normalize to CPM
     if (refType == "sc") {
-      seurat_object <- Seurat::CreateSeuratObject(counts = ref.raw)
-      seurat_object <- Seurat::NormalizeData(seurat_object, normalization.method = "RC", scale.factor = 1e6)
-      ref.cpm <- seurat_object@assays$RNA@data
-      colnames(ref.cpm) <- colnames(ref.raw)
-      ref.raw <- ref.cpm
+      lib_sizes <- Matrix::colSums(ref.raw)
+      norm_factor <- 1000000 / lib_sizes
+      ref_norm <- ref.raw %*% Matrix::Diagonal(x = norm_factor)
+      colnames(ref_norm) <- colnames(ref.raw)
+      ref.raw <- ref_norm
     }
 
 
@@ -435,8 +449,9 @@ getdtangleRes <- function(ref_val_table, vals, celltype_conversion){
     refs
   })
 
-
-  # valType = x[1,]$val_type[[1]]; valName = x[1,]$val_dataset[[1]]; refName = x[1,]$ref_name[[1]]; refType = x[1,]$ref_type[[1]]; celltypes2use = x[1,]$celltype_classes[[1]]
+  #i = 8
+  #x = ref_val_table
+  #valType = x[i,]$val_type[[1]]; valName = x[i,]$val_dataset[[1]]; refName = x[i,]$ref_name[[1]]; refType = x[i,]$ref_type[[1]]; celltypes2use = x[i,]$celltype_classes[[1]]
 
   vals.refs.res <- ref_val_table %>%
     # Run dtangle
@@ -525,32 +540,32 @@ getquanTIseqRes <- function(ref_val_table, vals, celltype_conversion){
 # Run cytometry/other validations
 
 print("Running CIBERSORTx...")
-cbrx.cyto.res <- getCIBERSORTxRes(ref_val_table = refval.tbl.nodeps, vals = cyto.vals, celltype_conversion)
-saveRDS(cbrx.cyto.res, "/bigdata/almogangel/xCell2_data/benchmarking_data/results/correlations/cbrx.cyto.res.rds")
+#cbrx.cyto.res <- getCIBERSORTxRes(ref_val_table = refval.tbl.nodeps, vals = cyto.vals, celltype_conversion)
+#saveRDS(cbrx.cyto.res, "/bigdata/almogangel/xCell2_data/benchmarking_data/results/correlations/cbrx.cyto.res.rds")
 
 print("Running EPIC...")
-epic.cyto.res <- getEPICRes(ref_val_table = refval.tbl.nodeps, vals = cyto.vals, celltype_conversion)
-saveRDS(epic.cyto.res, "/bigdata/almogangel/xCell2_data/benchmarking_data/results/correlations/epic.cyto.res.rds")
+#epic.cyto.res <- getEPICRes(ref_val_table = refval.tbl.nodeps, vals = cyto.vals, celltype_conversion)
+#saveRDS(epic.cyto.res, "/bigdata/almogangel/xCell2_data/benchmarking_data/results/correlations/epic.cyto.res.rds")
 
 print("Running BayesPrism...")
 bp.cyto.res <- getBayesPrismRes(ref_val_table = refval.tbl.nodeps, vals = cyto.vals, celltype_conversion)
 saveRDS(bp.cyto.res, "/bigdata/almogangel/xCell2_data/benchmarking_data/results/correlations/bp.cyto.res.rds")
 
 print("Running MCPcounter")
-mcp.cyto.res <- getMCPcounterRes(ref_val_table = refval.tbl, vals = cyto.vals, celltype_conversion)
-saveRDS(mcp.cyto.res, "/bigdata/almogangel/xCell2_data/benchmarking_data/results/correlations/mcp.cyto.res.rds")
+#mcp.cyto.res <- getMCPcounterRes(ref_val_table = refval.tbl, vals = cyto.vals, celltype_conversion)
+#saveRDS(mcp.cyto.res, "/bigdata/almogangel/xCell2_data/benchmarking_data/results/correlations/mcp.cyto.res.rds")
 
-print("Running dtangle")
-dtan.cyto.res <- getdtangleRes(ref_val_table = refval.tbl.nodeps, vals = cyto.vals, celltype_conversion)
-saveRDS(dtan.cyto.res, "/bigdata/almogangel/xCell2_data/benchmarking_data/results/correlations/dtan.cyto.res.rds")
+# print("Running dtangle")
+# dtan.cyto.res <- getdtangleRes(ref_val_table = refval.tbl.nodeps, vals = cyto.vals, celltype_conversion)
+# saveRDS(dtan.cyto.res, "/bigdata/almogangel/xCell2_data/benchmarking_data/results/correlations/dtan.cyto.res.rds")
 
 print("Running DeconRNASeq")
-decon.cyto.res <- getDeconRNASeqRes(ref_val_table = refval.tbl.nodeps, vals = cyto.vals, celltype_conversion)
-saveRDS(decon.cyto.res, "/bigdata/almogangel/xCell2_data/benchmarking_data/results/correlations/decon.cyto.res.rds")
+#decon.cyto.res <- getDeconRNASeqRes(ref_val_table = refval.tbl.nodeps, vals = cyto.vals, celltype_conversion)
+#saveRDS(decon.cyto.res, "/bigdata/almogangel/xCell2_data/benchmarking_data/results/correlations/decon.cyto.res.rds")
 
 print("Running quanTIseq")
-quanti.cyto.res <- getquanTIseqRes(ref_val_table = refval.tbl.nodeps, vals = cyto.vals, celltype_conversion)
-saveRDS(quanti.cyto.res, "/bigdata/almogangel/xCell2_data/benchmarking_data/results/correlations/quanti.cyto.res.rds")
+#quanti.cyto.res <- getquanTIseqRes(ref_val_table = refval.tbl.nodeps, vals = cyto.vals, celltype_conversion)
+#saveRDS(quanti.cyto.res, "/bigdata/almogangel/xCell2_data/benchmarking_data/results/correlations/quanti.cyto.res.rds")
 
 
 

@@ -8,19 +8,26 @@ xCell2Train(
   ref,
   labels,
   data_type,
+  mix = NULL,
   lineage_file = NULL,
-  weightGenes = FALSE,
-  sim_fracs = c(0, 0.001, 0.002, 0.004, 0.006, 0.008, seq(0.01, 1, 0.01)),
+  weightGenes = TRUE,
+  medianGEP = TRUE,
+  seed = 123,
+  probs = c(0.01, 0.05, 0.1, 0.25, 0.333, 0.49),
+  sim_fracs = c(0, seq(0.01, 0.25, 0.005), seq(0.3, 1, 0.05)),
   diff_vals = c(1, 1.32, 1.585, 2, 3, 4, 5),
   min_genes = 5,
   max_genes = 200,
-  filter_sigs = TRUE,
+  return_sigs = FALSE,
   sigsFile = NULL,
-  params = list(),
-  modelType = "rf",
-  bulkPseudoCount = 1,
   minPBcells = 30,
-  minPBgroups = 10
+  minPBsamples = 10,
+  ct_sims = 10,
+  sims_sample_frac = 0.1,
+  simMethod = "ref_thin",
+  sim_noise = NULL,
+  regGamma = 0.8,
+  nCores = 1
 )
 }
 \arguments{
@@ -34,9 +41,13 @@ xCell2Train(
 
 \item{data_type}{Gene expression data type: "rnaseq", "array", or "sc".}
 
+\item{mix}{description}
+
 \item{lineage_file}{Path to the cell type lineage file generated with `xCell2GetLineage` function (optional).}
 
 \item{weightGenes}{description}
+
+\item{probs}{A vector of probability thresholds to be used for generating signatures (optional).}
 
 \item{sim_fracs}{A vector of mixture fractions to be used in signature filtering (optional).}
 
@@ -46,21 +57,25 @@ xCell2Train(
 
 \item{max_genes}{The maximum number of genes to include in the signature (optional).}
 
-\item{filter_sigs}{description}
+\item{return_sigs}{description}
 
 \item{sigsFile}{description}
 
-\item{params}{description}
-
-\item{modelType}{description}
-
-\item{bulkPseudoCount}{description}
-
 \item{minPBcells}{description}
 
-\item{minPBgroups}{description}
+\item{ct_sims}{description}
 
-\item{probs}{A vector of probability thresholds to be used for generating signatures (optional).}
+\item{sims_sample_frac}{description}
+
+\item{simMethod}{description}
+
+\item{sim_noise}{description}
+
+\item{regGamma}{description}
+
+\item{nCores}{description}
+
+\item{minPBgroups}{description}
 }
 \value{
 An S4 object containing the signatures, cell type labels, and cell type dependencies.

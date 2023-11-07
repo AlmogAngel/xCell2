@@ -49,6 +49,7 @@ loadVals <- function(valList,
       # truth <- truth[rowSums(truth) != 0,]
       # rows <- rownames(truth)
       # truth[!duplicated(rows),]
+      truth
     })
     names(truths) <- tissue
     truths
@@ -201,7 +202,7 @@ combineRefVal <- function(vals, refList, splitDependencies){
 # Cytometry validations
 cyto.vals.list <- list(blood = c("BG_blood", "GSE107011", "GSE107572", "GSE127813", "GSE53655", "GSE60424",
                                  "SDY311", "SDY420", "SDY67", "GSE64385", "GSE65133", "GSE106898", "GSE64655", "GSE59654",
-                                 "GSE107990", "GSE20300", "CIBERSORT2", "GSE77343", "GSE77344"),
+                                 "GSE107990", "GSE20300", "GSE65135", "GSE77343", "GSE77344"),
                        tumor = c("ccRCC_cytof_CD45+", "NSCLC_cytof", "GSE121127", "WU_ccRCC_RCCTC"),
                        other = c("GSE120444", "GSE115823", "GSE93722"))
 
@@ -230,3 +231,6 @@ sc.refval.tbl.nodeps <- combineRefVal(vals = sc.vals, refList, splitDependencies
 
 saveRDS(sc.refval.tbl, "/bigdata/almogangel/xCell2_data/benchmarking_data/ref_val_pairs/sc_ref_val.rds")
 saveRDS(sc.refval.tbl.nodeps, "/bigdata/almogangel/xCell2_data/benchmarking_data/ref_val_pairs/sc_ref_val_nodeps.rds")
+
+
+

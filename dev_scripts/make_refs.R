@@ -231,6 +231,128 @@ sc_pan_cancer_ref <- list(ref = ref.mat,
 saveRDS(sc_pan_cancer_ref, "/bigdata/almogangel/xCell2_data/benchmarking_data/references/sc_pan_cancer_ref.rds")
 
 
+############# Pan-cancer melanoma ----------------------------------
+# Load counts matrix data
+ref.mat.files <- list.files("/bigdata/almogangel/pan_cancer_ref/split_by_patient_matrices/", pattern = ".*RDS", full.names = T)
+ref.mat.list <- lapply(ref.mat.files, function(path){
+  ref.in <- readRDS(path)
+  # Load only references with gene symbols:
+  if ("CCDC7" %in% rownames(ref.in)) {
+    ref.in
+  }else{
+    NA
+  }
+})
+
+# Convert all matrices to dgCMatrix
+ref.mat.list <- lapply(ref.mat.list, function(x){
+  if ("matrix" %in% class(x)) {
+    as(x, "dgCMatrix")
+  }else{
+    x
+  }
+})
+ref.mat.list <- ref.mat.list[unlist(lapply(ref.mat.list, function(x){ncol(x) > 0}))]
+ref.mat.list <- ref.mat.list[unlist(lapply(ref.mat.list, function(x){class(x) != "numeric"}))]
+
+
+# Load metadata
+meta <- readRDS("/bigdata/almogangel/pan_cancer_ref/harmonized_results_matrix_and_metadata_all_patients_all_cells.RDS")
+
+# Define 10X datasets (using supplemantry table - 41467_2023_37353_MOESM11_ESM)
+chromium10x_data <- c("Bi", "Chen", "Couterier", "Dong", "Gao", "Kim", "leader", "Lee", "Ma", "Peng", "Qian", "Slyper", "Wu", "Young")
+
+meta.10x.confident <- meta %>%
+  as_tibble() %>%
+  # Remove non-10X data
+  filter(dataset %in% chromium10x_data & disease %in% c("Melanoma", "melanoma (disease)")) %>%
+  dplyr::select(cell_names, dataset, disease, primary_met, layer_1:layer_6, classification_confidence, scATOMIC_pred) %>%
+  # Only cells with confident annotation
+  filter(classification_confidence == "confident") %>%
+  dplyr::select(-classification_confidence)
+
+# Filter labels
+labels2remove <- c("Tissue_Cell_Normal_or_Cancer", "unclassified_any_cell", "T_or_NK_lymphocyte", "macrophage_or_dendritic_cell", "unclassified_blood_cell",
+                   "unclassified_normal_or_cancer_tissue", "NK or CD8 T cell", "Non GI Epithelial Cell", "unclassified_T_or_NK_cell", "unclassified_macrophage_or_DC",
+                   "unclassified_B_cell_or_plasmablast", "GI Epithelial Cell", "Soft Tissue or Neuro Cancer Cell", "Ovarian/Endometrial/Kidney Cell", "unclassified_non_GI_epithelial_cell",
+                   "unclassified_GI_epithelial_cell", "Breast/Lung/Prostate Cell", "Unclassified Soft Tissue or Neuro Cancer Cell", "Brain/Neuroblastoma Cancer Cell", "Any Cell",
+                   "CD4 or CD8 T cell", "Non Stromal Cell", "Macrophage or Monocyte", "CD8 T or NK cell", "Ovarian/Endometrial/Kidney", "Normal Tissue Cell",
+                   "B cell or Plasmablast", "Macrophage or Dendritic Cell", "Tfh/Th1 helper CD4+ T cells", "T or NK Cell", "Non Blood Cell",
+                   "Biliary/Hepatic Cancer Cell", "Colorectal/Esophageal/Gastric Cell", "GI Tract Cell", "Breast/Lung/Prostate")
+
+meta.10x.confident.filt <- meta.10x.confident %>%
+  pivot_longer(c(layer_1:scATOMIC_pred), names_to = "layer", values_to = "label") %>%
+  dplyr::select(-layer) %>%
+  # Remove abritrary labels
+  filter(!label %in% labels2remove) %>%
+  unique() %>%
+  mutate(label = plyr::mapvalues(label, from = celltype_conversion_long$all_labels, to = celltype_conversion_long$xCell2_labels, warn_missing = FALSE)) %>%
+  group_by(label) %>%
+  # Minimum 50 cells per label
+  filter(n() >= 20) %>%
+  ungroup()
+
+# Subset and balance cells
+set.seed(123)
+
+meta.10x.confident.filt.sub <- meta.10x.confident.filt %>%
+  group_by(label, dataset, disease, primary_met) %>%
+  sample_n(min(1000, n())) %>%
+  group_by(label, dataset, disease) %>%
+  sample_n(min(1000, n())) %>%
+  group_by(label, dataset) %>%
+  sample_n(min(1000, n())) %>%
+  group_by(label) %>%
+  sample_n(min(1000, n()))
+
+table(meta.10x.confident.filt.sub$label)
+nrow(meta.10x.confident.filt.sub)
+length(unique(meta.10x.confident.filt.sub$cell_names))
+
+# Subset cells from reference data
+
+ref.mat.list <- lapply(ref.mat.list, function(x){x[,colnames(x) %in% meta.10x.confident.filt.sub$cell_names]})
+ref.mat.list <- ref.mat.list[unlist(lapply(ref.mat.list, function(x){class(x) != "numeric"}))]
+ref.mat.list <- ref.mat.list[unlist(lapply(ref.mat.list, function(x){ncol(x) > 0}))]
+
+
+# Combine references and make sure they share the same genes
+shared_rownames <- Reduce(intersect, lapply(ref.mat.list, rownames))
+ref.mat <- lapply(ref.mat.list, function(x) x[shared_rownames, ]) %>%
+  do.call(cbind, .)
+
+# Make sure every cell exist both in ref.mat and in the metadata
+meta.10x.confident.filt.sub <- meta.10x.confident.filt.sub %>%
+  filter(cell_names %in% colnames(ref.mat))
+all(meta.10x.confident.filt.sub$cell_names %in% colnames(ref.mat))
+table(meta.10x.confident.filt.sub$label)
+
+ref.mat <- ref.mat[,meta.10x.confident.filt.sub$cell_names]
+all(meta.10x.confident.filt.sub$cell_names == colnames(ref.mat))
+meta.10x.confident.filt.sub$cell_names <- make.unique(meta.10x.confident.filt.sub$cell_names)
+colnames(ref.mat) <- meta.10x.confident.filt.sub$cell_names
+
+# Get dependencies
+labels <- meta.10x.confident.filt.sub %>%
+  mutate(ont = plyr::mapvalues(label, from = celltype_conversion_long$xCell2_labels, to = celltype_conversion_long$ont, warn_missing = FALSE)) %>%
+  dplyr::select(ont,  label, sample = cell_names, dataset)
+
+labels[labels$label == "Exhausted CD8+ T cells",]$ont <- "CL:0011025"
+xCell2GetLineage(labels = labels, out_file = "/bigdata/almogangel/xCell2_data/dev_data/sc_melanoma_dependencies.tsv")
+lineage.file <- read.table("/bigdata/almogangel/xCell2_data/dev_data/sc_melanoma_dependencies.tsv", sep = "\t", header = TRUE)
+
+lineage.file[lineage.file$label == "Exhausted CD8+ T cells",]$ancestors <- "CD8-positive, alpha-beta T cell"
+
+
+write.table(lineage.file, "/bigdata/almogangel/xCell2_data/dev_data/sc_melanoma_dependencies.tsv", sep = "\t", quote = F, row.names = F)
+
+
+
+sc_melanoma_cancer_ref <- list(ref = ref.mat,
+                               labels = as.data.frame(labels),
+                               lineage_file = "/bigdata/almogangel/xCell2_data/dev_data/sc_melanoma_dependencies.tsv")
+saveRDS(sc_melanoma_cancer_ref, "/bigdata/almogangel/xCell2_data/benchmarking_data/references/sc_melanoma_ref.rds")
+
 ########################  Bulk RNA-seq sorted cells references ---------------------------------------
 ############# Human ---------------------------------------
 # Tumor ref (Kassandra) ----
