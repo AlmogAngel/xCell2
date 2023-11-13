@@ -238,7 +238,10 @@ getEPICRes <- function(ref_val_table, vals, celltype_conversion){
 # Run BayesPrism
 getBayesPrismRes <- function(ref_val_table, vals, celltype_conversion){
 
-  runBayesPrism <- function(vals, valType, valName, refsRDSList, refName, refType, celltypes2use, CPUs = 30){
+  runBayesPrism <- function(vals, valType, valName, refsRDSList, refName, refType, celltypes2use, CPUs = 65){
+
+    dir.create(tempdir())
+
 
     print(paste0(valName, "_", refName))
     mix <- vals$mixtures[[valType]][[valName]]
@@ -264,7 +267,7 @@ getBayesPrismRes <- function(ref_val_table, vals, celltype_conversion){
       diff.exp.stat <- get.exp.stat(sc.dat=ref.raw[,colSums(ref.raw>0)>3],# filter genes to reduce memory use
                                     cell.type.labels=labels,
                                     cell.state.labels=labels,
-                                    psuedo.count=0.1, #a numeric value used for log2 transformation. =0.1 for 10x data, =10 for smart-seq. Default=0.1.
+                                    # psuedo.count=0.1, #a numeric value used for log2 transformation. =0.1 for 10x data, =10 for smart-seq. Default=0.1.
                                     cell.count.cutoff=50, # a numeric value to exclude cell state with number of cells fewer than this value for t test. Default=50.
                                     n.cores=CPUs) #number of threads
 
@@ -310,14 +313,14 @@ getBayesPrismRes <- function(ref_val_table, vals, celltype_conversion){
   refsRDSList <- lapply(refList, function(ref_type){
     refs <- lapply(ref_type, function(ref){
       # Load reference
-      ref.in <- readRDS(paste0("references/", ref, "_ref.rds"))
+      ref.in <- readRDS(paste0("/bigdata/almogangel/xCell2_data/benchmarking_data/references/", ref, "_ref.rds"))
       ref.in
     })
     names(refs) <- ref_type
     refs
   })
 
-# i = 1
+# i = 3
 # x = ref_val_table
 # valType = x[i,]$val_type[[1]]; valName = x[i,]$val_dataset[[1]]; refName = x[i,]$ref_name[[1]]; refType = x[i,]$ref_type[[1]]; celltypes2use = x[i,]$celltype_classes[[1]]
 
@@ -381,7 +384,6 @@ getMCPcounterRes <- function(ref_val_table, vals, celltype_conversion){
 }
 
 # Run dtangle
-# TODO: try to fix patch for lm22
 getdtangleRes <- function(ref_val_table, vals, celltype_conversion){
 
   rundtangle <- function(vals, valType, celltypes2use, refsRDSList, valName, refName, refType){
@@ -392,9 +394,9 @@ getdtangleRes <- function(ref_val_table, vals, celltype_conversion){
     # Subset cell types from the raw reference matrix
     ref.in <- refsRDSList[[refType]][[refName]]
 
-    if (refName == "lm22") {
-      ref.in <- readRDS("/bigdata/almogangel/xCell2_data/dev_data/lm22_ref_for_dtangle.rds")
-    }
+    # if (refName == "lm22") {
+    #   ref.in <- readRDS("/bigdata/almogangel/xCell2_data/dev_data/lm22_ref_for_dtangle.rds")
+    # }
 
     celltypeIndex <- ref.in$labels$label %in% celltypes2use
     ref.raw <- ref.in$ref[,celltypeIndex]
@@ -428,6 +430,15 @@ getdtangleRes <- function(ref_val_table, vals, celltype_conversion){
       mix <- y[,(ncol(ref.raw)+1):ncol(y)]
     }
 
+    # Make sure mix and ref.raw are both in log space
+    if(max(mix) >= 50){
+      mix <-log2(mix+1)
+    }
+
+    if (max(ref.raw) >= 50) {
+      ref.raw <-log2(ref.raw+1)
+    }
+
 
     markerMethod <- ifelse(refType == "sc", "ratio", "p.value")
     dataType <- ifelse(refType == "array", "microarray-gene", "rna-seq")
@@ -449,9 +460,9 @@ getdtangleRes <- function(ref_val_table, vals, celltype_conversion){
     refs
   })
 
-  #i = 8
-  #x = ref_val_table
-  #valType = x[i,]$val_type[[1]]; valName = x[i,]$val_dataset[[1]]; refName = x[i,]$ref_name[[1]]; refType = x[i,]$ref_type[[1]]; celltypes2use = x[i,]$celltype_classes[[1]]
+  # i = 1
+  # x = ref_val_table
+  # valType = x[i,]$val_type[[1]]; valName = x[i,]$val_dataset[[1]]; refName = x[i,]$ref_name[[1]]; refType = x[i,]$ref_type[[1]]; celltypes2use = x[i,]$celltype_classes[[1]]
 
   vals.refs.res <- ref_val_table %>%
     # Run dtangle
@@ -548,16 +559,16 @@ print("Running EPIC...")
 #saveRDS(epic.cyto.res, "/bigdata/almogangel/xCell2_data/benchmarking_data/results/correlations/epic.cyto.res.rds")
 
 print("Running BayesPrism...")
-bp.cyto.res <- getBayesPrismRes(ref_val_table = refval.tbl.nodeps, vals = cyto.vals, celltype_conversion)
-saveRDS(bp.cyto.res, "/bigdata/almogangel/xCell2_data/benchmarking_data/results/correlations/bp.cyto.res.rds")
+#bp.cyto.res <- getBayesPrismRes(ref_val_table = refval.tbl.nodeps, vals = cyto.vals, celltype_conversion)
+#saveRDS(bp.cyto.res, "/bigdata/almogangel/xCell2_data/benchmarking_data/results/correlations/bp.cyto.res.rds")
 
 print("Running MCPcounter")
 #mcp.cyto.res <- getMCPcounterRes(ref_val_table = refval.tbl, vals = cyto.vals, celltype_conversion)
 #saveRDS(mcp.cyto.res, "/bigdata/almogangel/xCell2_data/benchmarking_data/results/correlations/mcp.cyto.res.rds")
 
-# print("Running dtangle")
-# dtan.cyto.res <- getdtangleRes(ref_val_table = refval.tbl.nodeps, vals = cyto.vals, celltype_conversion)
-# saveRDS(dtan.cyto.res, "/bigdata/almogangel/xCell2_data/benchmarking_data/results/correlations/dtan.cyto.res.rds")
+print("Running dtangle")
+#dtan.cyto.res <- getdtangleRes(ref_val_table = refval.tbl.nodeps, vals = cyto.vals, celltype_conversion)
+#saveRDS(dtan.cyto.res, "/bigdata/almogangel/xCell2_data/benchmarking_data/results/correlations/dtan.cyto.res.rds")
 
 print("Running DeconRNASeq")
 #decon.cyto.res <- getDeconRNASeqRes(ref_val_table = refval.tbl.nodeps, vals = cyto.vals, celltype_conversion)
@@ -572,12 +583,12 @@ print("Running quanTIseq")
 # Run single-cell validations
 
 print("Running CIBERSORTx...")
-cbrx.sc.res <- getCIBERSORTxRes(ref_val_table = sc.refval.tbl.nodeps, vals = sc.vals, celltype_conversion)
-saveRDS(cbrx.sc.res, "/bigdata/almogangel/xCell2_data/benchmarking_data/results/correlations/cbrx.sc.res.rds")
+#cbrx.sc.res <- getCIBERSORTxRes(ref_val_table = sc.refval.tbl.nodeps, vals = sc.vals, celltype_conversion)
+#saveRDS(cbrx.sc.res, "/bigdata/almogangel/xCell2_data/benchmarking_data/results/correlations/cbrx.sc.res.rds")
 
 print("Running EPIC...")
-epic.sc.res <- getEPICRes(ref_val_table = sc.refval.tbl.nodeps, vals = sc.vals, celltype_conversion)
-saveRDS(epic.sc.res, "/bigdata/almogangel/xCell2_data/benchmarking_data/results/correlations/epic.sc.res.rds")
+#epic.sc.res <- getEPICRes(ref_val_table = sc.refval.tbl.nodeps, vals = sc.vals, celltype_conversion)
+#saveRDS(epic.sc.res, "/bigdata/almogangel/xCell2_data/benchmarking_data/results/correlations/epic.sc.res.rds")
 
 print("Running BayesPrism...")
 bp.sc.res <- getBayesPrismRes(ref_val_table = sc.refval.tbl.nodeps, vals = sc.vals, celltype_conversion)

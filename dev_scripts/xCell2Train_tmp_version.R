@@ -3,18 +3,18 @@ library(xCell2)
 library(parallel)
 
 # Load reference
-ref.in <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/references/kass_tumor_ref.rds")
+ref.in <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/references/lm22_ref.rds")
 ref = ref.in$ref
 labels = ref.in$labels
 
 # Load mixture
 cyto.vals <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/ref_val_pairs/cyto.vals.rds")
-val_dataset = "ccRCC_cytof_CD45+"
-val_type = "tumor"
+val_dataset = "BG_blood"
+val_type = "blood"
 mix <- cyto.vals$mixtures[[val_type]][[val_dataset]]
 
 # Set data type
-data_type = "rnaseq"
+data_type = "array"
 
 # Get shared genes
 if (data_type == "sc") {
@@ -39,7 +39,7 @@ minPBsamples = 10
 weightGenes = TRUE
 medianGEP = TRUE
 sim_noise = NULL
-ct_sims = 10
+ct_sims = 20
 sims_sample_frac = 0.1
 filtLevel = "high"
 # high, medium, low
@@ -315,9 +315,8 @@ createSignatures <- function(labels, dep_list, quantiles_matrix, probs, cor_mat,
       # Round and sort top genes scores
       top_scores <- sort(unique(round(gene_passed-0.5)), decreasing = TRUE)
 
-      # Take top n_top_scores highest scores
-      # n_top_scores <- ifelse(length(top_scores) > n_top_scores, n_top_scores, length(top_scores))
-      # for (score in top_scores[1:n_top_scores])
+      # Take top 50% highest scores from top_scores
+      top_scores <- top_scores[top_scores >= median(top_scores)]
 
       for (score in top_scores) {
 
@@ -594,9 +593,9 @@ trainModels <- function(simulations_scored, consLvl, ncores, seed2use){
     return(.)
 
 }
-getSpillOverMat <- function(simulations, signatures, dep_list, trans_models, n_sims, frac2use){
+getSpillOverMat <- function(simulations, signatures, dep_list, models, frac2use){
 
-  scoreTransform <- function(mat, signatures, trans_models, is_controls){
+  scoreTransform <- function(mat, signatures, models){
 
     # Score
     mat_ranked <- singscore::rankGenes(mat)
@@ -606,8 +605,9 @@ getSpillOverMat <- function(simulations, signatures, dep_list, trans_models, n_s
     rownames(scores) <- colnames(mat)
 
 
-    transfomed_tbl <- trans_models %>%
-      mutate(predictions = list(round(predict(model, newdata = scores[,startsWith(colnames(scores), paste0(celltype, "#"))], type = "response"), 4))) %>%
+    transfomed_tbl <- models %>%
+      rowwise() %>%
+      mutate(predictions = list(round(randomForestSRC::predict.rfsrc(model, newdata = as.data.frame(scores[,startsWith(colnames(scores), paste0(celltype, "#"))]))$predicted, 4))) %>%
       select(celltype, predictions) %>%
       unnest_longer(predictions, indices_to = "sim_celltype") %>%
       pivot_wider(names_from = sim_celltype, values_from = predictions)
@@ -616,14 +616,60 @@ getSpillOverMat <- function(simulations, signatures, dep_list, trans_models, n_s
     # Convert to matrix
     transfomed_mat <- as.matrix(transfomed_tbl[,-1])
     rownames(transfomed_mat) <- pull(transfomed_tbl[,1])
+    colnames(transfomed_mat) <- rownames(transfomed_mat)
 
-    if (!is_controls) {
-      transfomed_mat <- transfomed_mat[colnames(mat), colnames(mat)]
-    }
 
     return(transfomed_mat)
 
   }
+
+  frac_col <- which(endsWith(colnames(simulations[[1]]), paste0("%%", frac2use)))
+
+  # Get CTOIs  matrix with frac2use fraction
+  ctoi_mat <- sapply(simulations, function(sim){
+    if (!is.null(ncol(sim[,frac_col]))) {
+      rowMeans(sim[,frac_col])
+    }else{
+      sim[,frac_col]
+    }
+  })
+
+  # Get control matrix with CTOI fraction = 0
+  frac_col <- which(endsWith(colnames(simulations[[1]]), paste0("%%", 0)))
+  controls_mat <- sapply(simulations, function(sim){
+    if (!is.null(ncol(sim[,frac_col]))) {
+      rowMeans(sim[,frac_col])
+    }else{
+      sim[,frac_col]
+    }
+  })
+
+  # Score and transform simulations
+  sim_transformed <- scoreTransform(mat = ctoi_mat, signatures, models)
+  controls_mat_transformed <- scoreTransform(mat = controls_mat, signatures, models)
+
+  # Remove control signal from the transformed mixture
+  spill_mat <- sim_transformed - controls_mat_transformed
+
+  # Clean and normalize spill matrix
+  spill_mat[spill_mat < 0] <- 0
+  spill_mat <- spill_mat / diag(spill_mat)
+
+  # Insert zero to dependent cell types
+  for(ctoi in rownames(spill_mat)){
+    dep_cts <- unname(unlist(dep_list[[ctoi]]))
+    dep_cts <- dep_cts[dep_cts != ctoi]
+    spill_mat[ctoi, dep_cts] <- 0
+  }
+
+  # TODO: Check this parameter
+  spill_mat[spill_mat > 0.5] <- 0.5
+  diag(spill_mat) <- 1
+
+  # pheatmap::pheatmap(spill_mat, cluster_rows = F, cluster_cols = F)
+
+
+
 
   if (n_sims == 1) {
 
@@ -818,7 +864,7 @@ xCell2Train <- function(ref, labels, data_type, mix = NULL, lineage_file = NULL,
 
   # Get spillover matrix
   message("Generating spillover matrix...")
-  # spill_mat <- getSpillOverMat(simulations, signatures, dep_list, trans_models, n_sims = 1, frac2use = 0.25)
+  # spill_mat <- getSpillOverMat(simulations, signatures, dep_list, models, n_sims = 1, frac2use = 0.25)
   spill_mat <- matrix()
 
   # Save results in S4 object
