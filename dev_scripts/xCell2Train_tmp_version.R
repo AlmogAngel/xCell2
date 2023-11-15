@@ -44,9 +44,9 @@ sims_sample_frac = 0.1
 filtLevel = "high"
 # high, medium, low
 seed = 123
-nCores = 20
+nCores = 10
 # mix = NULL
-simMethod = "ref_mix_thin"
+simMethod = "ref_multi"
 # c("ref_multi", "ref_thin", "ref_mix_thin")
 
 
@@ -506,12 +506,9 @@ makeSimulations <- function(ref, labels, mix, gep_mat, cor_mat, dep_list, sim_fr
       ref_ctoi_sub <- data_adjusted$ctoi_mat_thin
       ref_controls_sub <- data_adjusted$controls_mat_thin
 
-
       # Make fraction matrices
       ctoi_frac_mat <- makeFractionMatrix(mat = ref_ctoi_sub, sim_fracs, sim_method, control = FALSE)
       control_frac_mat <- makeFractionMatrix(mat = ref_controls_sub, sim_fracs, sim_method, control = TRUE)
-
-
 
       # Combine CTOI and control(s) fractions matrix
       simulation <- ctoi_frac_mat + control_frac_mat
@@ -623,12 +620,12 @@ getSpillOverMat <- function(simulations, signatures, dep_list, models, frac2use)
 
   }
 
-  frac_col <- which(endsWith(colnames(simulations[[1]]), paste0("%%", frac2use)))
 
-  # Get CTOIs  matrix with frac2use fraction
+  # Get CTOIs matrix with frac2use fraction
+  frac_col <- which(endsWith(colnames(simulations[[1]]), paste0("%%", frac2use)))
   ctoi_mat <- sapply(simulations, function(sim){
-    if (!is.null(ncol(sim[,frac_col]))) {
-      rowMeans(sim[,frac_col])
+    if (length(frac_col) > 1) {
+      apply(sim[,frac_col], 1, median)
     }else{
       sim[,frac_col]
     }
@@ -637,8 +634,8 @@ getSpillOverMat <- function(simulations, signatures, dep_list, models, frac2use)
   # Get control matrix with CTOI fraction = 0
   frac_col <- which(endsWith(colnames(simulations[[1]]), paste0("%%", 0)))
   controls_mat <- sapply(simulations, function(sim){
-    if (!is.null(ncol(sim[,frac_col]))) {
-      rowMeans(sim[,frac_col])
+    if (length(frac_col) > 1) {
+      apply(sim[,frac_col], 1, median)
     }else{
       sim[,frac_col]
     }
@@ -668,62 +665,7 @@ getSpillOverMat <- function(simulations, signatures, dep_list, models, frac2use)
 
   # pheatmap::pheatmap(spill_mat, cluster_rows = F, cluster_cols = F)
 
-
-
-
-  if (n_sims == 1) {
-
-    # Get CTOIs  matrix with frac2use fraction
-    frac_col <- which(endsWith(colnames(simulations[[1]]), paste0("%%", frac2use)))
-    ctoi_mat <- sapply(simulations, function(sim){
-      sim[,frac_col]
-    })
-
-
-    # Get control matrix with CTOI fraction = 0
-    frac_col <- which(endsWith(colnames(simulations[[1]]), paste0("%%", 0)))
-    controls_mat <- sapply(simulations, function(sim){
-      sim[,frac_col]
-    })
-    colnames(controls_mat) <- unname(sapply(simulations, function(sim){
-      gsub("%%*.", "", colnames(sim)[frac_col])
-    }))
-
-
-    # Score and transform simulations
-    sim_transformed <- scoreTransform(mat = ctoi_mat, signatures, trans_models, is_controls = FALSE)
-    controls_mat_uniq <- controls_mat[,!duplicated(colnames(controls_mat))]
-    controls_mat_transformed <- scoreTransform(mat = controls_mat_uniq, signatures, trans_models, is_controls = TRUE)
-    # Undo unique
-    controls_mat_transformed <- sapply(colnames(controls_mat), function(ctrl){
-      controls_mat_transformed[,ctrl]
-    })
-    controls_mat_transformed <- controls_mat_transformed[colnames(sim_transformed), ]
-
-    # Remove control signal from the transformed mixture
-    spill_mat <- sim_transformed - controls_mat_transformed
-
-    # Clean and normalize spill matrix
-    spill_mat[spill_mat < 0] <- 0
-    spill_mat <- spill_mat / diag(spill_mat)
-
-    # Insert zero to dependent cell types
-    for(ctoi in rownames(spill_mat)){
-      dep_cts <- unname(unlist(dep_list[[ctoi]]))
-      dep_cts <- dep_cts[dep_cts != ctoi]
-      spill_mat[ctoi, dep_cts] <- 0
-    }
-
-    # TODO: Check this parameter
-    spill_mat[spill_mat > 0.5] <- 0.5
-    diag(spill_mat) <- 1
-
-    # pheatmap::pheatmap(spill_mat, cluster_rows = F, cluster_cols = F)
-
-    return(spill_mat)
-
-  }
-
+  return(spill_mat)
 
 }
 
@@ -798,6 +740,7 @@ xCell2Train <- function(ref, labels, data_type, mix = NULL, lineage_file = NULL,
   ref <- inputs_validated$ref
   labels <- inputs_validated$labels
 
+
   # TODO: first sum counts and then normalize or vice versa?
 
   # Generate pseudo bulk from scRNA-Seq reference
@@ -856,7 +799,6 @@ xCell2Train <- function(ref, labels, data_type, mix = NULL, lineage_file = NULL,
 
   # Filter signatures and train RF model
   message("Filtering signatures and training models...")
-  # TODO: remove sim_noise
   models <- trainModels(simulations_scored, consLvl = filtLevel, ncores = nCores, seed2use = seed)
   signatures <- signatures[unlist(models$sigs_filtered)]
   models <- models[,-3]
@@ -864,8 +806,9 @@ xCell2Train <- function(ref, labels, data_type, mix = NULL, lineage_file = NULL,
 
   # Get spillover matrix
   message("Generating spillover matrix...")
-  # spill_mat <- getSpillOverMat(simulations, signatures, dep_list, models, n_sims = 1, frac2use = 0.25)
-  spill_mat <- matrix()
+  frac2use <- sim_fracs[which.min(abs(sim_fracs - 0.25))]
+  spill_mat <- getSpillOverMat(simulations, signatures, dep_list, models, frac2use)
+
 
   # Save results in S4 object
   xCell2Sigs.S4 <- new("xCell2Signatures",

@@ -89,7 +89,7 @@ sim_method <- "ref_mix_thin"
 simFracs <- c(0, seq(0.01, 0.25, 0.002), seq(0.3, 1, 0.05))
 # xCell2Analysis
 tranform <- TRUE
-spillover <- FALSE
+spillover <- TRUE
 nSims <- 20
 
 
