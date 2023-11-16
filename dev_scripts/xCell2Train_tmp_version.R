@@ -789,6 +789,26 @@ xCell2Train <- function(ref, labels, data_type, mix = NULL, lineage_file = NULL,
     signatures <- readRDS(sigsFile)
   }
 
+  # Add essential genes
+  celltype.data
+  addEssentialGenes <- function(signatures){
+
+    celltypes <- unique(gsub("#.*", "", names(signatures)))
+    for (ct in celltypes) {
+
+      # Check if cell type exists in celltype.data
+      if (!ct %in% celltype.data$all_labels) {
+        next
+      }
+
+      ct_label <- celltype.data[celltype.data$xCell2_labels == ct,]$xCell2_labels
+
+
+    }
+
+
+  }
+
 
   # Make simulations
   message("Generating simulations...")
