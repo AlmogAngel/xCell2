@@ -3,7 +3,7 @@ library(xCell2)
 library(parallel)
 
 # Load reference
-ref.in <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/references/lm22_ref.rds")
+ref.in <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/references/bp_ref.rds")
 ref = ref.in$ref
 labels = ref.in$labels
 
@@ -14,7 +14,7 @@ val_type = "blood"
 mix <- cyto.vals$mixtures[[val_type]][[val_dataset]]
 
 # Set data type
-data_type = "array"
+data_type = "rnaseq"
 
 # Get shared genes
 if (data_type == "sc") {
@@ -46,7 +46,7 @@ filtLevel = "high"
 seed = 123
 nCores = 10
 # mix = NULL
-simMethod = "ref_multi"
+simMethod = "ref_mix_thin"
 # c("ref_multi", "ref_thin", "ref_mix_thin")
 
 
@@ -422,7 +422,7 @@ makeSimulations <- function(ref, labels, mix, gep_mat, cor_mat, dep_list, sim_fr
 
     # Check if data not in counts (all integers) because you can't thin fractions (?)
     if (sim_method != "ref_multi") {
-      scale_factor <- 10000 # TODO: Ask Anna
+      scale_factor <- 10000
       mat <- round(mat * scale_factor)
     }
 
