@@ -312,6 +312,29 @@ createSignatures <- function(labels, dep_list, quantiles_matrix, probs, cor_mat,
 
   return(all_sigs)
 }
+addEssentialGenes <- function(signatures){
+
+  celltypes <- unique(gsub("#.*", "", names(signatures)))
+  for (ct in celltypes) {
+
+    # Check if cell type exists in celltype.data
+    if (!ct %in% celltype.data$all_labels) {
+      next
+    }
+
+    # Get essential genes
+    ct_label <- celltype.data[celltype.data$all_labels == ct,]$xCell2_labels
+    essen_genes <- unique(unlist(celltype.data[celltype.data$xCell2_labels == ct_label,]$essential_genes))
+
+    # Add to signature
+    ct_sigs <- which(startsWith(names(signatures), paste0(ct, "#")))
+    for (sig in ct_sigs) {
+      signatures[sig][[1]] <- unique(c(signatures[sig][[1]], essen_genes))
+    }
+  }
+  return(signatures)
+
+}
 makeSimulations <- function(ref, labels, mix, gep_mat, cor_mat, dep_list, sim_fracs, sim_method, ctoi_samples_frac, n_sims, ncores, seed2use){
 
   set.seed(seed2use)
@@ -366,7 +389,7 @@ makeSimulations <- function(ref, labels, mix, gep_mat, cor_mat, dep_list, sim_fr
 
     # Check if data not in counts (all integers) because you can't thin fractions (?)
     if (sim_method != "ref_multi") {
-      scale_factor <- 10000 # TODO: Ask Anna
+      scale_factor <- 10000
       mat <- round(mat * scale_factor)
     }
 
@@ -732,6 +755,9 @@ xCell2Train <- function(ref, labels, data_type, mix = NULL, lineage_file = NULL,
     message("Loading signatures...")
     signatures <- readRDS(sigsFile)
   }
+
+  # Add essential genes
+  signatures <- addEssentialGenes(signatures)
 
 
   # Make simulations
