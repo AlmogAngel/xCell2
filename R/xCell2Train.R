@@ -312,9 +312,10 @@ createSignatures <- function(labels, dep_list, quantiles_matrix, probs, cor_mat,
 
   return(all_sigs)
 }
-addEssentialGenes <- function(signatures){
+addEssentialGenes <- function(ref, signatures){
 
   celltypes <- unique(gsub("#.*", "", names(signatures)))
+
   for (ct in celltypes) {
 
     # Check if cell type exists in celltype.data
@@ -326,12 +327,20 @@ addEssentialGenes <- function(signatures){
     ct_label <- celltype.data[celltype.data$all_labels == ct,]$xCell2_labels
     essen_genes <- unique(unlist(celltype.data[celltype.data$xCell2_labels == ct_label,]$essential_genes))
 
+    if (all(is.na(essen_genes))) {
+      next
+    }
+
+    essen_genes <- intersect(rownames(ref), essen_genes) # Use only essential genes which are in ref
+
     # Add to signature
     ct_sigs <- which(startsWith(names(signatures), paste0(ct, "#")))
     for (sig in ct_sigs) {
       signatures[sig][[1]] <- unique(c(signatures[sig][[1]], essen_genes))
     }
+
   }
+
   return(signatures)
 
 }
@@ -757,8 +766,7 @@ xCell2Train <- function(ref, labels, data_type, mix = NULL, lineage_file = NULL,
   }
 
   # Add essential genes
-  signatures <- addEssentialGenes(signatures)
-
+  signatures <- addEssentialGenes(ref, signatures)
 
   # Make simulations
   message("Generating simulations...")
