@@ -25,8 +25,7 @@ xCell2Train(
   ct_sims = 10,
   sims_sample_frac = 0.1,
   simMethod = "ref_thin",
-  sim_noise = NULL,
-  regGamma = 0.8,
+  filtLevel = "high",
   nCores = 1
 )
 }
@@ -69,9 +68,7 @@ xCell2Train(
 
 \item{simMethod}{description}
 
-\item{sim_noise}{description}
-
-\item{regGamma}{description}
+\item{filtLevel}{description}
 
 \item{nCores}{description}
 
