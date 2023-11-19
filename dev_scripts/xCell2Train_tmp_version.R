@@ -368,7 +368,7 @@ createSignatures <- function(labels, dep_list, quantiles_matrix, probs, cor_mat,
 
   return(all_sigs)
 }
-addEssentialGenes <- function(ref, signatures){
+addEssentialGenes <- function(ref, signatures, celltype.data){
 
   celltypes <- unique(gsub("#.*", "", names(signatures)))
 
@@ -812,7 +812,8 @@ xCell2Train <- function(ref, labels, data_type, mix = NULL, lineage_file = NULL,
     signatures <- createSignatures(labels, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, weight_genes = weightGenes, ncores = nCores)
 
     # Add essential genes
-    signatures <- addEssentialGenes(ref, signatures)
+    celltype.data <- xCell2::celltype.data
+    signatures <- addEssentialGenes(ref, signatures, celltype.data)
 
     if (return_sigs) {
       return(signatures)
