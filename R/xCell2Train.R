@@ -755,6 +755,9 @@ xCell2Train <- function(ref, labels, data_type, mix = NULL, lineage_file = NULL,
     message("Generating signatures...")
     signatures <- createSignatures(labels, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, weight_genes = weightGenes, ncores = nCores)
 
+    # Add essential genes
+    signatures <- addEssentialGenes(ref, signatures)
+
     if (return_sigs) {
       return(signatures)
     }
@@ -765,8 +768,7 @@ xCell2Train <- function(ref, labels, data_type, mix = NULL, lineage_file = NULL,
     signatures <- readRDS(sigsFile)
   }
 
-  # Add essential genes
-  signatures <- addEssentialGenes(ref, signatures)
+
 
   # Make simulations
   message("Generating simulations...")

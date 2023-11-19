@@ -5,6 +5,7 @@
 # Goal: to generate boxplot that show that xCell2's signatures are better than xCell given the same reference
 
 library(tidyverse)
+library(xCell2)
 
 refval.tbl <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/ref_val_pairs/cyto_ref_val.rds")
 cyto.vals <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/ref_val_pairs/cyto.vals.rds")
