@@ -8,3 +8,15 @@
 #'   \item{symbol}{gene symbol}
 #' }
 "hs.genelist"
+
+#' @name celltype.data
+#' @title aa
+#' @description Gaaa
+#' @format A tibble with 4 columns:
+#' \describe{
+#'   \item{xCell2_labels}{xCell2_labels}
+#'   \item{all_labels}{all_labels}
+#'   \item{ont}{ontl}
+#'   \item{essential_genes}{essential_genes}
+#' }
+"celltype.data"
