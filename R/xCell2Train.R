@@ -220,10 +220,12 @@ createSignatures <- function(labels, dep_list, quantiles_matrix, probs, cor_mat,
 
     # Set signature thresholds grid
     param.df <- expand.grid("diff_vals" = diff_vals, "probs" = probs)
+    param.df <- param.df[order(-param.df$diff_vals, param.df$probs), ]
 
     # Generate signatures
     type_sigs <- list()
     for (i in 1:nrow(param.df)){
+
 
       # Get a Boolean matrices with genes that pass the quantiles criteria
       diff <- param.df[i, ]$diff_vals # difference threshold
@@ -259,8 +261,8 @@ createSignatures <- function(labels, dep_list, quantiles_matrix, probs, cor_mat,
       # Round and sort top genes scores
       top_scores <- sort(unique(round(gene_passed-0.5)), decreasing = TRUE)
 
-      # Take top 50% highest scores from top_scores
-      top_scores <- top_scores[top_scores >= median(top_scores)]
+      # Take top 3 highest scores from top_scores
+      top_scores <- top_scores[1:3]
 
       for (score in top_scores) {
 
@@ -707,8 +709,8 @@ setClass("xCell2Signatures", slots = list(
 #' @return An S4 object containing the signatures, cell type labels, and cell type dependencies.
 #' @export
 xCell2Train <- function(ref, labels, data_type, mix = NULL, lineage_file = NULL, weightGenes = TRUE, medianGEP = TRUE, seed = 123, probs = c(0.01, 0.05, 0.1, 0.25, 0.333, 0.49),
-                        sim_fracs = c(0, seq(0.01, 0.25, 0.005), seq(0.3, 1, 0.05)), diff_vals = c(1, 1.32, 1.585, 2, 3, 4, 5),
-                        min_genes = 5, max_genes = 200, return_sigs = FALSE, sigsFile = NULL, minPBcells = 30, minPBsamples = 10,
+                        sim_fracs = c(0, seq(0.01, 0.25, 0.005), seq(0.3, 1, 0.05)), diff_vals = c(1, 1.585, 2, 3, 4, 5),
+                        min_genes = 3, max_genes = 100, return_sigs = FALSE, sigsFile = NULL, minPBcells = 30, minPBsamples = 10,
                         ct_sims = 10, sims_sample_frac = 0.1, simMethod = "ref_thin", filtLevel = "high", nCores = 1){
 
 
@@ -768,7 +770,6 @@ xCell2Train <- function(ref, labels, data_type, mix = NULL, lineage_file = NULL,
     message("Loading signatures...")
     signatures <- readRDS(sigsFile)
   }
-
 
 
   # Make simulations
