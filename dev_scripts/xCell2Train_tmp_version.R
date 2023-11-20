@@ -3,7 +3,7 @@ library(xCell2)
 library(parallel)
 
 # Load reference
-ref.in <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/references/bp_ref.rds")
+ref.in <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/references/lm22_ref.rds")
 ref = ref.in$ref
 labels = ref.in$labels
 
@@ -14,7 +14,7 @@ val_type = "blood"
 mix <- cyto.vals$mixtures[[val_type]][[val_dataset]]
 
 # Set data type
-data_type = "rnaseq"
+data_type = "array"
 
 # Get shared genes
 if (data_type == "sc") {
@@ -28,10 +28,10 @@ mix <- shared_clean_genes$mix
 # Load parameters
 lineage_file = ref.in$lineage_file
 sim_fracs = c(0, seq(0.01, 0.25, 0.002), seq(0.3, 1, 0.05))
-diff_vals = c(1, 1.32, 1.585, 2, 3, 4, 5)
+diff_vals = c(1, 1.585, 2, 3, 4, 5)
 probs = c(0.01, 0.05, 0.1, 0.25, 0.333, 0.49)
-min_genes = 5
-max_genes = 200
+min_genes = 3
+max_genes = 100
 return_sigs = FALSE
 sigsFile = NULL
 minPBcells = 30
@@ -41,8 +41,6 @@ medianGEP = TRUE
 sim_noise = NULL
 ct_sims = 20
 sims_sample_frac = 0.1
-filtLevel = "high"
-# high, medium, low
 seed = 123
 nCores = 10
 # mix = NULL
@@ -276,10 +274,12 @@ createSignatures <- function(labels, dep_list, quantiles_matrix, probs, cor_mat,
 
     # Set signature thresholds grid
     param.df <- expand.grid("diff_vals" = diff_vals, "probs" = probs)
+    param.df <- param.df[order(-param.df$diff_vals, param.df$probs), ]
 
     # Generate signatures
     type_sigs <- list()
     for (i in 1:nrow(param.df)){
+
 
       # Get a Boolean matrices with genes that pass the quantiles criteria
       diff <- param.df[i, ]$diff_vals # difference threshold
@@ -315,8 +315,8 @@ createSignatures <- function(labels, dep_list, quantiles_matrix, probs, cor_mat,
       # Round and sort top genes scores
       top_scores <- sort(unique(round(gene_passed-0.5)), decreasing = TRUE)
 
-      # Take top 50% highest scores from top_scores
-      top_scores <- top_scores[top_scores >= median(top_scores)]
+      # Take top 3 highest scores from top_scores
+      top_scores <- top_scores[1:3]
 
       for (score in top_scores) {
 
@@ -588,14 +588,14 @@ scoreSimulations <- function(signatures, simulations, ncores){
   return(sims_scored)
 
 }
-trainModels <- function(simulations_scored, consLvl, ncores, seed2use){
+trainModels <- function(simulations_scored, ncores, seed2use){
 
   set.seed(seed2use)
 
-  fitModel <- function(data, nRFcores, consLvl){
+  fitModel <- function(data, nRFcores){
 
     options(rf.cores=nRFcores, mc.cores=1)
-    model <- randomForestSRC::var.select(frac ~ ., as.data.frame(data), method = "md", conservative = consLvl, verbose = FALSE, refit = TRUE)
+    model <- randomForestSRC::var.select(frac ~ ., as.data.frame(data), method = "vh.vimp", verbose = FALSE, refit = TRUE, fast = TRUE)
     selected_features <- model$topvars
 
     return(tibble(model = list(model$rfsrc.refit.obj), sigs_filtered = list(selected_features)))
@@ -755,7 +755,6 @@ setClass("xCell2Signatures", slots = list(
 #' @param minPBcells description
 #' @param minPBgroups description
 #' @param ct_sims description
-#' @param filtLevel description
 #' @param sims_sample_frac description
 #' @param nCores description
 #' @param mix description
@@ -763,9 +762,9 @@ setClass("xCell2Signatures", slots = list(
 #' @return An S4 object containing the signatures, cell type labels, and cell type dependencies.
 #' @export
 xCell2Train <- function(ref, labels, data_type, mix = NULL, lineage_file = NULL, weightGenes = TRUE, medianGEP = TRUE, seed = 123, probs = c(0.01, 0.05, 0.1, 0.25, 0.333, 0.49),
-                        sim_fracs = c(0, seq(0.01, 0.25, 0.005), seq(0.3, 1, 0.05)), diff_vals = c(1, 1.32, 1.585, 2, 3, 4, 5),
-                        min_genes = 5, max_genes = 200, return_sigs = FALSE, sigsFile = NULL, minPBcells = 30, minPBsamples = 10,
-                        ct_sims = 10, sims_sample_frac = 0.1, simMethod = "ref_thin", filtLevel = "high", nCores = 1){
+                        sim_fracs = c(0, seq(0.01, 0.25, 0.005), seq(0.3, 1, 0.05)), diff_vals = c(1, 1.585, 2, 3, 4, 5),
+                        min_genes = 3, max_genes = 100, return_sigs = FALSE, sigsFile = NULL, minPBcells = 30, minPBsamples = 10,
+                        ct_sims = 20, sims_sample_frac = 0.1, simMethod = "ref_thin", nCores = 1){
 
 
   # Validate inputs
@@ -826,7 +825,6 @@ xCell2Train <- function(ref, labels, data_type, mix = NULL, lineage_file = NULL,
   }
 
 
-
   # Make simulations
   message("Generating simulations...")
   simulations <- makeSimulations(ref, labels, mix, gep_mat, cor_mat, dep_list, sim_fracs, sim_method = simMethod, ctoi_samples_frac = sims_sample_frac, n_sims = ct_sims, ncores = nCores, seed2use = seed)
@@ -836,7 +834,7 @@ xCell2Train <- function(ref, labels, data_type, mix = NULL, lineage_file = NULL,
 
   # Filter signatures and train RF model
   message("Filtering signatures and training models...")
-  models <- trainModels(simulations_scored, consLvl = filtLevel, ncores = nCores, seed2use = seed)
+  models <- trainModels(simulations_scored, ncores = nCores, seed2use = seed)
   signatures <- signatures[unlist(models$sigs_filtered)]
   models <- models[,-3]
 

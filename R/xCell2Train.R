@@ -534,14 +534,14 @@ scoreSimulations <- function(signatures, simulations, ncores){
   return(sims_scored)
 
 }
-trainModels <- function(simulations_scored, consLvl, ncores, seed2use){
+trainModels <- function(simulations_scored, ncores, seed2use){
 
   set.seed(seed2use)
 
-  fitModel <- function(data, nRFcores, consLvl){
+  fitModel <- function(data, nRFcores){
 
     options(rf.cores=nRFcores, mc.cores=1)
-    model <- randomForestSRC::var.select(frac ~ ., as.data.frame(data), method = "md", conservative = consLvl, verbose = FALSE, refit = TRUE)
+    model <- randomForestSRC::var.select(frac ~ ., as.data.frame(data), method = "vh.vimp", verbose = FALSE, refit = TRUE, fast = TRUE)
     selected_features <- model$topvars
 
     return(tibble(model = list(model$rfsrc.refit.obj), sigs_filtered = list(selected_features)))
@@ -701,7 +701,6 @@ setClass("xCell2Signatures", slots = list(
 #' @param minPBcells description
 #' @param minPBgroups description
 #' @param ct_sims description
-#' @param filtLevel description
 #' @param sims_sample_frac description
 #' @param nCores description
 #' @param mix description
@@ -711,7 +710,7 @@ setClass("xCell2Signatures", slots = list(
 xCell2Train <- function(ref, labels, data_type, mix = NULL, lineage_file = NULL, weightGenes = TRUE, medianGEP = TRUE, seed = 123, probs = c(0.01, 0.05, 0.1, 0.25, 0.333, 0.49),
                         sim_fracs = c(0, seq(0.01, 0.25, 0.005), seq(0.3, 1, 0.05)), diff_vals = c(1, 1.585, 2, 3, 4, 5),
                         min_genes = 3, max_genes = 100, return_sigs = FALSE, sigsFile = NULL, minPBcells = 30, minPBsamples = 10,
-                        ct_sims = 10, sims_sample_frac = 0.1, simMethod = "ref_thin", filtLevel = "high", nCores = 1){
+                        ct_sims = 20, sims_sample_frac = 0.1, simMethod = "ref_thin", nCores = 1){
 
 
   # Validate inputs
@@ -781,7 +780,7 @@ xCell2Train <- function(ref, labels, data_type, mix = NULL, lineage_file = NULL,
 
   # Filter signatures and train RF model
   message("Filtering signatures and training models...")
-  models <- trainModels(simulations_scored, consLvl = filtLevel, ncores = nCores, seed2use = seed)
+  models <- trainModels(simulations_scored, ncores = nCores, seed2use = seed)
   signatures <- signatures[unlist(models$sigs_filtered)]
   models <- models[,-3]
 

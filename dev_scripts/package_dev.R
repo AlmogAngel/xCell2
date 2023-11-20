@@ -1,6 +1,7 @@
 devtools::install_github("AlmogAngel/xCell2", force = TRUE, dep = FALSE)
 
 library(xCell2)
+library(tidyverse)
 
 setwd("/bigdata/almogangel/xCell2/")
 devtools::document()
