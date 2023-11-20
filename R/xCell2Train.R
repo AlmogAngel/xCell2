@@ -558,7 +558,7 @@ trainModels <- function(simulations_scored, ncores, seed2use){
 
   #start <- Sys.time()
   models_list <- parallel::mclapply(simulations_scored, function(data){
-    fitModel(data, rfCores, consLvl)
+    fitModel(data, rfCores)
   }, mc.cores = mcCores, mc.set.seed = FALSE)
   #end <- Sys.time()
   #print(end-start)
