@@ -189,9 +189,10 @@ logTransformRef <- function(ref){
 }
 makeQuantiles <- function(ref, labels, probs, ncores){
 
+  param <- BiocParallel::MulticoreParam(workers = ncores)
   celltypes <- unique(labels[,2])
 
-  quantiles_mat_list <-  parallel::mclapply(celltypes, function(type){
+  quantiles_mat_list <-  BiocParallel::bplapply(celltypes, function(type){
 
     type_samples <- labels[,2] == type
 
@@ -205,7 +206,7 @@ makeQuantiles <- function(ref, labels, probs, ncores){
     # Calculate quantiles
     # TODO: Balance quantiles by dataset
     type_quantiles_matrix <- apply(type.df, 1, function(x) quantile(x, unique(c(probs, rev(1-probs))), na.rm=TRUE))
-  }, mc.cores = ncores, mc.set.seed = FALSE)
+  }, BPPARAM = param)
   names(quantiles_mat_list) <- celltypes
 
   return(quantiles_mat_list)
@@ -296,12 +297,13 @@ createSignatures <- function(labels, dep_list, quantiles_matrix, probs, cor_mat,
     return(type_sigs)
   }
 
-
+  param <- BiocParallel::MulticoreParam(workers = ncores)
   celltypes <- unique(labels[,2])
 
-  all_sigs <- parallel::mclapply(celltypes, function(type){
+
+  all_sigs <- BiocParallel::bplapply(celltypes, function(type){
     getSigs(celltypes, type, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, weight_genes)
-  }, mc.cores = ncores, mc.set.seed = FALSE)
+  }, BPPARAM = param)
 
 
   all_sigs <- unlist(all_sigs, recursive = FALSE)
@@ -351,6 +353,7 @@ makeSimulations <- function(ref, labels, mix, gep_mat, cor_mat, dep_list, sim_fr
 
   set.seed(seed2use)
 
+  param <- BiocParallel::MulticoreParam(workers = ncores)
   celltypes <- unique(labels$label)
 
   getSubMatrix <- function(mat, sim_fracs, n_samples_sim){
@@ -434,7 +437,7 @@ makeSimulations <- function(ref, labels, mix, gep_mat, cor_mat, dep_list, sim_fr
   }
 
 
-  sim_list <- parallel::mclapply(celltypes, function(ctoi){
+  sim_list <- BiocParallel::bplapply(celltypes, function(ctoi){
 
     ref_ctoi <- ref[,labels$label == ctoi]
 
@@ -503,7 +506,7 @@ makeSimulations <- function(ref, labels, mix, gep_mat, cor_mat, dep_list, sim_fr
     do.call(cbind, ctoi_sim_list)
 
 
-  }, mc.cores = ncores, mc.set.seed = FALSE)
+  }, BPPARAM = param)
   names(sim_list) <- celltypes
 
   return(sim_list)
@@ -511,9 +514,10 @@ makeSimulations <- function(ref, labels, mix, gep_mat, cor_mat, dep_list, sim_fr
 }
 scoreSimulations <- function(signatures, simulations, ncores){
 
+  param <- BiocParallel::MulticoreParam(workers = ncores)
   celltypes <- names(simulations)
 
-  sims_scored <- parallel::mclapply(celltypes, function(ctoi){
+  sims_scored <- BiocParallel::bplapply(celltypes, function(ctoi){
 
     signatures_ctoi <- signatures[gsub("#.*", "", names(signatures)) %in% ctoi]
     ctoi_sim <- simulations[[ctoi]]
@@ -527,7 +531,7 @@ scoreSimulations <- function(signatures, simulations, ncores){
     score <- cbind(scores, frac = as.numeric(gsub("mix%%", "", colnames(ctoi_sim))))
     score
 
-  }, mc.cores = ncores, mc.set.seed = FALSE)
+  }, BPPARAM = param)
 
   names(sims_scored) <- celltypes
 
@@ -538,28 +542,28 @@ trainModels <- function(simulations_scored, ncores, seed2use){
 
   set.seed(seed2use)
 
-  fitModel <- function(data, nRFcores){
+  fitModel <- function(data){
 
-    options(rf.cores=nRFcores, mc.cores=1)
+    options(rf.cores=1, mc.cores=1)
+
+    #start <- Sys.time()
     model <- randomForestSRC::var.select(frac ~ ., as.data.frame(data), method = "vh.vimp", verbose = FALSE, refit = TRUE, fast = TRUE)
-    selected_features <- model$topvars
+    #end <- Sys.time()
+    #print(end-start)
 
-    return(tibble(model = list(model$rfsrc.refit.obj), sigs_filtered = list(selected_features)))
+    sigs_filt <- model$topvars
+
+    return(tibble(model = list(model$rfsrc.refit.obj), sigs_filtered = list(sigs_filt)))
 
   }
 
-  if (ncores < 4) {
-    mcCores <- round(ncores*(3/4))
-    rfCores <- round(ncores*(1/4))
-  }else{
-    mcCores <- ncores
-    rfCores <- 1
-  }
+
+  param <- BiocParallel::MulticoreParam(workers = ncores)
 
   #start <- Sys.time()
-  models_list <- parallel::mclapply(simulations_scored, function(data){
-    fitModel(data, rfCores)
-  }, mc.cores = mcCores, mc.set.seed = FALSE)
+  models_list <- BiocParallel::bplapply(simulations_scored, function(data){
+    fitModel(data)
+  }, BPPARAM = param)
   #end <- Sys.time()
   #print(end-start)
 
@@ -673,12 +677,9 @@ setClass("xCell2Signatures", slots = list(
 #' @import tibble
 #' @import tidyr
 #' @import readr
-#' @import parallel
+#' @import BiocParallel
 #' @importFrom randomForestSRC var.select
 #' @importFrom Rfast rowMedians rowmeans rowsums
-#' @importFrom parallel mclapply
-#' @importFrom pbapply pblapply pbsapply
-#' @importFrom RRF RRF
 #' @importFrom seqgendiff thin_lib
 #' @importFrom Matrix rowMeans rowSums colSums
 #' @importFrom singscore rankGenes simpleScore
@@ -746,6 +747,7 @@ xCell2Train <- function(ref, labels, data_type, mix = NULL, lineage_file = NULL,
   }else{
     dep_list <- getDependencies(lineage_file)
   }
+
 
 
   # Generate/Load signatures

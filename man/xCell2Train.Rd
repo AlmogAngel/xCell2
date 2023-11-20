@@ -15,17 +15,16 @@ xCell2Train(
   seed = 123,
   probs = c(0.01, 0.05, 0.1, 0.25, 0.333, 0.49),
   sim_fracs = c(0, seq(0.01, 0.25, 0.005), seq(0.3, 1, 0.05)),
-  diff_vals = c(1, 1.32, 1.585, 2, 3, 4, 5),
-  min_genes = 5,
-  max_genes = 200,
+  diff_vals = c(1, 1.585, 2, 3, 4, 5),
+  min_genes = 3,
+  max_genes = 100,
   return_sigs = FALSE,
   sigsFile = NULL,
   minPBcells = 30,
   minPBsamples = 10,
-  ct_sims = 10,
+  ct_sims = 20,
   sims_sample_frac = 0.1,
   simMethod = "ref_thin",
-  filtLevel = "high",
   nCores = 1
 )
 }
@@ -67,8 +66,6 @@ xCell2Train(
 \item{sims_sample_frac}{description}
 
 \item{simMethod}{description}
-
-\item{filtLevel}{description}
 
 \item{nCores}{description}
 
