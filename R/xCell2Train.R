@@ -221,12 +221,10 @@ createSignatures <- function(labels, dep_list, quantiles_matrix, probs, cor_mat,
 
     # Set signature thresholds grid
     param.df <- expand.grid("diff_vals" = diff_vals, "probs" = probs)
-    param.df <- param.df[order(-param.df$diff_vals, param.df$probs), ]
 
     # Generate signatures
     type_sigs <- list()
     for (i in 1:nrow(param.df)){
-
 
       # Get a Boolean matrices with genes that pass the quantiles criteria
       diff <- param.df[i, ]$diff_vals # difference threshold
@@ -263,7 +261,9 @@ createSignatures <- function(labels, dep_list, quantiles_matrix, probs, cor_mat,
       top_scores <- sort(unique(round(gene_passed-0.5)), decreasing = TRUE)
 
       # Take top 3 highest scores from top_scores
-      top_scores <- top_scores[1:3]
+      if (length(top_scores) > 3) {
+        top_scores <- top_scores[1:3]
+      }
 
       for (score in top_scores) {
 
