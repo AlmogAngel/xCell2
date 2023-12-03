@@ -30,7 +30,6 @@ celltype.data <- read_tsv("/bigdata/almogangel/xCell2_data/celltypes.data.tsv") 
   mutate(all_labels = str_split(all_labels, ";")) %>%
   mutate(essential_genes = str_split(essential_genes, ";")) %>%
   unnest(cols = c(all_labels))
-celltype.data <- celltype.data[,1:4]
 
 usethis::use_data(ts_labels_with_ontology)
 usethis::use_data(hs.genelist)
