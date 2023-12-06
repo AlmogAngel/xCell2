@@ -3,18 +3,18 @@ library(xCell2)
 
 
 # Load reference
-ref.in <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/references/lm22_ref.rds")
+ref.in <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/references/bp_ref.rds")
 ref = ref.in$ref
 labels = ref.in$labels
 
 # Load mixture
 cyto.vals <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/ref_val_pairs/cyto.vals.rds")
-val_dataset = "BG_blood"
+val_dataset = "GSE107011"
 val_type = "blood"
 mix <- cyto.vals$mixtures[[val_type]][[val_dataset]]
 
 # Set data type
-data_type = "array"
+data_type = "rnaseq"
 
 # Get shared genes
 if (data_type == "sc") {
@@ -29,22 +29,22 @@ mix <- shared_clean_genes$mix
 lineage_file = ref.in$lineage_file
 sim_fracs = c(0, seq(0.01, 0.25, 0.002), seq(0.3, 1, 0.05))
 diff_vals = round(c(log2(1), log2(1.5), log2(2), log2(2.5), log2(3), log2(4), log2(5), log2(10), log2(20)), 3)
-probs = c(0.01, 0.05, 0.1, 0.15, 0.2, 0.25, 0.333, 0.4)
+probs = c(0.01, 0.05, 0.1, 0.15, 0.2, 0.25, 0.333, 0.49)
 min_genes = 3
 max_genes = 100
 return_sigs = FALSE
 sigsFile = NULL
 minPBcells = 30
 minPBsamples = 10
-top_genes_frac = 0.5
+top_genes_frac = 1
 medianGEP = TRUE
 sim_noise = NULL
-ct_sims = 100
-samples_frac = 0.1
+ct_sims = 20
+sims_sample_frac = 0.1
 seed = 123
 nCores = 60
 # mix = NULL
-simMethod = "ref_thin"
+simMethod = "ref_mix_thin"
 # c("ref_multi", "ref_thin", "ref_mix_thin")
 
 
@@ -473,12 +473,11 @@ makeSimulations <- function(ref, labels, mix, sim_method, samples_frac, n_sims, 
 
   param <- BiocParallel::MulticoreParam(workers = ncores)
   celltypes <- unique(labels$label)
-  design_mat <- matrix(0, nrow = length(sim_fracs), ncol = length(sim_fracs))
-  diag(design_mat) <- 1
+  genes <- rownames(ref)
 
-  adjustLibSize <- function(mat1, mat2){
 
-    genes <- names(mat1)
+  adjustLibSize <- function(mat1, mat2, genes){
+
     mat1isVec = class(mat1)[1] == "numeric"
     mat2isVec = class(mat2)[1] == "numeric"
 
@@ -488,7 +487,6 @@ makeSimulations <- function(ref, labels, mix, sim_method, samples_frac, n_sims, 
     }
 
     if (mat2isVec) {
-      genes <- names(mat2)
       mat2 <- matrix(rep(mat2, 2), nrow = length(mat2), byrow = FALSE)
       rownames(mat2) <- genes
     }
@@ -515,63 +513,56 @@ makeSimulations <- function(ref, labels, mix, sim_method, samples_frac, n_sims, 
 
   sim_list <- BiocParallel::bplapply(celltypes, function(ctoi){
 
+    # Get pure CTOI matrix from reference
     ref_ctoi <- ref[,labels$label == ctoi]
-
-    # Number of CTOI samples to sample for each simulation
+    if (class(ref_ctoi)[1] == "numeric") {
+      ref_ctoi <- matrix(rep(ref_ctoi, 2), ncol = 2, byrow = FALSE)
+    }
+    # Number of random CTOI samples to sample for each simulation
     n_ctoi_samples <- round(ncol(ref_ctoi) * samples_frac + 0.5)
-    # Number of mixture samples to sample for each simulation
+    # Number of random mixture samples to sample for each simulation
     n_mix_samples <- round(ncol(mix) * samples_frac + 0.5)
-    # CTOI genes ratio
-    ctoi_gene_ratio <- mean(ref_ctoi[gene, ])/mean(ref[gene, labels$label != ctoi])
+
+    not_dep_celltypes <- celltypes[!celltypes %in% c(ctoi, unname(unlist(dep_list[[ctoi]])))]
+    ctoi_genes_ratio <- Rfast::rowmeans(ref_ctoi) / Rfast::rowmeans(ref[, labels$label %in% not_dep_celltypes])
+    ctoi_genes_ratio[ctoi_genes_ratio == 0 | is.nan(ctoi_genes_ratio)] <- 1
+    ctoi_genes_ratio[is.infinite(ctoi_genes_ratio)] <- Rfast::rowmeans(ref_ctoi)[is.infinite(ctoi_genes_ratio)]
+    names(ctoi_genes_ratio) <- genes
 
     # Generate n_sims simulations
     ctoi_sim_list <- lapply(1:n_sims, function(i){
 
-      # Pick random sample for CTOI/mix
-      ref_ctoi_sub <- ref_ctoi[,sample(1:ncol(ref_ctoi), n_ctoi_samples)]
-      mix_sub <- mix[,sample(1:ncol(mix), n_mix_samples)]
+      # Generate a mixture sub matrix by sampling
+      mix_sub_mat <- sapply(1:length(sim_fracs), function(j){
+        Rfast::rowmeans(mix[,sample(1:ncol(mix), n_mix_samples)])
+      })
+      rownames(mix_sub_mat) <- genes
 
-      # Adjust for library size
-      data_adjusted <- adjustLibSize(mat1 = ref_ctoi_sub, mat2 = mix_sub)
-      ref_ctoi_sub <- data_adjusted$mat1out
-      mix_sub <- data_adjusted$mat2out
+      # # Generate a vector of coefficients by the CTOI reference expression
+      # ref_ctoi_sub <- Rfast::rowmeans(matrix(ref_ctoi[,sample(1:ncol(ref_ctoi), n_ctoi_samples)]))
+      # ref_ctoi_sub_scaled <- (ref_ctoi_sub - min(ref_ctoi_sub)) / (max(ref_ctoi_sub) - min(ref_ctoi_sub))
+      # names(ref_ctoi_sub_scaled) <- genes
 
-      # Center the log2 GEP
-      ref_ctoi_sub_centered <- log2(ref_ctoi_sub+1) - log2(mean(ref_ctoi_sub)+1)
+      simulation <- t(sapply(genes, function(gene){
 
-      # Scale thinning coefficients by sim_frac
-      ref_ctoi_sub_centered_scaled <- lapply(1:length(sim_fracs), function(i){
-        fold_change <- 1+sim_fracs[i]
-        (ref_ctoi_sub_centered * (fold_change - 1)) + 1
-      }) %>%
-        do.call(cbind, .)
+        base_value <- mean(mix_sub_mat[gene,])
 
-      # Adjust coefficients by genes ratio
-      ref_ctoi_sub_centered_scaled_adjusted <- lapply(rownames(ref_ctoi_sub_centered_scaled), function(gene){
-
-        if (ctoi_gene_ratio == 1) {
-          return(ref_ctoi_sub_centered_scaled[gene,])
+        if (base_value == 0) {
+          return(rep(base_value, length(sim_fracs)))
         }
 
-        if (ctoi_gene_ratio > 1) {
-          gene_ratio_sclaed <- log2(scales::rescale(2^ref_ctoi_sub_centered_scaled[gene,], to = c(min(2^ref_ctoi_sub_centered_scaled[gene,]), min(2^ref_ctoi_sub_centered_scaled[gene,])*ctoi_gene_ratio)))
-        }else{
-          gene_ratio_sclaed <- log2(scales::rescale(2^ref_ctoi_sub_centered_scaled[gene,], to = c(max(2^ref_ctoi_sub_centered_scaled[gene,])*ctoi_gene_ratio, max(2^ref_ctoi_sub_centered_scaled[gene,]))))
-        }
-        return(gene_ratio_sclaed)
+        # CTOI genes ratio
+        base_value_adjusted <- (base_value/ctoi_genes_ratio[gene])/base_value
+        # base_value_adjusted <- ifelse(base_value_adjusted < 1, 1, base_value_adjusted)
+        log2values <- -log2(scales::rescale(sim_fracs, to = c(base_value_adjusted, 1)))
+        # log2values <- log2values * ref_ctoi_sub_scaled[gene]
+        log2values[log2values < 0] <- 0
+        thinned_mat <- seqgendiff::thin_gene(mat = matrix(round(mix_sub_mat[gene,])*1e3), thinlog2 = log2values)$mat
+        thinned_vec <- thinned_mat[,1]/1e3
+        # cor(thinned_vec, 1:length(thinned_vec), method = "spearman")
 
-
-      }) %>%
-        do.call(rbind, .)
-      rownames(ref_ctoi_sub_centered_scaled_adjusted) <- names(ref_ctoi_sub_centered)
-
-      #
-      mix_sub <- matrix(rep(mix_sub, length(sim_fracs)), byrow = FALSE, ncol = length(sim_fracs))
-      rownames(mix_sub) <- rownames(mix)
-
-      simulation <- seqgendiff::thin_diff(mat = mix_sub, design_fixed = design_mat, coef_fixed = ref_ctoi_sub_centered_scaled_adjusted)
-      simulation <- simulation$mat
-      rownames(simulation) <- rownames(mix_sub)
+        return(thinned_vec)
+      }))
       colnames(simulation) <- paste0("mix", "%%", sim_fracs)
 
       simulation
@@ -618,13 +609,15 @@ trainModels <- function(simulations_scored, ncores, seed2use){
 
   fitModel <- function(data){
 
-    options(rf.cores=1, mc.cores=1)
-
     # Signature filtering with Lasso
-    cv_fit <- glmnet::cv.glmnet(data[,-ncol(data)], data[,ncol(data)], alpha = 1) # Using lasso penalty for feature selection
+    cv_fit <- glmnet::cv.glmnet(data[,-ncol(data)], data[,ncol(data)], alpha = 1, lower.limits = 0) # Using lasso penalty for feature selection
     best_lambda <- cv_fit$lambda.min
     coefficients <- as.matrix(coef(cv_fit, s = best_lambda))
     sigs_filtered <- rownames(coefficients)[-1][coefficients[-1, , drop = FALSE] != 0]
+
+    # model <- randomForestSRC::var.select(frac ~ ., as.data.frame(data), method = "vh.vimp", verbose = FALSE, refit = TRUE, fast = TRUE)
+    # sigs_filtered <- model$topvars
+    # # cor(round(randomForestSRC::predict.rfsrc(model$rfsrc.refit.obj, newdata = as.data.frame(scores[,sigs_filtered]))$predicted, 4), fracs, method = "spearman", use = "pairwise.complete.obs")
 
     # Make sure there are at least three signatures
     lasso_alpha <- 1
@@ -640,6 +633,8 @@ trainModels <- function(simulations_scored, ncores, seed2use){
     cv_fit <- glmnet::cv.glmnet(data[,sigs_filtered], data[,ncol(data)], alpha = 0)
     best_lambda <- cv_fit$lambda.min
     model <- glmnet::glmnet(data[,sigs_filtered], data[,ncol(data)], alpha = 0, lambda = best_lambda)
+
+    # cor(round(predict(model, scores[,sigs_filtered], s = best_lambda, type = "response")[,1], 4), fracs, method = "spearman", use = "pairwise.complete.obs")
 
 
     return(tibble(model = list(model), sigs_filtered = list(sigs_filtered)))

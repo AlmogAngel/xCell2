@@ -66,7 +66,7 @@ cyto.Res <- lapply(files, function(f){
 # xCell 2.0 settings
 set.seed(123)
 thisseed <- 123
-cores2use <- 10
+cores2use <- 60
 # gene settings
 useTopVar <- TRUE
 nTopVar <- 5000
@@ -75,22 +75,22 @@ ProteinCodingSC <- TRUE
 genesGroups <- c("Rb", "Mrp", "other_Rb", "chrM", "MALAT1", "chrX", "chrY")
 genesGroupsSC <- c("Rb", "Mrp", "other_Rb", "chrM", "MALAT1", "chrX", "chrY")
 # signature settings
-load_sigs <- FALSE
-#sigs_suffix <- "x"
+topGenesFrac = 0.5
+load_sigs <- TRUE
+sigs_suffix <- "3dec"
 scores_results <- FALSE
 minpbcells <- 30
 minpbgroups <- 10
-weight_genes <- TRUE
 # simulations settings
-simNoise <- NULL
-fLvel <- "high"
 # sim_method <- c("ref_multi", "ref_thin", "ref_mix_thin")
 sim_method <- "ref_mix_thin"
+samplesFrac = 0.1
 simFracs <- c(0, seq(0.01, 0.25, 0.002), seq(0.3, 1, 0.05))
 # xCell2Analysis
 tranform <- TRUE
 spillover <- TRUE
 nSims <- 20
+
 
 
 xCell2results <- lapply(1:nrow(vals.refs.res), function(i){
@@ -119,32 +119,53 @@ xCell2results <- lapply(1:nrow(vals.refs.res), function(i){
     mix <- shared_cleaned_genes$mix
   }
 
-  # Load signatures?
-  if (load_sigs) {
-    sigsFile <- paste0("/bigdata/almogangel/xCell2_data/dev_data/sigs/", val_ref, "_sigs_", sigs_suffix, ".rds")
-  }else{
-    sigsFile <- NULL
-  }
+  xcell2object_file <-  paste0("/bigdata/almogangel/xCell2_data/dev_data/sigs/", val_ref, "_xCell2object_", sigs_suffix, ".rds")
 
-  # xCell2Train
-  if (sim_method == "ref_mix_thin") {
-    mix2use <- mix
+  if (!file.exists(xcell2object_file)) {
+
+    # Load signatures?
+    sig_file <-  paste0("/bigdata/almogangel/xCell2_data/dev_data/sigs/", val_ref, "_sigs_", sigs_suffix, ".rds")
+    if (load_sigs) {
+      sigsFile <- sig_file
+    }else{
+      sigsFile <- NULL
+    }
+
+
+    sigs <-  xCell2::xCell2Train(ref = ref, labels = labels, data_type = refType, lineage_file = lineage_file, return_sigs = !load_sigs,
+                                 sigsFile = sigsFile, minPBcells = minpbcells, minPBsamples = minpbgroups, seed = thisseed, samples_frac = samplesFrac, top_genes_frac = topGenesFrac,
+                                 nCores = cores2use, simMethod = sim_method, mix = mix2use, sim_fracs = simFracs, ct_sims = nSims)
+
+    if (!load_sigs) {
+      saveRDS(sigs, sig_file)
+      print(paste0(val_ref, " sigs are ready."))
+      return(NA)
+    }
+
+    if (load_sigs) {
+      saveRDS(sigs, xcell2object_file)
+      print(paste0(val_ref, " xCell2 object is ready."))
+      return(NA)
+    }
   }else{
-    mix2use <- NULL
+    sigs <- readRDS(xcell2object_file)
   }
-  sigs <-  xCell2::xCell2Train(ref = ref, labels = labels, data_type = refType, lineage_file = lineage_file, return_sigs = FALSE,
-                               sigsFile = sigsFile, minPBcells = minpbcells, minPBsamples = minpbgroups, weightGenes = weight_genes, seed = thisseed,
-                               nCores = cores2use, simMethod = sim_method, mix = mix2use, sim_fracs = simFracs, filtLevel = fLvel, ct_sims = nSims)
 
   # xCell2Analysis
-  res_mat <- xCell2::xCell2Analysis(mix = mix, xcell2sigs = sigs, tranform = tranform, spillover = spillover, spillover_alpha = 0)
+  res_mat <- xCell2::xCell2Analysis(mix = mix, xcell2sigs = sigs, tranform = tranform, spillover = spillover, spillover_alpha = 0.5)
   res_mat <- res_mat[vals.refs.res[i,]$shared_celltypes[[1]], ]
-  res_mat
+  return(res_mat)
 })
 
 # saveRDS(xCell2results, "/bigdata/almogangel/xCell2_data/benchmarking_data/results/correlations/xcell2.fig1.cyto.res.rds")
 
-xCell2results <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/results/correlations/xcell2.fig1.cyto.res.rds")
+# xCell2results <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/results/correlations/xcell2.fig1.cyto.nospill.refmixthin.essenGenes.res.rds")
+
+# Rearrange vals.refs.res (BP was fist)
+vals.refs.res.tmp <- vals.refs.res %>%
+  arrange(ref_name) %>%
+  select(c(3,5))
+
 
 allLevel1plots <- list()
 allLevel2plots <- list()
@@ -169,7 +190,9 @@ for (i in 1:nrow(vals.refs.res)) {
 
   xcell2.cyto.Res.tmp <- cyto.Res.tmp[1,]
   xcell2.cyto.Res.tmp$method <- "xCell2"
-  xcell2.cyto.Res.tmp$res[[1]]  <- xCell2results[[i]]
+  xCell2results.index <- which(vals.refs.res.tmp$val_dataset == vals.refs.res[i,]$val_dataset & vals.refs.res.tmp$ref_name == vals.refs.res[i,]$ref_name[[1]])
+
+  xcell2.cyto.Res.tmp$res[[1]]  <- xCell2results[[xCell2results.index]]
   cyto.Res.tmp <- rbind(cyto.Res.tmp, xcell2.cyto.Res.tmp)
 
 
@@ -179,6 +202,7 @@ for (i in 1:nrow(vals.refs.res)) {
 
 
   level1plots <- lapply(1:nrow(cyto.Res.tmp), function(j){
+
     res <- cyto.Res.tmp[j,]$res[[1]]
     celltypes <- intersect(rownames(res), rownames(truth_mat))
     method <- cyto.Res.tmp[j,]$method[[1]]
