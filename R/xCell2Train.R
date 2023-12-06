@@ -412,7 +412,7 @@ addEssentialGenes <- function(ref, signatures){
   return(signatures)
 
 }
-makeSimulations <- function(ref, labels, mix, dep_list, sim_method, samples_frac, n_sims, ncores, seed2use){
+makeSimulations <- function(ref, labels, mix, dep_list, sim_method, sim_fracs, samples_frac, n_sims, ncores, seed2use){
 
   set.seed(seed2use)
 
@@ -803,7 +803,7 @@ xCell2Train <- function(ref, labels, data_type, mix = NULL, lineage_file = NULL,
 
   # Make simulations
   message("Generating simulations...")
-  simulations <- makeSimulations(ref, labels, mix, dep_list, sim_method = simMethod, samples_frac = samples_frac, n_sims = ct_sims, ncores = nCores, seed2use = seed)
+  simulations <- makeSimulations(ref, labels, mix, dep_list, sim_method = simMethod, sim_fracs = sim_fracs, samples_frac = samples_frac, n_sims = ct_sims, ncores = nCores, seed2use = seed)
   message("Scoring simulations...")
   simulations_scored <- scoreSimulations(signatures, simulations, nCores)
 
