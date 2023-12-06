@@ -479,7 +479,12 @@ makeSimulations <- function(ref, labels, mix, dep_list, sim_method, sim_fracs, s
 
       # Generate a mixture sub matrix by sampling
       mix_sub_mat <- sapply(1:length(sim_fracs), function(j){
-        Rfast::rowmeans(mix[,sample(1:ncol(mix), n_mix_samples)])
+        mix_sub <- mix[,sample(1:ncol(mix), n_mix_samples)]
+        if (class(mix_sub)[1] == "numeric") {
+          mix_sub
+        }else{
+          Rfast::rowmeans(mix_sub)
+        }
       })
       rownames(mix_sub_mat) <- genes
 
