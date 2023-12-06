@@ -616,7 +616,7 @@ getSpillOverMat <- function(simulations, signatures, dep_list, models, frac2use)
 
     transfomed_tbl <- models %>%
       rowwise() %>%
-      mutate(predictions = list(round(predict(model, scores[,startsWith(colnames(scores), paste0(celltype, "#"))], s = best_lambda, type = "response")[,1], 4))) %>%
+      mutate(predictions = list(round(predict(model, scores[,startsWith(colnames(scores), paste0(celltype, "#"))], s = model$lambda, type = "response")[,1], 4))) %>%
       select(celltype, predictions) %>%
       unnest_longer(predictions, indices_to = "sim_celltype") %>%
       pivot_wider(names_from = sim_celltype, values_from = predictions)
