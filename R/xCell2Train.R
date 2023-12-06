@@ -803,7 +803,7 @@ xCell2Train <- function(ref, labels, data_type, mix = NULL, lineage_file = NULL,
 
   # Make simulations
   message("Generating simulations...")
-  simulations <- makeSimulations(ref, labels, mix, sim_method = simMethod, samples_frac = sims_sample_frac, n_sims = ct_sims, ncores = nCores, seed2use = seed)
+  simulations <- makeSimulations(ref, labels, mix, sim_method = simMethod, samples_frac = samples_frac, n_sims = ct_sims, ncores = nCores, seed2use = seed)
   message("Scoring simulations...")
   simulations_scored <- scoreSimulations(signatures, simulations, nCores)
 
