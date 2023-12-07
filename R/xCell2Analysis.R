@@ -31,9 +31,7 @@ xCell2Analysis <- function(mix, xcell2sigs, min_intersect = 0.9, tranform, spill
   predictFracs <- function(ctoi, scores, xcell2sigs){
 
     model <- filter(xcell2sigs@models, celltype == ctoi)$model[[1]]
-    # predictions <- round(randomForestSRC::predict.rfsrc(model, newdata = as.data.frame(scores))$predicted, 4)
-    predictions <- round(predict(model, scores, s = model$lambda, type = "response")[,1], 4)
-
+    predictions <- round(randomForestSRC::predict.rfsrc(model, newdata = as.data.frame(scores))$predicted, 4)
     names(predictions) <- rownames(scores)
 
     return(predictions)
@@ -55,7 +53,7 @@ xCell2Analysis <- function(mix, xcell2sigs, min_intersect = 0.9, tranform, spill
   # Score and predict
   sigs_celltypes <- unique(unlist(lapply(names(xcell2sigs@signatures), function(x){strsplit(x, "#")[[1]][1]})))
 
-   all_predictions <- tibble(label = sigs_celltypes) %>%
+  all_predictions <- tibble(label = sigs_celltypes) %>%
     rowwise() %>%
     mutate(scores = list(scoreMix(ctoi = label, mix_ranked, xcell2sigs))) %>%
     mutate(predictions = ifelse(tranform, list(predictFracs(ctoi = label, scores, xcell2sigs)), list(scores))) %>%
@@ -64,7 +62,7 @@ xCell2Analysis <- function(mix, xcell2sigs, min_intersect = 0.9, tranform, spill
     pivot_wider(names_from = sample, values_from = predictions)
 
   # Convert to matrix
-   all_predictions_mat <- as.matrix(all_predictions[,-1])
+  all_predictions_mat <- as.matrix(all_predictions[,-1])
   rownames(all_predictions_mat) <- pull(all_predictions[,1])
 
   if (!spillover) {
@@ -86,5 +84,3 @@ xCell2Analysis <- function(mix, xcell2sigs, min_intersect = 0.9, tranform, spill
 
 
 }
-
-
