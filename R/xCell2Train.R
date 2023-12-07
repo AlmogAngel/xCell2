@@ -536,7 +536,7 @@ trainModels <- function(simulations_scored, ncores, seed2use){
     # sigs_filtered <- rownames(coefficients)[-1][coefficients[-1, , drop = FALSE] != 0]
 
     # options(rf.cores = 60)
-    model <- randomForestSRC::var.select(frac ~ ., as.data.frame(data), method = "md", verbose = FALSE, refit = TRUE, fast = TRUE,  conservative = "high")
+    model <- randomForestSRC::var.select(frac ~ ., as.data.frame(data), method = "md", verbose = FALSE, refit = TRUE, conservative = "high")
     sigs_filtered <- model$topvars
     # cor(round(randomForestSRC::predict.rfsrc(model$rfsrc.refit.obj, newdata = as.data.frame(scores[,sigs_filtered]))$predicted, 4), fracs, method = "spearman", use = "pairwise.complete.obs")
 
@@ -558,7 +558,7 @@ trainModels <- function(simulations_scored, ncores, seed2use){
     # cor(round(predict(model, scores[,sigs_filtered], s = best_lambda, type = "response")[,1], 4), fracs, method = "spearman", use = "pairwise.complete.obs")
 
 
-    return(tibble(model = list(model), sigs_filtered = list(sigs_filtered)))
+    return(tibble(model = list(model$rfsrc.refit.obj), sigs_filtered = list(sigs_filtered)))
 
   }
 
