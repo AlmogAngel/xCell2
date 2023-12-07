@@ -540,14 +540,14 @@ trainModels <- function(simulations_scored, ncores, seed2use){
     sigs_filtered <- model$topvars
     # cor(round(randomForestSRC::predict.rfsrc(model$rfsrc.refit.obj, newdata = as.data.frame(scores[,sigs_filtered]))$predicted, 4), fracs, method = "spearman", use = "pairwise.complete.obs")
 
-    # Make sure there are at least three signatures
-    lasso_alpha <- 1
-    while(length(sigs_filtered) < 3) {
-      lasso_alpha <- lasso_alpha - 0.1
-      cv_fit <- glmnet::cv.glmnet(data[,-ncol(data)], data[,ncol(data)], alpha = lasso_alpha)
-      coefficients <- as.matrix(coef(cv_fit, s = best_lambda))
-      sigs_filtered <- rownames(coefficients)[-1][coefficients[-1, , drop = FALSE] != 0]
-    }
+    # # Make sure there are at least three signatures
+    # lasso_alpha <- 1
+    # while(length(sigs_filtered) < 3) {
+    #   lasso_alpha <- lasso_alpha - 0.1
+    #   cv_fit <- glmnet::cv.glmnet(data[,-ncol(data)], data[,ncol(data)], alpha = lasso_alpha)
+    #   coefficients <- as.matrix(coef(cv_fit, s = best_lambda))
+    #   sigs_filtered <- rownames(coefficients)[-1][coefficients[-1, , drop = FALSE] != 0]
+    # }
 
 
     # # Fit final model with Ridge
