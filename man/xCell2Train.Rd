@@ -10,7 +10,7 @@ xCell2Train(
   data_type,
   mix = NULL,
   lineage_file = NULL,
-  weightGenes = TRUE,
+  top_genes_frac = 0.5,
   medianGEP = TRUE,
   seed = 123,
   probs = c(0.01, 0.05, 0.1, 0.25, 0.333, 0.49),
@@ -23,7 +23,7 @@ xCell2Train(
   minPBcells = 30,
   minPBsamples = 10,
   ct_sims = 20,
-  sims_sample_frac = 0.1,
+  samples_frac = 0.1,
   simMethod = "ref_thin",
   nCores = 1
 )
@@ -43,7 +43,7 @@ xCell2Train(
 
 \item{lineage_file}{Path to the cell type lineage file generated with `xCell2GetLineage` function (optional).}
 
-\item{weightGenes}{description}
+\item{top_genes_frac}{description}
 
 \item{probs}{A vector of probability thresholds to be used for generating signatures (optional).}
 
@@ -63,7 +63,7 @@ xCell2Train(
 
 \item{ct_sims}{description}
 
-\item{sims_sample_frac}{description}
+\item{samples_frac}{description}
 
 \item{simMethod}{description}
 
