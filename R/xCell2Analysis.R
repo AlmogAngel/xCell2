@@ -31,8 +31,8 @@ xCell2Analysis <- function(mix, xcell2sigs, min_intersect = 0.9, tranform, spill
   predictFracs <- function(ctoi, scores, xcell2sigs){
 
     model <- filter(xcell2sigs@models, celltype == ctoi)$model[[1]]
-    # predictions <- round(randomForestSRC::predict.rfsrc(model, newdata = as.data.frame(scores))$predicted, 4)
-    predictions <- round(predict(model, scores, s = model$lambda, type = "response")[,1], 4)
+    predictions <- round(randomForestSRC::predict.rfsrc(model, newdata = as.data.frame(scores))$predicted, 4)
+    # predictions <- round(predict(model, scores, s = model$lambda, type = "response")[,1], 4)
 
     names(predictions) <- rownames(scores)
 
