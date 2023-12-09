@@ -412,114 +412,189 @@ addEssentialGenes <- function(ref, signatures){
   return(signatures)
 
 }
-makeSimulations <- function(ref, labels, mix, dep_list, sim_method, sim_fracs, samples_frac, n_sims, ncores, seed2use){
+makeSimulations <- function(ref, labels, mix, gep_mat, cor_mat, dep_list, sim_fracs, sim_method, ctoi_samples_frac, n_sims, noise, ncores, seed2use){
 
   set.seed(seed2use)
-
   param <- BiocParallel::MulticoreParam(workers = ncores)
+
+
   celltypes <- unique(labels$label)
-  genes <- rownames(ref)
 
-
-  adjustLibSize <- function(mat1, mat2, genes){
-
-    mat1isVec = class(mat1)[1] == "numeric"
-    mat2isVec = class(mat2)[1] == "numeric"
-
-    if (mat1isVec) {
-      mat1 <- matrix(rep(mat1, 2), nrow = length(mat1), byrow = FALSE)
-      rownames(mat1) <- genes
+  getSubMatrix <- function(mat, sim_fracs, n_samples_sim){
+    if (class(mat)[1] == "numeric") {
+      mat_sub <- matrix(rep(mat, length(sim_fracs)), byrow = FALSE, ncol = length(sim_fracs))
+      rownames(mat_sub) <- rownames(mat)
+    }else{
+      mat_sub <- sapply(1:length(sim_fracs), function(i){
+        mat_tmp <- mat[,sample(1:ncol(mat), n_samples_sim)]
+        if (class(mat_tmp)[1] == "numeric") {
+          mat_tmp
+        }else{
+          rowMeans(mat_tmp)
+        }
+      })
     }
 
-    if (mat2isVec) {
-      mat2 <- matrix(rep(mat2, 2), nrow = length(mat2), byrow = FALSE)
-      rownames(mat2) <- genes
-    }
+    rownames(mat_sub) <- rownames(mat)
 
-    mat1 <- round(mat1)
-    mat2 <- round(mat2)
+    return(mat_sub)
+  }
+  adjustLibSize <- function(ctoi_mat, controls_mat){
 
-    # Adjust to the minimum library size
-    min_lib_size <- min(min(colSums(mat1)), min(colSums(mat2)))
-    mat1_lib_fracs <- min_lib_size/colSums(mat1)
-    mat2_lib_fracs <- min_lib_size/colSums(mat2)
+    # Scale to simulate counts data
+    scale_factor <- 10000
+    ctoi_mat_scaled <- round(ctoi_mat * scale_factor)
+    controls_mat_scaled <- round(controls_mat * scale_factor)
+
+    # Adjust reference-controls library size
+    min_lib_size <- min(min(colSums(ctoi_mat_scaled)), min(colSums(controls_mat_scaled)))
+    ref_ctoi_sub_lib_fracs <- min_lib_size/colSums(ctoi_mat_scaled)
+    ref_controls_sub_lib_fracs <- min_lib_size/colSums(controls_mat_scaled)
 
     # Thin data to adjust lib size
-    mat1_thin <- seqgendiff::thin_lib(mat1, thinlog2 = -log2(mat1_lib_fracs), type = "thin")$mat
-    mat1_thin <- round(Rfast::rowmeans(mat1_thin))
-    names(mat1_thin) <- genes
-    mat2_thin <- seqgendiff::thin_lib(mat2, thinlog2 = -log2(mat2_lib_fracs), type = "thin")$mat
-    mat2_thin <- round(Rfast::rowmeans(mat2_thin))
-    names(mat2_thin) <- genes
+    ctoi_mat_scaled_thin <- seqgendiff::thin_lib(ctoi_mat_scaled, thinlog2 = -log2(ref_ctoi_sub_lib_fracs), type = "thin")$mat
+    controls_mat_scaled_thin <- seqgendiff::thin_lib(controls_mat_scaled, thinlog2 = -log2(ref_controls_sub_lib_fracs), type = "thin")$mat
 
+    # Unscale
+    ctoi_mat_thin <- ctoi_mat_scaled_thin/scale_factor
+    rownames(ctoi_mat_thin) <- rownames(ctoi_mat)
+    controls_mat_thin <- controls_mat_scaled_thin/scale_factor
+    rownames(controls_mat_thin) <- rownames(controls_mat)
 
-    return(list(mat1out = mat1_thin, mat2out = mat2_thin))
+    return(list(ctoi_mat_thin = ctoi_mat_thin, controls_mat_thin = controls_mat_thin))
   }
+  makeFractionMatrix <- function(mat, sim_fracs, sim_method, control){
+
+
+    # Check if data not in counts (all integers) because you can't thin fractions (?)
+    if (sim_method != "ref_multi") {
+      scale_factor <- 10000 # TODO: Ask Anna
+      mat <- round(mat * scale_factor)
+    }
+
+    # Adjust simulation fractions for controls
+    if (control) {
+      sim_fracs <- 1-sim_fracs
+    }
+
+
+    # Multiply reference matrix to simulate fractions
+    if (sim_method == "ref_multi") {
+      sim <- mat %*% diag(sim_fracs)
+    }else{
+      # Thin reference/mixture to simulate fractions
+      if (sum(sim_fracs == 0) != 0) { # Can't thin when frac = 0
+        zero_index <- which(sim_fracs == 0)
+        sim_fracs[zero_index] <- 0.001
+        sim <- seqgendiff::thin_lib(mat, thinlog2 = -log2(sim_fracs), type = "thin")$mat
+        sim_fracs[zero_index] <- 0
+        sim <- sim/scale_factor
+        sim[,zero_index] <- 0
+      }else{
+        sim <- seqgendiff::thin_lib(mat, thinlog2 = -log2(sim_fracs), type = "thin")$mat
+      }
+    }
+
+    rownames(sim) <- rownames(mat)
+
+    return(sim)
+  }
+
 
   sim_list <- BiocParallel::bplapply(celltypes, function(ctoi){
 
-    # Get pure CTOI matrix from reference
     ref_ctoi <- ref[,labels$label == ctoi]
-    if (class(ref_ctoi)[1] == "numeric") {
-      ref_ctoi <- matrix(rep(ref_ctoi, 2), ncol = 2, byrow = FALSE)
-    }
-    # Number of random CTOI samples to sample for each simulation
-    n_ctoi_samples <- round(ncol(ref_ctoi) * samples_frac + 0.5)
-    # Number of random mixture samples to sample for each simulation
-    n_mix_samples <- round(ncol(mix) * samples_frac + 0.5)
 
-    not_dep_celltypes <- celltypes[!celltypes %in% c(ctoi, unname(unlist(dep_list[[ctoi]])))]
-    ctoi_genes_ratio <- Rfast::rowmeans(ref_ctoi) / Rfast::rowmeans(ref[, labels$label %in% not_dep_celltypes])
-    ctoi_genes_ratio[ctoi_genes_ratio == 0 | is.nan(ctoi_genes_ratio)] <- 1
-    ctoi_genes_ratio[is.infinite(ctoi_genes_ratio)] <- Rfast::rowmeans(ref_ctoi)[is.infinite(ctoi_genes_ratio)]
-    names(ctoi_genes_ratio) <- genes
+    # Number of CTOI samples to use for each simulation
+    n_samples_sim <- round(ncol(ref_ctoi) * ctoi_samples_frac)
+    n_samples_sim <- ifelse(n_samples_sim < 1, 1, n_samples_sim)
+
+    if (sim_method != "ref_mix_thin") {
+      # Get control cell types
+      dep_cts <- unique(c(ctoi, unname(unlist(dep_list[[ctoi]]))))
+      controls <- celltypes[!celltypes %in% dep_cts]
+    }
 
     # Generate n_sims simulations
     ctoi_sim_list <- lapply(1:n_sims, function(i){
 
-      # Generate a mixture sub matrix by sampling
-      mix_sub_mat <- sapply(1:length(sim_fracs), function(j){
-        mix_sub <- mix[,sample(1:ncol(mix), n_mix_samples)]
-        if (class(mix_sub)[1] == "numeric") {
-          mix_sub
-        }else{
-          Rfast::rowmeans(mix_sub)
-        }
-      })
-      rownames(mix_sub_mat) <- genes
+      # Use n_samples_sim random samples for CTOI
+      ref_ctoi_sub <- getSubMatrix(mat = ref_ctoi, sim_fracs, n_samples_sim)
 
-      # # Generate a vector of coefficients by the CTOI reference expression
-      # ref_ctoi_sub <- Rfast::rowmeans(matrix(ref_ctoi[,sample(1:ncol(ref_ctoi), n_ctoi_samples)]))
-      # ref_ctoi_sub_scaled <- (ref_ctoi_sub - min(ref_ctoi_sub)) / (max(ref_ctoi_sub) - min(ref_ctoi_sub))
-      # names(ref_ctoi_sub_scaled) <- genes
+      # Use n_samples_sim random samples for controls
+      if (sim_method != "ref_mix_thin") {
 
-      simulation <- t(sapply(genes, function(gene){
+        controls2use <- sample(controls, sample(1:length(controls), 1), replace = FALSE)
+        samples2use <- labels %>%
+          filter(label %in% controls2use) %>%
+          pull(sample)
+        ref_controls <- ref[,samples2use]
 
-        base_value <- mean(mix_sub_mat[gene,])
+        n_samples_sim <- round(ncol(ref_controls) * ctoi_samples_frac)
+        n_samples_sim <- ifelse(n_samples_sim < 1, 1, n_samples_sim)
 
-        if (base_value == 0) {
-          return(rep(base_value, length(sim_fracs)))
-        }
+        ref_controls_sub <- getSubMatrix(mat = ref_controls, sim_fracs, n_samples_sim)
+      }else{
 
-        # CTOI genes ratio
-        base_value_adjusted <- (base_value/ctoi_genes_ratio[gene])/base_value
-        # base_value_adjusted <- ifelse(base_value_adjusted < 1, 1, base_value_adjusted)
-        log2values <- -log2(scales::rescale(sim_fracs, to = c(base_value_adjusted, 1)))
-        # log2values <- log2values * ref_ctoi_sub_scaled[gene]
-        log2values[log2values < 0] <- 0
-        thinned_mat <- seqgendiff::thin_gene(mat = matrix(round(mix_sub_mat[gene,])*1e3), thinlog2 = log2values)$mat
-        thinned_vec <- thinned_mat[,1]/1e3
-        # cor(thinned_vec, 1:length(thinned_vec), method = "spearman")
+        # Shuffle expression values between genes
+        mix_shuffled <- t(apply(mix, 1, sample))
+        mix_shuffled <- mix_shuffled[rownames(mix),]
 
-        return(thinned_vec)
-      }))
+        # Number of control samples to use
+        n_samples_sim <- round(ncol(mix_shuffled) * ctoi_samples_frac)
+        n_samples_sim <- ifelse(n_samples_sim < 1, 1, n_samples_sim)
+
+        ref_controls_sub <- getSubMatrix(mat = mix_shuffled, sim_fracs, n_samples_sim)
+      }
+
+      # Thin to adjust library size
+      data_adjusted <- adjustLibSize(ctoi_mat = ref_ctoi_sub, controls_mat = ref_controls_sub)
+      ref_ctoi_sub <- data_adjusted$ctoi_mat_thin
+      ref_controls_sub <- data_adjusted$controls_mat_thin
+
+
+      # Make fraction matrices
+      ctoi_frac_mat <- makeFractionMatrix(mat = ref_ctoi_sub, sim_fracs, sim_method, control = FALSE)
+      control_frac_mat <- makeFractionMatrix(mat = ref_controls_sub, sim_fracs, sim_method, control = TRUE)
+
+
+
+      # Combine CTOI and control(s) fractions matrix
+      simulation <- ctoi_frac_mat + control_frac_mat
       colnames(simulation) <- paste0("mix", "%%", sim_fracs)
 
       simulation
+
+
     })
 
-    do.call(cbind, ctoi_sim_list)
+    # TODO: Noise
+    if (!is.null(noise)) {
+      ctoi_sim_list_noised <- lapply(ctoi_sim_list, function(sim){
 
+        random_ref_samples <- sample(1:ncol(ref), size = ncol(sim), replace = FALSE)
+
+        if (sum(sim_fracs == 0) != 0) {
+          zero_index <- which(sim_fracs == 0)
+          noiseLevel <- -log2(sim_fracs[-zero_index]/(1/noise)) # % noise is from the original frac
+          ref_noise <- seqgendiff::thin_lib(round(ref[,random_ref_samples])[,-zero_index], thinlog2 = noiseLevel, type = "thin")$mat
+          if (zero_index == 1) {
+            # Zero is  the first column
+            ref_noise <- cbind(sim[,1]*0, ref_noise)
+          }else{
+            # Zero is the last column
+            ref_noise <- cbind(ref_noise, sim[,1]*0)
+          }
+        }else{
+          ref_noise <- seqgendiff::thin_lib(round(ref[,random_ref_samples])[,-zero_index], thinlog2 = -log2(sim_fracs/(1/noise)), type = "thin")$mat
+        }
+
+        sim + ref_noise
+      })
+      do.call(cbind, ctoi_sim_list_noised)
+    }else{
+      do.call(cbind, ctoi_sim_list)
+    }
 
   }, BPPARAM = param)
   names(sim_list) <- celltypes
@@ -573,7 +648,7 @@ trainModels <- function(simulations_scored, ncores, seed2use){
     # data <- data[, c(selected_features, "frac")]
 
     options(rf.cores=1, mc.cores=1)
-    model <- randomForestSRC::var.select(frac ~ ., as.data.frame(data), method = "md", verbose = FALSE, refit = TRUE, conservative = "high", ntree = 500)
+    model <- randomForestSRC::var.select(frac ~ ., as.data.frame(data), method = "md", verbose = FALSE, refit = TRUE, conservative = "high")
     sigs_filtered <- model$topvars
     # cor(round(randomForestSRC::predict.rfsrc(model$rfsrc.refit.obj, newdata = as.data.frame(scores[,sigs_filtered]))$predicted, 4), fracs, method = "spearman", use = "pairwise.complete.obs")
 
@@ -824,7 +899,7 @@ xCell2Train <- function(ref, labels, data_type, mix = NULL, lineage_file = NULL,
     mix <- (2^mix)-1
   }
   message("Generating simulations...")
-  simulations <- makeSimulations(ref, labels, mix, dep_list, sim_method = simMethod, sim_fracs = sim_fracs, samples_frac = samples_frac, n_sims = ct_sims, ncores = nCores, seed2use = seed)
+  simulations <- makeSimulations(ref, labels, mix, gep_mat, cor_mat, dep_list, sim_fracs, sim_method = simMethod, ctoi_samples_frac = 0.1, n_sims = ct_sims, noise = NULL, ncores = nCores, seed2use = seed)
   message("Scoring simulations...")
   simulations_scored <- scoreSimulations(signatures, simulations, nCores)
 
