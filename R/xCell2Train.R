@@ -412,7 +412,7 @@ addEssentialGenes <- function(ref, signatures){
   return(signatures)
 
 }
-makeSimulations <- function(ref, labels, mix, dep_list, sim_method, sim_fracs, samples_frac, n_sims, ncores, seed2use, signatures){
+makeSimulations <- function(ref, labels, mix, dep_list, sim_method, sim_fracs, samples_frac, n_sims, ncores, seed2use){
 
   set.seed(seed2use)
 
@@ -421,6 +421,40 @@ makeSimulations <- function(ref, labels, mix, dep_list, sim_method, sim_fracs, s
   genes <- rownames(ref)
 
 
+  adjustLibSize <- function(mat1, mat2, genes){
+
+    mat1isVec = class(mat1)[1] == "numeric"
+    mat2isVec = class(mat2)[1] == "numeric"
+
+    if (mat1isVec) {
+      mat1 <- matrix(rep(mat1, 2), nrow = length(mat1), byrow = FALSE)
+      rownames(mat1) <- genes
+    }
+
+    if (mat2isVec) {
+      mat2 <- matrix(rep(mat2, 2), nrow = length(mat2), byrow = FALSE)
+      rownames(mat2) <- genes
+    }
+
+    mat1 <- round(mat1)
+    mat2 <- round(mat2)
+
+    # Adjust to the minimum library size
+    min_lib_size <- min(min(colSums(mat1)), min(colSums(mat2)))
+    mat1_lib_fracs <- min_lib_size/colSums(mat1)
+    mat2_lib_fracs <- min_lib_size/colSums(mat2)
+
+    # Thin data to adjust lib size
+    mat1_thin <- seqgendiff::thin_lib(mat1, thinlog2 = -log2(mat1_lib_fracs), type = "thin")$mat
+    mat1_thin <- round(Rfast::rowmeans(mat1_thin))
+    names(mat1_thin) <- genes
+    mat2_thin <- seqgendiff::thin_lib(mat2, thinlog2 = -log2(mat2_lib_fracs), type = "thin")$mat
+    mat2_thin <- round(Rfast::rowmeans(mat2_thin))
+    names(mat2_thin) <- genes
+
+
+    return(list(mat1out = mat1_thin, mat2out = mat2_thin))
+  }
 
   sim_list <- BiocParallel::bplapply(celltypes, function(ctoi){
 
@@ -429,6 +463,8 @@ makeSimulations <- function(ref, labels, mix, dep_list, sim_method, sim_fracs, s
     if (class(ref_ctoi)[1] == "numeric") {
       ref_ctoi <- matrix(rep(ref_ctoi, 2), ncol = 2, byrow = FALSE)
     }
+    # Number of random CTOI samples to sample for each simulation
+    n_ctoi_samples <- round(ncol(ref_ctoi) * samples_frac + 0.5)
     # Number of random mixture samples to sample for each simulation
     n_mix_samples <- round(ncol(mix) * samples_frac + 0.5)
 
@@ -437,9 +473,6 @@ makeSimulations <- function(ref, labels, mix, dep_list, sim_method, sim_fracs, s
     ctoi_genes_ratio[ctoi_genes_ratio == 0 | is.nan(ctoi_genes_ratio)] <- 1
     ctoi_genes_ratio[is.infinite(ctoi_genes_ratio)] <- Rfast::rowmeans(ref_ctoi)[is.infinite(ctoi_genes_ratio)]
     names(ctoi_genes_ratio) <- genes
-
-    # signatures_ctoi <- signatures[gsub("#.*", "", names(signatures)) %in% ctoi]
-    # ctoi_genes_ratio[!names(ctoi_genes_ratio) %in% unique(unlist(signatures_ctoi))] <- 1
 
     # Generate n_sims simulations
     ctoi_sim_list <- lapply(1:n_sims, function(i){
@@ -474,16 +507,13 @@ makeSimulations <- function(ref, labels, mix, dep_list, sim_method, sim_fracs, s
         log2values <- -log2(scales::rescale(sim_fracs, to = c(base_value_adjusted, 1)))
         # log2values <- log2values * ref_ctoi_sub_scaled[gene]
         log2values[log2values < 0] <- 0
-
         thinned_mat <- seqgendiff::thin_gene(mat = matrix(round(mix_sub_mat[gene,])*1e3), thinlog2 = log2values)$mat
         thinned_vec <- thinned_mat[,1]/1e3
         # cor(thinned_vec, 1:length(thinned_vec), method = "spearman")
 
-
         return(thinned_vec)
       }))
       colnames(simulation) <- paste0("mix", "%%", sim_fracs)
-
 
       simulation
     })
@@ -529,18 +559,25 @@ trainModels <- function(simulations_scored, ncores, seed2use){
 
   fitModel <- function(data){
 
-    # # Signature filtering with Lasso
-    # cv_fit <- glmnet::cv.glmnet(data[,-ncol(data)], data[,ncol(data)], alpha = 1, lower.limits = 0) # Using lasso penalty for feature selection
+    # Signature filtering with Lasso
+    # cv_fit <- glmnet::cv.glmnet(data[,-ncol(data)], data[,ncol(data)], alpha = 1) # Using lasso penalty for feature selection
     # best_lambda <- cv_fit$lambda.min
     # coefficients <- as.matrix(coef(cv_fit, s = best_lambda))
     # sigs_filtered <- rownames(coefficients)[-1][coefficients[-1, , drop = FALSE] != 0]
 
-    # options(rf.cores = 60)
-    model <- randomForestSRC::var.select(frac ~ ., as.data.frame(data), method = "md", verbose = FALSE, refit = TRUE, conservative = "high")
+
+    # RF <- RRF::RRF(x = as.data.frame(data[,-ncol(data)]), y = data[,ncol(data)], flagReg = 0, importance = TRUE, ntree = 1000)
+    # RF_imp <- RF$importance[,"%IncMSE"] / max(RF$importance[,"%IncMSE"])
+    # RRF <- RRF::RRF(x = data[,-ncol(data)], y = data[,ncol(data)], flagReg = 1, ntree = 1000, coefReg = (1-gamma) + gamma*RF_imp)
+    # selected_features <- colnames(data)[RRF$feaSet]
+    # data <- data[, c(selected_features, "frac")]
+
+
+    model <- randomForestSRC::var.select(frac ~ ., as.data.frame(data), method = "md", verbose = FALSE, refit = TRUE, conservative = "high", fast = TRUE, ntree = 500)
     sigs_filtered <- model$topvars
     # cor(round(randomForestSRC::predict.rfsrc(model$rfsrc.refit.obj, newdata = as.data.frame(scores[,sigs_filtered]))$predicted, 4), fracs, method = "spearman", use = "pairwise.complete.obs")
 
-    # # Make sure there are at least three signatures
+    # Make sure there are at least three signatures
     # lasso_alpha <- 1
     # while(length(sigs_filtered) < 3) {
     #   lasso_alpha <- lasso_alpha - 0.1
@@ -549,8 +586,10 @@ trainModels <- function(simulations_scored, ncores, seed2use){
     #   sigs_filtered <- rownames(coefficients)[-1][coefficients[-1, , drop = FALSE] != 0]
     # }
 
+    # model <- glmnet::glmnet(data[,-ncol(data)], data[,ncol(data)], lambda = best_lambda, alpha = 0.5)
+    # sigs_filtered <- colnames(data[,-ncol(data)])
 
-    # # Fit final model with Ridge
+    # Fit final model with Ridge
     # cv_fit <- glmnet::cv.glmnet(data[,sigs_filtered], data[,ncol(data)], alpha = 0)
     # best_lambda <- cv_fit$lambda.min
     # model <- glmnet::glmnet(data[,sigs_filtered], data[,ncol(data)], alpha = 0, lambda = best_lambda)
@@ -592,7 +631,7 @@ getSpillOverMat <- function(simulations, signatures, dep_list, models, frac2use)
 
     transfomed_tbl <- models %>%
       rowwise() %>%
-      # mutate(predictions = list(round(predict(model, scores[,startsWith(colnames(scores), paste0(celltype, "#"))], s = model$lambda, type = "response")[,1], 4))) %>%
+      #mutate(predictions = list(round(predict(model, scores[,startsWith(colnames(scores), paste0(celltype, "#"))], s = model$lambda, type = "response")[,1], 4))) %>%
       mutate(predictions = list(round(randomForestSRC::predict.rfsrc(model, newdata = as.data.frame(scores[,startsWith(colnames(scores), paste0(celltype, "#"))]))$predicted, 4))) %>%
       select(celltype, predictions) %>%
       unnest_longer(predictions, indices_to = "sim_celltype") %>%
@@ -785,7 +824,7 @@ xCell2Train <- function(ref, labels, data_type, mix = NULL, lineage_file = NULL,
     mix <- (2^mix)-1
   }
   message("Generating simulations...")
-  simulations <- makeSimulations(ref, labels, mix, dep_list, sim_method = simMethod, sim_fracs = sim_fracs, samples_frac = samples_frac, n_sims = ct_sims, ncores = nCores, seed2use = seed, signatures)
+  simulations <- makeSimulations(ref, labels, mix, dep_list, sim_method = simMethod, sim_fracs = sim_fracs, samples_frac = samples_frac, n_sims = ct_sims, ncores = nCores, seed2use = seed)
   message("Scoring simulations...")
   simulations_scored <- scoreSimulations(signatures, simulations, nCores)
 
@@ -793,19 +832,19 @@ xCell2Train <- function(ref, labels, data_type, mix = NULL, lineage_file = NULL,
   # Filter signatures and train RF model
   message("Filtering signatures and training models...")
   models <- trainModels(simulations_scored, ncores = nCores, seed2use = seed)
-  signatures <- signatures[unlist(models$sigs_filtered)]
+  signatures_filt <- signatures[unlist(models$sigs_filtered)]
   models <- models[,-3]
 
 
   # Get spillover matrix
   message("Generating spillover matrix...")
   frac2use <- sim_fracs[which.min(abs(sim_fracs - 0.25))]
-  spill_mat <- getSpillOverMat(simulations, signatures, dep_list, models, frac2use)
+  spill_mat <- getSpillOverMat(simulations, signatures_filt, dep_list, models, frac2use)
 
 
   # Save results in S4 object
   xCell2Sigs.S4 <- new("xCell2Signatures",
-                       signatures = signatures,
+                       signatures = signatures_filt,
                        dependencies = dep_list,
                        models = models,
                        spill_mat = spill_mat,
