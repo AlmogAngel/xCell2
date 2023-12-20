@@ -28,7 +28,8 @@ validateInputs <- function(ref, labels, ref_type){
 
 }
 # TODO: Write a function for TPM/CPM normalization for bulk reference
-normRef <- function(ref, mix, ref_type, mix_type, QN){
+normRefMix <- function(ref, mix, ref_type, mix_type, QN){
+
 
   if(all(ref == as.integer(ref))){
 
@@ -59,10 +60,11 @@ normRef <- function(ref, mix, ref_type, mix_type, QN){
       refmix <- cbind(ref, mix)
       refmix <- limma::normalizeBetweenArrays(refmix)
       ref <- refmix[,1:ncol(ref)]
+      mix <- refmix[,(ncol(ref)+1):ncol(refmix)]
     }
   }
 
-  return(ref)
+  return(list(ref.out = ref, mix.out = mix))
 }
 sc2pseudoBulk <- function(ref, labels, min_n_cells, min_ps_samples, seed2use){
 
@@ -236,6 +238,7 @@ createSignatures <- function(labels, dep_list, quantiles_matrix, probs, cor_mat,
 
     # Set signature thresholds grid
     param.df <- expand.grid("diff_vals" = diff_vals, "probs" = probs)
+    param.df <- param.df[param.df$diff_vals != 0 | param.df$probs <= 0.05,]
     ntop <- round(length(not_dep_celltypes)*top_genes_frac) # Number of top values given top top_genes_frac of the not dependent cell types
     # Adjusted ntop given the diff value
     param.ranks <- rank((param.df$diff_vals^2)*(1/param.df$probs))
@@ -286,10 +289,10 @@ createSignatures <- function(labels, dep_list, quantiles_matrix, probs, cor_mat,
     }
 
     # Remove duplicate signatures
-    # type_sigs_sorted <- lapply(type_sigs, function(x) sort(x))
-    # type_sigs_sorted_collapsed <- sapply(type_sigs_sorted, paste, collapse = ",")
-    # duplicated_sigs <- duplicated(type_sigs_sorted_collapsed)
-    # type_sigs <- type_sigs[!duplicated_sigs]
+    type_sigs_sorted <- lapply(type_sigs, function(x) sort(x))
+    type_sigs_sorted_collapsed <- sapply(type_sigs_sorted, paste, collapse = ",")
+    duplicated_sigs <- duplicated(type_sigs_sorted_collapsed)
+    type_sigs <- type_sigs[!duplicated_sigs]
 
     nRelax <- 1
     while (length(type_sigs) < 3 & nRelax <= 5) {
@@ -340,10 +343,10 @@ createSignatures <- function(labels, dep_list, quantiles_matrix, probs, cor_mat,
         }
 
       }
-      # type_sigs_sorted <- lapply(type_sigs, function(x) sort(x))
-      # type_sigs_sorted_collapsed <- sapply(type_sigs_sorted, paste, collapse = ",")
-      # duplicated_sigs <- duplicated(type_sigs_sorted_collapsed)
-      # type_sigs <- type_sigs[!duplicated_sigs]
+      type_sigs_sorted <- lapply(type_sigs, function(x) sort(x))
+      type_sigs_sorted_collapsed <- sapply(type_sigs_sorted, paste, collapse = ",")
+      duplicated_sigs <- duplicated(type_sigs_sorted_collapsed)
+      type_sigs <- type_sigs[!duplicated_sigs]
 
       nRelax <- nRelax + 1
 
@@ -425,7 +428,7 @@ addEssentialGenes <- function(ref, signatures){
   return(signatures)
 
 }
-makeSimulations <- function(ref, labels, mix, gep_mat, cor_mat, dep_list, sim_fracs, sim_method, ctoi_samples_frac, n_sims, noise, ncores, seed2use){
+makeSimulations <- function(ref, labels, mix, gep_mat, cor_mat, dep_list, sim_fracs, sim_method, n_sims, ncores, seed2use){
 
   set.seed(seed2use)
   param <- BiocParallel::MulticoreParam(workers = ncores)
@@ -475,41 +478,31 @@ makeSimulations <- function(ref, labels, mix, gep_mat, cor_mat, dep_list, sim_fr
 
     return(list(ctoi_mat_thin = ctoi_mat_thin, controls_mat_thin = controls_mat_thin))
   }
-  makeFractionMatrix <- function(mat, sim_fracs, sim_method, control){
+  makeFractionMatrixControls <- function(controls_mat, sim_fracs, controls){
 
 
-    # Check if data not in counts (all integers) because you can't thin fractions (?)
-    if (sim_method != "ref_multi") {
-      scale_factor <- 10000 # TODO: Ask Anna
-      mat <- round(mat * scale_factor)
+    # Multiple control mixture by fractions
+    generateFractions <- function(target_sum, n_fracs = ncol(controls_mat)) {
+      # Generate random numbers from a uniform distribution
+      numbers <- runif(n_fracs)
+
+      # Scale the numbers so that their sum equals target_sum
+      fracs <- numbers / sum(numbers) * target_sum
+
+      return(fracs)
     }
 
-    # Adjust simulation fractions for controls
-    if (control) {
-      sim_fracs <- 1-sim_fracs
-    }
-
-
-    # Multiply reference matrix to simulate fractions
-    if (sim_method == "ref_multi") {
-      sim <- mat %*% diag(sim_fracs)
-    }else{
-      # Thin reference/mixture to simulate fractions
-      if (sum(sim_fracs == 0) != 0) { # Can't thin when frac = 0
-        zero_index <- which(sim_fracs == 0)
-        sim_fracs[zero_index] <- 0.001
-        sim <- seqgendiff::thin_lib(mat, thinlog2 = -log2(sim_fracs), type = "thin")$mat
-        sim_fracs[zero_index] <- 0
-        sim <- sim/scale_factor
-        sim[,zero_index] <- 0
+    controls_frac_mat <- sapply(1-sim_fracs, function(frac){
+      fracs <- generateFractions(target_sum = frac)
+      if (length(fracs) == 1) {
+        controls_mat * fracs
       }else{
-        sim <- seqgendiff::thin_lib(mat, thinlog2 = -log2(sim_fracs), type = "thin")$mat
+        Rfast::rowmeans(controls_mat %*% diag(fracs))
       }
-    }
+    })
+    rownames(controls_frac_mat) <- rownames(ref)
 
-    rownames(sim) <- rownames(mat)
-
-    return(sim)
+    return(controls_frac_mat)
   }
 
 
@@ -517,62 +510,117 @@ makeSimulations <- function(ref, labels, mix, gep_mat, cor_mat, dep_list, sim_fr
 
     ref_ctoi <- ref[,labels$label == ctoi]
 
-    # Number of CTOI samples to use for each simulation
-    if (sum(labels$label == ctoi) == 1) {
-      n_samples_sim <- 1
-    }else{
-      n_samples_sim <- round(ncol(ref_ctoi) * ctoi_samples_frac + 0.5)
-    }
-
-    if (sim_method != "ref_mix_thin") {
+    if (sim_method == "ref_multi") {
       # Get control cell types
       dep_cts <- unique(c(ctoi, unname(unlist(dep_list[[ctoi]]))))
       controls <- celltypes[!celltypes %in% dep_cts]
     }
 
+
     # Generate n_sims simulations
     ctoi_sim_list <- lapply(1:n_sims, function(i){
 
-      # Use n_samples_sim random samples for CTOI
-      ref_ctoi_sub <- getSubMatrix(mat = ref_ctoi, sim_fracs, n_samples_sim)
 
-      if (sim_method != "ref_mix_thin") {
+      if (sim_method == "ref_multi") {
 
-        # Sample 1-5 control cell types
-        controls2use <- sample(controls, sample(1:min(5, length(controls)), 1), replace = FALSE)
-        ref_controls <- ref[,labels$label %in% controls2use]
-        if (class(ref_controls)[1] == "numeric") {
-          n_samples_sim_control <- 1
-        }else{
-          n_samples_sim_control <- ncol(ref_controls)
-        }
-        ref_controls_sub <- getSubMatrix(mat = ref_controls, sim_fracs, n_samples_sim = n_samples_sim_control)
 
-      }else{
+        # Use n_samples_sim random samples for CTOI
+        ref_ctoi_sub <- getSubMatrix(mat = ref_ctoi, sim_fracs, n_samples_sim)
 
-        ref_controls_sub <- getSubMatrix(mat = mix, sim_fracs, n_samples_sim = 1)
+        # Sample 1-10 control cell types
+        controls2use <- sample(controls, sample(1:min(10, length(controls)), 1), replace = FALSE)
+        # Generate controls matrix
+        controls_mat <- sapply(controls2use, function(ctrl){
+
+          control_samples <- labels[labels$label == ctrl,]$sample
+          samples2use <- control_samples[1:sample(1:length(control_samples), 1)]
+
+          if (length(samples2use) == 1) {
+            ref[,samples2use]
+          }else{
+            Rfast::rowmeans(ref[,samples2use])
+          }
+
+        })
+        rownames(controls_mat) <- rownames(ref)
+
+        # Thin to adjust library size
+        data_adjusted <- adjustLibSize(ctoi_mat = ref_ctoi_sub, controls_mat = controls_mat)
+        ref_ctoi_sub <- data_adjusted$ctoi_mat_thin
+        controls_mat <- data_adjusted$controls_mat_thin
+
+        # Generete fractions ,at
+        ctoi_frac_mat <- ref_ctoi_sub %*% diag(sim_fracs)
+        control_frac_mat <- makeFractionMatrixControls(controls_mat, sim_fracs, controls = controls2use)
+
+
+        simulation <- ctoi_frac_mat + control_frac_mat
+        colnames(simulation) <- paste0("mix", "%%", sim_fracs)
+
+        simulation
+
+
       }
 
-      # Thin to adjust library size
-      data_adjusted <- adjustLibSize(ctoi_mat = ref_ctoi_sub, controls_mat = ref_controls_sub)
-      ref_ctoi_sub <- data_adjusted$ctoi_mat_thin
-      ref_controls_sub <- data_adjusted$controls_mat_thin
+      if (sim_method == "mix_thin") {
 
 
-      # Make fraction matrices
-      ctoi_frac_mat <- makeFractionMatrix(mat = ref_ctoi_sub, sim_fracs, sim_method, control = FALSE)
-      control_frac_mat <- makeFractionMatrix(mat = ref_controls_sub, sim_fracs, sim_method, control = TRUE)
+        mix_vec <- mix[,sample(1:ncol(mix), 1)]
+        ctoi_vec <- ref_ctoi[,sample(1:ncol(ref_ctoi), sample(1:ncol(ref_ctoi), 1))]
+        if (class(ctoi_vec)[1] != "numeric") {
+          ctoi_vec <- Rfast::rowmeans(ctoi_vec)
+          names(ctoi_vec) <- rownames(ref_ctoi)
+        }
+        ctoi_vec[ctoi_vec == 0] <- 1 # In case ctoi_vec is 0 sizeEffect is -Inf
 
-      # Combine CTOI and control(s) fractions matrix
-      simulation <- ctoi_frac_mat + control_frac_mat
-      colnames(simulation) <- paste0("mix", "%%", sim_fracs)
+        sizeEffect <- log2(ctoi_vec/mix_vec)
 
-      simulation
+        mix_sub <- round(matrix(rep(mix_vec, length(sim_fracs)), ncol = length(sim_fracs), byrow = FALSE))
+
+        design_mat <- matrix(0, nrow = length(sim_fracs), ncol = length(sim_fracs))
+        diag(design_mat) <- 1
+
+        sizeEffect[is.nan(sizeEffect)] <- 0 # In case of 0/0
+        sizeEffect[sizeEffect == Inf] <- 0 # In case mix_vec is 0
+
+        betamat <- matrix(rep(sizeEffect, length(sim_fracs)), ncol = length(sim_fracs), byrow = FALSE)
+        rownames(betamat) <- rownames(mix)
+        betamat <- betamat %*% diag(sim_fracs)
+
+        simulation <- seqgendiff::thin_diff(mat = mix_sub, design_fixed = design_mat, coef_fixed = betamat)$mat
+        rownames(simulation) <- rownames(mix)
+        colnames(simulation) <- paste0("mix", "%%", sim_fracs)
+        return(simulation)
+
+        # good_genes <- unique(unlist(signatures[names(sort(c, decreasing = T)[1:5])]))
+        # bad_genes <- unique(unlist(signatures[names(sort(c, decreasing = F)[1:5])]))
+        # bad_genes <- bad_genes[!bad_genes %in% good_genes]
+        #
+        # cor(simulation[good_genes,ncol(simulation)], ctoi_vec[good_genes])
+        # cor(simulation[bad_genes,ncol(simulation)], ctoi_vec[bad_genes])
+
+        # sort(sapply(signatures_ctoi, function(sig){
+        #   cor(simulation[sig,ncol(simulation)], ctoi_vec[sig])
+        # }), decreasing = TRUE) -> xx
+        # c[names(xx)]
+        #
+        # all_cors <- apply(simulation, 2, function(mix){
+        #   sapply(signatures_ctoi, function(sig){
+        #     cor(mix[sig], ctoi_vec[sig])
+        #   })
+        # })
+        #
+        # c[names(sort(rowMeans(all_cors), decreasing = TRUE))]
+
+
+
+      }
 
 
     })
 
     do.call(cbind, ctoi_sim_list)
+
 
   }, BPPARAM = param)
   names(sim_list) <- celltypes
@@ -613,20 +661,20 @@ trainModels <- function(simulations_scored, ncores, seed2use){
   fitModel <- function(data){
 
     # Signature filtering with Lasso
-    # cv_fit <- glmnet::cv.glmnet(data[,-ncol(data)], data[,ncol(data)], alpha = 1) # Using lasso penalty for feature selection
-    # best_lambda <- cv_fit$lambda.min
-    # coefficients <- as.matrix(coef(cv_fit, s = best_lambda))
-    # sigs_filtered <- rownames(coefficients)[-1][coefficients[-1, , drop = FALSE] != 0]
-    #
+    cv_fit <- glmnet::cv.glmnet(data[,-ncol(data)], data[,ncol(data)], alpha = 1) # Using lasso penalty for feature selection
+    best_lambda <- cv_fit$lambda.min
+    coefficients <- as.matrix(coef(cv_fit, s = best_lambda))
+    sigs_filtered <- rownames(coefficients)[-1][coefficients[-1, , drop = FALSE] != 0]
 
-    # RF <- RRF::RRF(x = as.data.frame(data[,-ncol(data)]), y = data[,ncol(data)], flagReg = 0, importance = TRUE, ntree = 1000)
-    # RF_imp <- RF$importance[,"%IncMSE"] / max(RF$importance[,"%IncMSE"])
-    # RRF <- RRF::RRF(x = data[,-ncol(data)], y = data[,ncol(data)], flagReg = 1, ntree = 1000, coefReg = (1-gamma) + gamma*RF_imp)
-    # selected_features <- colnames(data)[RRF$feaSet]
-    # data <- data[, c(selected_features, "frac")]
+
+    RF <- RRF::RRF(x = as.data.frame(data[,-ncol(data)]), y = data[,ncol(data)], flagReg = 0, importance = TRUE, ntree = 1000)
+    RF_imp <- RF$importance[,"%IncMSE"] / max(RF$importance[,"%IncMSE"])
+    RRF <- RRF::RRF(x = data[,-ncol(data)], y = data[,ncol(data)], flagReg = 1, ntree = 1000, coefReg = (1-gamma) + gamma*RF_imp)
+    selected_features <- colnames(data)[RRF$feaSet]
+    data <- data[, c(selected_features, "frac")]
 
     # options(rf.cores=1, mc.cores=1)
-    model <- randomForestSRC::var.select(frac ~ ., as.data.frame(data), method = "md", verbose = FALSE, refit = TRUE, conservative = "high")
+    model <- randomForestSRC::var.select(frac ~ ., as.data.frame(data), method = "vh.vimp", verbose = FALSE, refit = TRUE, conservative = "high")
     sigs_filtered <- model$topvars
     # cor(round(randomForestSRC::predict.rfsrc(model$rfsrc.refit.obj, newdata = as.data.frame(scores[,sigs_filtered]))$predicted, 4), fracs, method = "spearman", use = "pairwise.complete.obs")
 
@@ -801,6 +849,8 @@ setClass("xCell2Signatures", slots = list(
 #' @param max_genes The maximum number of genes to include in the signature (optional).
 #' @param sigsFile description
 #' @param return_sigs description
+#' @param simsFile description
+#' @param return_sims description
 #' @param minPBcells description
 #' @param minPBgroups description
 #' @param ct_sims description
@@ -810,10 +860,10 @@ setClass("xCell2Signatures", slots = list(
 #' @param simMethod description
 #' @return An S4 object containing the signatures, cell type labels, and cell type dependencies.
 #' @export
-xCell2Train <- function(ref, labels, mix = NULL, ref_type, mix_type = NULL, QN = TRUE, lineage_file = NULL, top_genes_frac = 1, medianGEP = TRUE, seed = 123, probs = c(0.01, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.4, 0.49),
+xCell2Train <- function(ref, labels, mix = NULL, ref_type, mix_type = NULL, QN = TRUE, lineage_file = NULL, top_genes_frac = 0.5, medianGEP = TRUE, seed = 123, probs = c(0.01, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.4),
                         sim_fracs = c(0, seq(0.01, 0.25, 0.005), seq(0.3, 1, 0.05)), diff_vals = round(c(log2(1), log2(1.5), log2(2), log2(2.5), log2(3), log2(4), log2(5), log2(10), log2(20)), 3),
-                        min_genes = 3, max_genes = 200, return_sigs = FALSE, sigsFile = NULL, minPBcells = 30, minPBsamples = 10,
-                        ct_sims = 20, samples_frac = 0.1, simMethod = "ref_mix_thin", nCores = 1){
+                        min_genes = 3, max_genes = 150, return_sigs = FALSE, return_sims = FALSE, sigsFile = NULL, simsFile = NULL, minPBcells = 30, minPBsamples = 10,
+                        ct_sims = 20, samples_frac = 0.1, simMethod = "ref_multi", nCores = 1){
 
 
   # Validate inputs
@@ -822,15 +872,15 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type, mix_type = NULL, QN =
   labels <- inputs_validated$labels
 
 
-  # if (max(mix) <= 50 & mix_type == "array") {
-  #   message("Assuming mixture is in log-space (RMA), using 2-based exponentiation...")
-  #   mix <- (2^mix)-1
-  # }
-  #
-  # if (max(ref) <= 50 & ref_type == "array") {
-  #   message("Assuming referance is in log-space (RMA), using 2-based exponentiation...")
-  #   ref <- (2^ref)-1
-  # }
+  if (max(mix) <= 50 & mix_type == "array") {
+    message("Assuming mixture is in log-space (RMA), using 2-based exponentiation...")
+    mix <- (2^mix)-1
+  }
+
+  if (max(ref) <= 50 & ref_type == "array") {
+    message("Assuming referance is in log-space (RMA), using 2-based exponentiation...")
+    ref <- (2^ref)-1
+  }
 
   # Generate pseudo bulk from scRNA-Seq reference
   if (ref_type == "sc") {
@@ -841,7 +891,9 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type, mix_type = NULL, QN =
   }
 
   # Normalize reference/mixture
-  ref <- normRef(ref, mix, ref_type, mix_type, QN)
+  out <- normRefMix(ref, mix, ref_type, mix_type, QN)
+  ref <- out$ref.out
+  mix <- out$mix.out
 
   # Build cell types correlation matrix
   message("Calculating cell-type correlation matrix...")
@@ -879,10 +931,24 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type, mix_type = NULL, QN =
 
 
   # Make simulations
-  message("Generating simulations...")
-  simulations <- makeSimulations(ref, labels, mix, gep_mat, cor_mat, dep_list, sim_fracs, sim_method = simMethod, ctoi_samples_frac = 0.1, n_sims = ct_sims, noise = NULL, ncores = nCores, seed2use = seed)
-  message("Scoring simulations...")
-  simulations_scored <- scoreSimulations(signatures, simulations, nCores)
+  if (is.null(simsFile)) {
+    message("Generating simulations...")
+    simulations <- makeSimulations(ref, labels, mix, gep_mat, cor_mat, dep_list, sim_fracs, sim_method = simMethod,  n_sims = ct_sims,  ncores = nCores, seed2use = seed)
+    message("Scoring simulations...")
+    simulations_scored <- scoreSimulations(signatures, simulations, nCores)
+
+    if (return_sims) {
+      sims.out <- list(sims = simulations, sims_scored = simulations_scored)
+      return(signatures)
+    }
+
+  }else{
+    # Load signatures
+    message("Loading simulations")
+    simulations.in <- readRDS(simsFile)
+    simulations <- simulations.in$sims
+    simulations_scored <- simulations.in$sims_scored
+  }
 
 
   # Filter signatures and train RF model
