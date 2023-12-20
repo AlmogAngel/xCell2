@@ -28,7 +28,7 @@ validateInputs <- function(ref, labels, ref_type){
 
 }
 # TODO: Write a function for TPM/CPM normalization for bulk reference
-normRefMix <- function(ref, mix, ref_type, mix_type, QN){
+normRefMix <- function(ref, mix, ref_type, QN){
 
 
   if(all(ref == as.integer(ref))){
@@ -49,19 +49,14 @@ normRefMix <- function(ref, mix, ref_type, mix_type, QN){
     message("Assuming reference already normalized.")
   }
 
-  if (is.null(mix_type)) {
-    message("Disabling quantile normalization. Please provide mix_type")
-    QN <- FALSE
-  }
+
 
   if (QN) {
-    if (ref_type != mix_type) {
-      message("Reference and mixture are not from the same platform - using quantile normalization...")
-      refmix <- cbind(ref, mix)
-      refmix <- limma::normalizeBetweenArrays(refmix)
-      ref <- refmix[,1:ncol(ref)]
-      mix <- refmix[,(ncol(ref)+1):ncol(refmix)]
-    }
+    message("Reference and mixture are not from the same platform - using quantile normalization...")
+    refmix <- cbind(ref, mix)
+    refmix <- limma::normalizeBetweenArrays(refmix)
+    ref <- refmix[,1:ncol(ref)]
+    mix <- refmix[,(ncol(ref)+1):ncol(refmix)]
   }
 
   return(list(ref.out = ref, mix.out = mix))
@@ -860,7 +855,7 @@ setClass("xCell2Signatures", slots = list(
 #' @param simMethod description
 #' @return An S4 object containing the signatures, cell type labels, and cell type dependencies.
 #' @export
-xCell2Train <- function(ref, labels, mix = NULL, ref_type, mix_type = NULL, QN = TRUE, lineage_file = NULL, top_genes_frac = 0.5, medianGEP = TRUE, seed = 123, probs = c(0.01, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.4),
+xCell2Train <- function(ref, labels, mix = NULL, ref_type,  QN = TRUE, lineage_file = NULL, top_genes_frac = 0.5, medianGEP = TRUE, seed = 123, probs = c(0.01, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.4),
                         sim_fracs = c(0, seq(0.01, 0.25, 0.005), seq(0.3, 1, 0.05)), diff_vals = round(c(log2(1), log2(1.5), log2(2), log2(2.5), log2(3), log2(4), log2(5), log2(10), log2(20)), 3),
                         min_genes = 3, max_genes = 150, return_sigs = FALSE, return_sims = FALSE, sigsFile = NULL, simsFile = NULL, minPBcells = 30, minPBsamples = 10,
                         ct_sims = 20, samples_frac = 0.1, simMethod = "ref_multi", nCores = 1){
@@ -872,7 +867,7 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type, mix_type = NULL, QN =
   labels <- inputs_validated$labels
 
 
-  if (max(mix) <= 50 & mix_type == "array") {
+  if (max(mix) <= 50) {
     message("Assuming mixture is in log-space (RMA), using 2-based exponentiation...")
     mix <- (2^mix)-1
   }
@@ -891,7 +886,7 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type, mix_type = NULL, QN =
   }
 
   # Normalize reference/mixture
-  out <- normRefMix(ref, mix, ref_type, mix_type, QN)
+  out <- normRefMix(ref, mix, ref_type, QN)
   ref <- out$ref.out
   mix <- out$mix.out
 
