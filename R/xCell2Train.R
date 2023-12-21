@@ -616,14 +616,14 @@ makeSimulations <- function(ref, labels, mix, gep_mat, cor_mat, dep_list, sim_fr
 
     do.call(cbind, ctoi_sim_list)
 
-    yy = do.call(cbind, ctoi_sim_list)
-    yyy=apply(yy, 2, function(m){
-
-      sapply(signatures_ctoi, function(sig){
-        cor(m[sig], gep_mat[sig, ctoi])
-      })
-    })
-    c[names(sort(rowMeans(yyy), decreasing = TRUE))]
+    # yy = do.call(cbind, ctoi_sim_list)
+    # yyy=apply(yy, 2, function(m){
+    #
+    #   sapply(signatures_ctoi, function(sig){
+    #     cor(m[sig], gep_mat[sig, ctoi])
+    #   })
+    # })
+    # c[names(sort(rowMeans(yyy), decreasing = TRUE))]
 
   }, BPPARAM = param)
   names(sim_list) <- celltypes
