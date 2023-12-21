@@ -561,10 +561,14 @@ makeSimulations <- function(ref, labels, mix, gep_mat, cor_mat, dep_list, sim_fr
 
 
         mix_vec <- mix[,sample(1:ncol(mix), 1)]
-        ctoi_vec <- ref_ctoi[,sample(1:ncol(ref_ctoi), sample(1:ncol(ref_ctoi), 1))]
-        if (class(ctoi_vec)[1] != "numeric") {
-          ctoi_vec <- Rfast::rowmeans(ctoi_vec)
-          names(ctoi_vec) <- rownames(ref_ctoi)
+        if (class(ref_ctoi)[1] != "numeric") {
+          ctoi_vec <- ref_ctoi[,sample(1:ncol(ref_ctoi), sample(1:ncol(ref_ctoi), 1))]
+          if (class(ctoi_vec)[1] != "numeric") {
+            ctoi_vec <- Rfast::rowmeans(ctoi_vec)
+            names(ctoi_vec) <- rownames(ref_ctoi)
+          }
+        }else{
+          ctoi_vec <- ref_ctoi
         }
         ctoi_vec[ctoi_vec == 0] <- 1 # In case ctoi_vec is 0 sizeEffect is -Inf
 
