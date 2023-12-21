@@ -52,7 +52,7 @@ normRefMix <- function(ref, mix, ref_type, QN){
 
 
   if (QN) {
-    message("Reference and mixture are not from the same platform - using quantile normalization...")
+    message("> Using quantile normalization...")
     refmix <- cbind(ref, mix)
     refmix <- limma::normalizeBetweenArrays(refmix)
     ref <- refmix[,1:ncol(ref)]
@@ -593,18 +593,18 @@ makeSimulations <- function(ref, labels, mix, gep_mat, cor_mat, dep_list, sim_fr
         #
         # cor(simulation[good_genes,ncol(simulation)], ctoi_vec[good_genes])
         # cor(simulation[bad_genes,ncol(simulation)], ctoi_vec[bad_genes])
-
+        #
         # sort(sapply(signatures_ctoi, function(sig){
         #   cor(simulation[sig,ncol(simulation)], ctoi_vec[sig])
         # }), decreasing = TRUE) -> xx
         # c[names(xx)]
-        #
+
         # all_cors <- apply(simulation, 2, function(mix){
         #   sapply(signatures_ctoi, function(sig){
         #     cor(mix[sig], ctoi_vec[sig])
         #   })
         # })
-        #
+
         # c[names(sort(rowMeans(all_cors), decreasing = TRUE))]
 
 
@@ -616,6 +616,14 @@ makeSimulations <- function(ref, labels, mix, gep_mat, cor_mat, dep_list, sim_fr
 
     do.call(cbind, ctoi_sim_list)
 
+    yy = do.call(cbind, ctoi_sim_list)
+    yyy=apply(yy, 2, function(m){
+
+      sapply(signatures_ctoi, function(sig){
+        cor(m[sig], gep_mat[sig, ctoi])
+      })
+    })
+    c[names(sort(rowMeans(yyy), decreasing = TRUE))]
 
   }, BPPARAM = param)
   names(sim_list) <- celltypes
@@ -855,7 +863,7 @@ setClass("xCell2Signatures", slots = list(
 #' @param simMethod description
 #' @return An S4 object containing the signatures, cell type labels, and cell type dependencies.
 #' @export
-xCell2Train <- function(ref, labels, mix = NULL, ref_type,  QN = TRUE, lineage_file = NULL, top_genes_frac = 0.5, medianGEP = TRUE, seed = 123, probs = c(0.01, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.4),
+xCell2Train <- function(ref, labels, mix = NULL, ref_type,  QN = TRUE, lineage_file = NULL, top_genes_frac = 1, medianGEP = TRUE, seed = 123, probs = c(0.01, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.4),
                         sim_fracs = c(0, seq(0.01, 0.25, 0.005), seq(0.3, 1, 0.05)), diff_vals = round(c(log2(1), log2(1.5), log2(2), log2(2.5), log2(3), log2(4), log2(5), log2(10), log2(20)), 3),
                         min_genes = 3, max_genes = 150, return_sigs = FALSE, return_sims = FALSE, sigsFile = NULL, simsFile = NULL, minPBcells = 30, minPBsamples = 10,
                         ct_sims = 20, samples_frac = 0.1, simMethod = "ref_multi", nCores = 1){
@@ -934,7 +942,7 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type,  QN = TRUE, lineage_f
 
     if (return_sims) {
       sims.out <- list(sims = simulations, sims_scored = simulations_scored)
-      return(signatures)
+      return(sims.out)
     }
 
   }else{
