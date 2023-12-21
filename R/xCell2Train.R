@@ -802,6 +802,51 @@ getSpillOverMat <- function(simulations, signatures, dep_list, models, frac2use)
   return(spill_mat)
 
 }
+filterSignatures <- function(simulations, signatures, labels, gep_mat, min_sigs, ncores){
+
+  param <- BiocParallel::MulticoreParam(workers = ncores)
+
+  celltypes <- unique(labels$label)
+  mixNames <- rev(unique(colnames(simulations[[1]])))
+  mixNames <- mixNames[mixNames != "mix%%0"]
+
+  sigs_filt <- BiocParallel::bplapply(celltypes, function(ctoi){
+
+    signatures_ctoi <- signatures[startsWith(names(signatures), paste0(ctoi, "#"))]
+    simulations_ctoi <- simulations[[ctoi]]
+
+    sigsLeft <- names(signatures_ctoi)
+    for(mixname in mixNames){
+
+      if (length(sigsLeft) <= min_sigs) {
+        break
+      }
+
+      simulations_ctoi_sub <- simulations_ctoi[,colnames(simulations_ctoi) == mixname]
+      signatures_ctoi_sub <- signatures_ctoi[names(signatures_ctoi) %in% sigsLeft]
+
+      cors_sorted <- sort(sapply(signatures_ctoi_sub, function(sig){
+        mean(apply(simulations_ctoi_sub, 2, function(m){
+          cor(m[sig], gep_mat[sig, ctoi])
+        }))
+      }), decreasing = T)
+
+      sigsLeft <- names(cors_sorted[1:round(length(cors_sorted)*0.9)])
+
+      if (length(sigsLeft) <= min_sigs) {
+        sigsLeft <- names(cors_sorted)[1:min_sigs]
+        break
+      }
+
+    }
+
+    return(sigsLeft)
+
+  }, BPPARAM = param)
+
+  return(unlist(sigs_filt))
+
+}
 
 
 #' @slot signatures list of xCell2 signatures
@@ -852,8 +897,7 @@ setClass("xCell2Signatures", slots = list(
 #' @param max_genes The maximum number of genes to include in the signature (optional).
 #' @param sigsFile description
 #' @param return_sigs description
-#' @param simsFile description
-#' @param return_sims description
+#' @param return_sigs_filt description
 #' @param minPBcells description
 #' @param minPBgroups description
 #' @param ct_sims description
@@ -865,7 +909,7 @@ setClass("xCell2Signatures", slots = list(
 #' @export
 xCell2Train <- function(ref, labels, mix = NULL, ref_type,  QN = TRUE, lineage_file = NULL, top_genes_frac = 1, medianGEP = TRUE, seed = 123, probs = c(0.01, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.4),
                         sim_fracs = c(0, seq(0.01, 0.25, 0.005), seq(0.3, 1, 0.05)), diff_vals = round(c(log2(1), log2(1.5), log2(2), log2(2.5), log2(3), log2(4), log2(5), log2(10), log2(20)), 3),
-                        min_genes = 3, max_genes = 150, return_sigs = FALSE, return_sims = FALSE, sigsFile = NULL, simsFile = NULL, minPBcells = 30, minPBsamples = 10,
+                        min_genes = 3, max_genes = 150, return_sigs = FALSE, return_sigs_filt = FALSE, sigsFile = NULL, minPBcells = 30, minPBsamples = 10,
                         ct_sims = 20, samples_frac = 0.1, simMethod = "ref_multi", nCores = 1){
 
 
@@ -934,24 +978,20 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type,  QN = TRUE, lineage_f
 
 
   # Make simulations
-  if (is.null(simsFile)) {
-    message("Generating simulations...")
-    simulations <- makeSimulations(ref, labels, mix, gep_mat, cor_mat, dep_list, sim_fracs, sim_method = simMethod,  n_sims = ct_sims,  ncores = nCores, seed2use = seed)
-    message("Scoring simulations...")
-    simulations_scored <- scoreSimulations(signatures, simulations, nCores)
+  message("Generating simulations...")
+  simulations <- makeSimulations(ref, labels, mix, gep_mat, cor_mat, dep_list, sim_fracs, sim_method = simMethod, n_sims = ct_sims, ncores = nCores, seed2use = seed)
 
-    if (return_sims) {
-      sims.out <- list(sims = simulations, sims_scored = simulations_scored)
-      return(sims.out)
-    }
-
-  }else{
-    # Load signatures
-    message("Loading simulations")
-    simulations.in <- readRDS(simsFile)
-    simulations <- simulations.in$sims
-    simulations_scored <- simulations.in$sims_scored
+  # New filtering method
+  message("Filtering signatures...")
+  signatures_filtered <- filterSignatures(simulations, signatures, labels, gep_mat, min_sigs = 3, ncores = nCores)
+  if (return_sigs_filt) {
+    return(signatures_filtered)
   }
+
+
+
+  message("Scoring simulations...")
+  simulations_scored <- scoreSimulations(signatures, simulations, nCores)
 
 
   # Filter signatures and train RF model
