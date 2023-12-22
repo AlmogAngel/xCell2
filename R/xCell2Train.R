@@ -561,6 +561,7 @@ makeSimulations <- function(ref, labels, mix, gep_mat, cor_mat, dep_list, sim_fr
 
 
         mix_vec <- mix[,sample(1:ncol(mix), 1)]
+
         if (class(ref_ctoi)[1] != "numeric") {
           ctoi_vec <- ref_ctoi[,sample(1:ncol(ref_ctoi), sample(1:ncol(ref_ctoi), 1))]
           if (class(ctoi_vec)[1] != "numeric") {
@@ -570,17 +571,17 @@ makeSimulations <- function(ref, labels, mix, gep_mat, cor_mat, dep_list, sim_fr
         }else{
           ctoi_vec <- ref_ctoi
         }
+
         ctoi_vec[ctoi_vec == 0] <- 1 # In case ctoi_vec is 0 sizeEffect is -Inf
 
         sizeEffect <- log2(ctoi_vec/mix_vec)
+        sizeEffect[is.nan(sizeEffect)] <- 0 # In case of 0/0
+        sizeEffect[sizeEffect == Inf] <- 0 # In case mix_vec is 0
 
         mix_sub <- round(matrix(rep(mix_vec, length(sim_fracs)), ncol = length(sim_fracs), byrow = FALSE))
 
         design_mat <- matrix(0, nrow = length(sim_fracs), ncol = length(sim_fracs))
         diag(design_mat) <- 1
-
-        sizeEffect[is.nan(sizeEffect)] <- 0 # In case of 0/0
-        sizeEffect[sizeEffect == Inf] <- 0 # In case mix_vec is 0
 
         betamat <- matrix(rep(sizeEffect, length(sim_fracs)), ncol = length(sim_fracs), byrow = FALSE)
         rownames(betamat) <- rownames(mix)
@@ -595,9 +596,11 @@ makeSimulations <- function(ref, labels, mix, gep_mat, cor_mat, dep_list, sim_fr
         # bad_genes <- unique(unlist(signatures[names(sort(c, decreasing = F)[1:5])]))
         # bad_genes <- bad_genes[!bad_genes %in% good_genes]
         #
-        # cor(simulation[good_genes,ncol(simulation)], ctoi_vec[good_genes])
-        # cor(simulation[bad_genes,ncol(simulation)], ctoi_vec[bad_genes])
-        #
+        # cor(simulation[good_genes,ncol(simulation)], gep_mat[good_genes, ctoi])
+        # cor(simulation[bad_genes,ncol(simulation)], gep_mat[bad_genes, ctoi])
+        # sigs_genes <- unique(unlist(signatures[names(c)]))
+        # cor(simulation[sigs_genes, ncol(simulation)], gep_mat[sigs_genes, ctoi])
+
         # sort(sapply(signatures_ctoi, function(sig){
         #   cor(simulation[sig,ncol(simulation)], ctoi_vec[sig])
         # }), decreasing = TRUE) -> xx
@@ -808,32 +811,71 @@ getSpillOverMat <- function(simulations, signatures, dep_list, models, frac2use)
 }
 filterSignatures <- function(simulations, signatures, labels, gep_mat, min_sigs, ncores){
 
+
   param <- BiocParallel::MulticoreParam(workers = ncores)
 
   celltypes <- unique(labels$label)
   mixNames <- rev(unique(colnames(simulations[[1]])))
-  mixNames <- mixNames[mixNames != "mix%%0"]
+  mix2use <- as.numeric(gsub("mix%%", "", mixNames)) != 0 & as.numeric(gsub("mix%%", "", mixNames)) <= 0.25
+  mixNames <- mixNames[mix2use]
 
   sigs_filt <- BiocParallel::bplapply(celltypes, function(ctoi){
 
-    signatures_ctoi <- signatures[startsWith(names(signatures), paste0(ctoi, "#"))]
-    simulations_ctoi <- simulations[[ctoi]]
+    sig_ctoi <- signatures[startsWith(names(signatures), paste0(ctoi, "#"))]
+    sigs_genes <- unique(unlist(sig_ctoi))
+    sim_ctoi <- simulations[[ctoi]]
 
-    sigsLeft <- names(signatures_ctoi)
+
+    # good_genes <- unique(unlist(signatures[names(sort(c, decreasing = T)[1:5])]))
+    # bad_genes <- unique(unlist(signatures[names(sort(c, decreasing = F)[1:5])])) ; bad_genes <- bad_genes[!bad_genes %in% good_genes]
+    # y=rowMeans(sim_ctoi[sigs_genes, colnames(sim_ctoi) == "mix%%1"])
+    # cor(y[good_genes], gep_mat[good_genes, ctoi])
+    # cor(y[bad_genes], gep_mat[bad_genes, ctoi])
+
+
+    # Find outlines genes in the simulation
+    sigsWithOutliers <- c()
+    sim_ctoi_sub <- sim_ctoi[sigs_genes, colnames(sim_ctoi) == "mix%%1"]
+    SEs <- sort(sqrt((Rfast::rowmeans(sim_ctoi_sub) - gep_mat[sigs_genes, ctoi])^2), decreasing = T)
+    SEs.tmp <- SEs
+    outlierGenes <- c()
+    for (i in 1:round(length(SEs)*0.5)) {
+      p <- outliers::grubbs.test(SEs.tmp)$p.value
+      if (p >= 0.01) {
+        break
+      }
+      outlierGenes <- c(outlierGenes, names(p))
+      SEs.tmp <- SEs.tmp[-1]
+    }
+
+    # Outlines genes must be in at least 80% of signatures
+    outlierGenes <- names(which(table(unlist(sig_ctoi))[outlierGenes]/length(sig_ctoi) >= 0.8))
+
+    # Subset outlines genes from signatures
+    sig_ctoi <- lapply(sig_ctoi, function(sig){
+      sig[!sig %in% outlierGenes]
+    })
+    sigsWithOutliers <- names(sig_ctoi[lengths(sig_ctoi) < 3]) # Keep signatures with outlines
+    sig_ctoi <- sig_ctoi[!names(sig_ctoi) %in% sigsWithOutliers]
+
+
+    # Filter signatures
+    sigsLeft <- names(sig_ctoi)
     for(mixname in mixNames){
 
       if (length(sigsLeft) <= min_sigs) {
         break
       }
 
-      simulations_ctoi_sub <- simulations_ctoi[,colnames(simulations_ctoi) == mixname]
-      signatures_ctoi_sub <- signatures_ctoi[names(signatures_ctoi) %in% sigsLeft]
+      sig_ctoi_sub <- sig_ctoi[names(sig_ctoi) %in% sigsLeft]
+      sigs_genes <- unique(unlist(sig_ctoi_sub))
+      sim_ctoi_sub <- sim_ctoi[sigs_genes, colnames(sim_ctoi) == mixname]
 
-      cors_sorted <- sort(sapply(signatures_ctoi_sub, function(sig){
-        mean(apply(simulations_ctoi_sub, 2, function(m){
+      cors_sorted <- sort(sapply(sig_ctoi_sub, function(sig){
+        mean(apply(sim_ctoi_sub, 2, function(m){
           cor(m[sig], gep_mat[sig, ctoi])
         }))
-      }), decreasing = T)
+      }), decreasing = TRUE)
 
       sigsLeft <- names(cors_sorted[1:round(length(cors_sorted)*0.9)])
 
@@ -844,7 +886,7 @@ filterSignatures <- function(simulations, signatures, labels, gep_mat, min_sigs,
 
     }
 
-    return(sigsLeft)
+    return(c(sigsWithOutliers, sigsLeft))
 
   }, BPPARAM = param)
 
