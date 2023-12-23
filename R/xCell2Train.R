@@ -714,7 +714,7 @@ trainModels <- function(simulations_scored, ncores, seed2use){
     model <- randomForestSRC::rfsrc(frac ~ ., as.data.frame(data))
     sigs_filtered <- colnames(data)[colnames(data) != "frac"]
 
-    return(tibble(model = list(model$rfsrc.refit.obj), sigs_filtered = list(sigs_filtered)))
+    return(tibble(model = list(model), sigs_filtered = list(sigs_filtered)))
 
   }
 
