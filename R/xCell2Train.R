@@ -827,7 +827,10 @@ filterSignatures <- function(simulations, signatures, labels, gep_mat, min_sigs,
 
 
     # good_genes <- unique(unlist(signatures[names(sort(c, decreasing = T)[1:5])]))
-    # bad_genes <- unique(unlist(signatures[names(sort(c, decreasing = F)[1:5])])) ; bad_genes <- bad_genes[!bad_genes %in% good_genes]
+    # bad_genes <- unique(unlist(signatures[names(sort(c, decreasing = F)[1:5])]))
+
+    # good_genes <- good_genes[!good_genes %in% bad_genes]
+
     # y=rowMeans(sim_ctoi[sigs_genes, colnames(sim_ctoi) == "mix%%1"])
     # cor(y[good_genes], gep_mat[good_genes, ctoi])
     # cor(y[bad_genes], gep_mat[bad_genes, ctoi])
@@ -872,6 +875,13 @@ filterSignatures <- function(simulations, signatures, labels, gep_mat, min_sigs,
       sig_ctoi_sub <- sig_ctoi[names(sig_ctoi) %in% sigsLeft]
       sigs_genes <- unique(unlist(sig_ctoi_sub))
       sim_ctoi_sub <- sim_ctoi[sigs_genes, colnames(sim_ctoi) == mixname]
+
+      min_sim_cor <- min(apply(sim_ctoi_sub, 2, function(m){
+        cor(m[sigs_genes], gep_mat[sigs_genes, ctoi])
+      }))
+      if (min_sim_cor < 0.5) {
+        next
+      }
 
       cors_sorted <- sort(sapply(sig_ctoi_sub, function(sig){
 
