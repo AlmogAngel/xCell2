@@ -1,3 +1,4 @@
+
 validateInputs <- function(ref, labels, ref_type){
   if (length(unique(labels$label)) < 3) {
     # TODO: What happens with 2 cell types
@@ -671,21 +672,25 @@ trainModels <- function(simulations_scored, ncores, seed2use){
   fitModel <- function(data){
 
     # Signature filtering with Lasso
-    cv_fit <- glmnet::cv.glmnet(data[,-ncol(data)], data[,ncol(data)], alpha = 1) # Using lasso penalty for feature selection
-    best_lambda <- cv_fit$lambda.min
-    coefficients <- as.matrix(coef(cv_fit, s = best_lambda))
-    sigs_filtered <- rownames(coefficients)[-1][coefficients[-1, , drop = FALSE] != 0]
+    # cv_fit <- glmnet::cv.glmnet(data[,-ncol(data)], data[,ncol(data)], alpha = 0.5) # Using lasso penalty for feature selection
+    # best_lambda <- cv_fit$lambda.min
+    # coefficients <- as.matrix(coef(cv_fit, s = best_lambda))
+    # sigs_filtered <- rownames(coefficients)[-1][coefficients[-1, , drop = FALSE] != 0]
 
 
-    RF <- RRF::RRF(x = as.data.frame(data[,-ncol(data)]), y = data[,ncol(data)], flagReg = 0, importance = TRUE, ntree = 1000)
-    RF_imp <- RF$importance[,"%IncMSE"] / max(RF$importance[,"%IncMSE"])
-    RRF <- RRF::RRF(x = data[,-ncol(data)], y = data[,ncol(data)], flagReg = 1, ntree = 1000, coefReg = (1-gamma) + gamma*RF_imp)
-    selected_features <- colnames(data)[RRF$feaSet]
-    data <- data[, c(selected_features, "frac")]
+    # RF <- RRF::RRF(x = as.data.frame(data[,-ncol(data)]), y = data[,ncol(data)], flagReg = 0, importance = TRUE, ntree = 1000)
+    # RF_imp <- RF$importance[,"%IncMSE"] / max(RF$importance[,"%IncMSE"])
+    # RRF <- RRF::RRF(x = data[,-ncol(data)], y = data[,ncol(data)], flagReg = 1, ntree = 1000, coefReg = (1-gamma) + gamma*RF_imp)
+    # selected_features <- colnames(data)[RRF$feaSet]
+    # data <- data[, c(selected_features, "frac")]
 
     # options(rf.cores=1, mc.cores=1)
-    model <- randomForestSRC::var.select(frac ~ ., as.data.frame(data), method = "vh.vimp", verbose = FALSE, refit = TRUE, conservative = "high")
-    sigs_filtered <- model$topvars
+    # model <- randomForestSRC::var.select(frac ~ ., as.data.frame(data), method = "vh.vimp", verbose = FALSE, refit = TRUE, conservative = "high", fast = TRUE)
+    # sigs_filtered <- model$topvars
+    #
+    # model <- randomForestSRC::var.select(frac ~ ., as.data.frame(data)[,c(sigs_filtered, "frac")], method = "vh.vimp", verbose = FALSE, refit = TRUE, conservative = "high", fast = TRUE)
+    # sigs_filtered <- model$topvars
+
     # cor(round(randomForestSRC::predict.rfsrc(model$rfsrc.refit.obj, newdata = as.data.frame(scores[,sigs_filtered]))$predicted, 4), fracs, method = "spearman", use = "pairwise.complete.obs")
 
     # Make sure there are at least three signatures
@@ -707,6 +712,8 @@ trainModels <- function(simulations_scored, ncores, seed2use){
 
     # cor(round(predict(model, scores[,sigs_filtered], s = best_lambda, type = "response")[,1], 4), fracs, method = "spearman", use = "pairwise.complete.obs")
 
+    model <- randomForestSRC::rfsrc(frac ~ ., as.data.frame(data))
+    sigs_filtered <- colnames(data)[colnames(data) != "frac"]
 
     return(tibble(model = list(model$rfsrc.refit.obj), sigs_filtered = list(sigs_filtered)))
 
@@ -1049,12 +1056,12 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type,  QN = TRUE, lineage_f
   message("Generating simulations...")
   simulations <- makeSimulations(ref, labels, mix, gep_mat, cor_mat, dep_list, sim_fracs, sim_method = simMethod, n_sims = ct_sims, ncores = nCores, seed2use = seed)
 
-  # New filtering method
-  message("Filtering signatures...")
-  signatures_filtered <- filterSignatures(simulations, signatures, labels, gep_mat, min_sigs = 3, ncores = nCores)
-  if (return_sigs_filt) {
-    return(signatures_filtered)
-  }
+  # # New filtering method
+  # message("Filtering signatures...")
+  # signatures_filtered <- filterSignatures(simulations, signatures, labels, gep_mat, min_sigs = 3, ncores = nCores)
+  #   if (return_sigs_filt) {
+  #     return(signatures_filtered)
+  #   }
 
 
 
