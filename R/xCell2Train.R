@@ -859,6 +859,8 @@ filterSignatures <- function(simulations, signatures, labels, gep_mat, min_sigs,
     sig_ctoi <- sig_ctoi[!names(sig_ctoi) %in% sigsWithOutliers]
 
 
+
+
     # Filter signatures
     sigsLeft <- names(sig_ctoi)
     for(mixname in mixNames){
@@ -872,12 +874,20 @@ filterSignatures <- function(simulations, signatures, labels, gep_mat, min_sigs,
       sim_ctoi_sub <- sim_ctoi[sigs_genes, colnames(sim_ctoi) == mixname]
 
       cors_sorted <- sort(sapply(sig_ctoi_sub, function(sig){
+
         mean(apply(sim_ctoi_sub, 2, function(m){
-          cor(m[sig], gep_mat[sig, ctoi])
+          if (all(m[sig] == 0) | all(gep_mat[sig, ctoi] == 0)) {
+            # Punish this sig with cor = 0
+            return(0)
+          }else{
+            return(cor(m[sig], gep_mat[sig, ctoi]))
+          }
         }))
+
       }), decreasing = TRUE)
 
-      sigsLeft <- names(cors_sorted[1:round(length(cors_sorted)*0.9)])
+
+      sigsLeft <- names(cors_sorted[1:as.integer(length(cors_sorted)*0.9)])
 
       if (length(sigsLeft) <= min_sigs) {
         sigsLeft <- names(cors_sorted)[1:min_sigs]
@@ -954,7 +964,7 @@ setClass("xCell2Signatures", slots = list(
 #' @return An S4 object containing the signatures, cell type labels, and cell type dependencies.
 #' @export
 xCell2Train <- function(ref, labels, mix = NULL, ref_type,  QN = TRUE, lineage_file = NULL, top_genes_frac = 1, medianGEP = TRUE, seed = 123, probs = c(0.01, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.4),
-                        sim_fracs = c(0, seq(0.01, 0.25, 0.005), seq(0.3, 1, 0.05)), diff_vals = round(c(log2(1), log2(1.5), log2(2), log2(2.5), log2(3), log2(4), log2(5), log2(10), log2(20)), 3),
+                        sim_fracs = c(0, seq(0.01, 0.25, 0.01), seq(0.3, 1, 0.05)), diff_vals = round(c(log2(1), log2(1.5), log2(2), log2(2.5), log2(3), log2(4), log2(5), log2(10), log2(20)), 3),
                         min_genes = 3, max_genes = 150, return_sigs = FALSE, return_sigs_filt = FALSE, sigsFile = NULL, minPBcells = 30, minPBsamples = 10,
                         ct_sims = 20, samples_frac = 0.1, simMethod = "ref_multi", nCores = 1){
 
