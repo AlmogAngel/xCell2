@@ -821,6 +821,7 @@ filterSignatures <- function(simulations, signatures, labels, gep_mat, min_sigs,
 
   sigs_filt <- BiocParallel::bplapply(celltypes, function(ctoi){
 
+
     sig_ctoi <- signatures[startsWith(names(signatures), paste0(ctoi, "#"))]
     sigs_genes <- unique(unlist(sig_ctoi))
     sim_ctoi <- simulations[[ctoi]]
@@ -878,8 +879,9 @@ filterSignatures <- function(simulations, signatures, labels, gep_mat, min_sigs,
 
       min_sim_cor <- min(apply(sim_ctoi_sub, 2, function(m){
         cor(m[sigs_genes], gep_mat[sigs_genes, ctoi])
-      }))
-      if (min_sim_cor < 0.5) {
+      }), na.rm = TRUE)
+
+      if (min_sim_cor < 0.5 | is.na(min_sim_cor)) { # min_sim_cor might be NA if all sim_ctoi_sub are zeros
         next
       }
 
