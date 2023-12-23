@@ -1,4 +1,3 @@
-
 validateInputs <- function(ref, labels, ref_type){
   if (length(unique(labels$label)) < 3) {
     # TODO: What happens with 2 cell types
@@ -1077,9 +1076,9 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type,  QN = TRUE, lineage_f
 
 
   # Get spillover matrix
-  message("Generating spillover matrix...")
-  frac2use <- sim_fracs[which.min(abs(sim_fracs - 0.25))]
-  spill_mat <- getSpillOverMat(simulations, signatures_filt, dep_list, models, frac2use)
+  # message("Generating spillover matrix...")
+  # frac2use <- sim_fracs[which.min(abs(sim_fracs - 0.25))]
+  # spill_mat <- getSpillOverMat(simulations, signatures_filt, dep_list, models, frac2use)
 
 
   # Save results in S4 object
@@ -1087,7 +1086,7 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type,  QN = TRUE, lineage_f
                        signatures = signatures_filt,
                        dependencies = dep_list,
                        models = models,
-                       spill_mat = spill_mat,
+                       spill_mat = matrix(),
                        genes_used = rownames(ref))
 
 
