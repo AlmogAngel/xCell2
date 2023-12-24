@@ -683,7 +683,6 @@ trainModels <- function(simulations_scored, ncores, seed2use){
     # selected_features <- colnames(data)[RRF$feaSet]
     # data <- data[, c(selected_features, "frac")]
 
-    # options(rf.cores=1, mc.cores=1)
     # model <- randomForestSRC::var.select(frac ~ ., as.data.frame(data), method = "vh.vimp", verbose = FALSE, refit = TRUE, conservative = "high", fast = TRUE)
     # sigs_filtered <- model$topvars
     #
@@ -711,6 +710,7 @@ trainModels <- function(simulations_scored, ncores, seed2use){
 
     # cor(round(predict(model, scores[,sigs_filtered], s = best_lambda, type = "response")[,1], 4), fracs, method = "spearman", use = "pairwise.complete.obs")
 
+    options(rf.cores=1, mc.cores=1)
     model <- randomForestSRC::rfsrc(frac ~ ., as.data.frame(data))
     sigs_filtered <- colnames(data)[colnames(data) != "frac"]
 
