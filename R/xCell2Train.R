@@ -27,6 +27,90 @@ validateInputs <- function(ref, labels, ref_type){
   return(out)
 
 }
+splitRef <- function(df, train_prop, seed2use = seed) {
+  # Check if the dataframe has the required columns
+  required_cols <- c("ont", "label", "sample", "dataset")
+  if (!all(required_cols %in% colnames(df))) {
+    stop("Dataframe does not have the required columns")
+  }
+
+  set.seed(seed) # For reproducibility
+
+  # Prepare empty lists for training and testing groups
+  train_groups <- list()
+  test_groups <- list()
+
+  # Splitting each unique label-dataset combination
+  df_grouped <- df %>%
+    group_by(label, dataset) %>%
+    group_split()
+
+  # Function to handle assignment of groups to training/testing
+  assign_group <- function(group) {
+    if (nrow(group) == 1 && length(df[df$label %in% unique(group$label),"dataset"]) == 1) {
+      # Duplicate if only one sample in the group
+      train_groups <<- c(train_groups, list(group))
+      test_groups <<- c(test_groups, list(group))
+    } else {
+      # Randomly assign to training or testing
+      if (runif(1) < train_prop) {
+        train_groups <<- c(train_groups, list(group))
+      } else {
+        test_groups <<- c(test_groups, list(group))
+      }
+    }
+  }
+
+  # Apply the assignment function to each group
+  walk(df_grouped, assign_group)
+
+  # Combine all groups into two tibbles
+  training_set <- bind_rows(train_groups)
+  testing_set <- bind_rows(test_groups)
+
+  # Check if all labels are in both sets, if not, balance them
+  labels_uniq <- unique(df$label)
+  for (l in labels_uniq) {
+    if (!(l %in% testing_set$label)) {
+      label2add <- training_set %>%
+        filter(label == l)
+      datasets <- unique(label2add$dataset)
+      if (length(datasets) > 1) {
+        sample_to_add <- label2add %>%
+          filter(dataset == datasets[1])
+      }else{
+        sample_to_add <- label2add %>%
+          slice_sample(prop = 1-train_prop)
+        if(nrow(sample_to_add) == 0){
+          sample_to_add <- label2add[1,]
+        }
+      }
+      training_set <- training_set %>%
+        filter(!sample %in% sample_to_add$sample)
+      testing_set <- rbind(testing_set, sample_to_add)
+    }
+    if (!(l %in% training_set$label)) {
+      label2add <- testing_set %>%
+        filter(label == l)
+      datasets <- unique(label2add$dataset)
+      if (length(datasets) > 1) {
+        sample_to_add <- label2add %>%
+          filter(dataset == datasets[1])
+      }else{
+        sample_to_add <- label2add %>%
+          slice_sample(prop = train_prop)
+        if(nrow(sample_to_add) == 0){
+          sample_to_add <- label2add[1,]
+        }
+      }
+      testing_set <- testing_set %>%
+        filter(!sample %in% sample_to_add$sample)
+      training_set <- rbind(training_set, sample_to_add)
+    }
+  }
+
+  return(list(training_set = training_set, testing_set = testing_set))
+}
 # TODO: Write a function for TPM/CPM normalization for bulk reference
 normRefMix <- function(ref, mix, ref_type, QN){
 
@@ -431,12 +515,13 @@ makeSimulations <- function(ref, labels, mix, gep_mat, cor_mat, dep_list, sim_fr
 
   celltypes <- unique(labels$label)
 
-  getSubMatrix <- function(mat, sim_fracs, n_samples_sim){
+  getSubMatrix <- function(mat, sim_fracs){
 
     if (class(mat)[1] == "numeric") {
       ctoi_vec <- mat
-
+      n_samples_sim <- 1
     }else{
+      n_samples_sim <- round(ncol(mat)*0.2 + 0.5)
       ctoi_vec <- mat[,sample(1:ncol(mat), n_samples_sim)]
     }
 
@@ -473,31 +558,27 @@ makeSimulations <- function(ref, labels, mix, gep_mat, cor_mat, dep_list, sim_fr
 
     return(list(ctoi_mat_thin = ctoi_mat_thin, controls_mat_thin = controls_mat_thin))
   }
-  makeFractionMatrixControls <- function(controls_mat, sim_fracs, controls){
+  makeFractionMatrixControls <- function(controls_mat, sim_fracs){
 
 
-    # Multiple control mixture by fractions
-    generateFractions <- function(target_sum, n_fracs = ncol(controls_mat)) {
-      # Generate random numbers from a uniform distribution
-      numbers <- runif(n_fracs)
+    if (ncol(controls_mat) == 1) {
 
-      # Scale the numbers so that their sum equals target_sum
-      fracs <- numbers / sum(numbers) * target_sum
+      ctrl_frac_mat <- sapply(1-sim_fracs, function(frac){
+        controls_mat[,1] * frac
+      })
 
-      return(fracs)
+      return(ctrl_frac_mat)
     }
 
-    controls_frac_mat <- sapply(1-sim_fracs, function(frac){
-      fracs <- generateFractions(target_sum = frac)
-      if (length(fracs) == 1) {
-        controls_mat * fracs
-      }else{
-        Rfast::rowmeans(controls_mat %*% diag(fracs))
-      }
-    })
-    rownames(controls_frac_mat) <- rownames(ref)
+    numbers <- runif(ncol(controls_mat))
+    initial_fracs <- numbers / sum(numbers)
 
-    return(controls_frac_mat)
+    ctrl_frac_mat <- sapply(1-sim_fracs, function(frac){
+      adjusted_fracs <- initial_fracs * frac
+      rowSums(controls_mat %*% diag(adjusted_fracs))
+    })
+
+    return(ctrl_frac_mat)
   }
 
 
@@ -505,11 +586,15 @@ makeSimulations <- function(ref, labels, mix, gep_mat, cor_mat, dep_list, sim_fr
 
     ref_ctoi <- ref[,labels$label == ctoi]
 
-    if (sim_method == "ref_multi") {
-      # Get control cell types
-      dep_cts <- unique(c(ctoi, unname(unlist(dep_list[[ctoi]]))))
-      controls <- celltypes[!celltypes %in% dep_cts]
+    # Get control cell types
+    dep_cts <- unique(c(ctoi, unname(unlist(dep_list[[ctoi]]))))
+    controls <- celltypes[!celltypes %in% dep_cts]
+    controls_vec <- ref[,labels$label %in% controls]
+    if (class(controls_vec)[1] != "numeric") {
+      controls_vec <- Rfast::rowMedians(controls_vec)
+      names(controls_vec) <- rownames(ref)
     }
+    controls_vec[controls_vec == 0] <- 1 # In case ctoi_vec is 0 sizeEffect is -Inf
 
 
     # Generate n_sims simulations
@@ -518,12 +603,15 @@ makeSimulations <- function(ref, labels, mix, gep_mat, cor_mat, dep_list, sim_fr
 
       if (sim_method == "ref_multi") {
 
-
         # Use n_samples_sim random samples for CTOI
-        ref_ctoi_sub <- getSubMatrix(mat = ref_ctoi, sim_fracs, n_samples_sim)
+        ref_ctoi_sub <- getSubMatrix(mat = ref_ctoi, sim_fracs)
+
+        # Get CTOI fraction matrix
+        ctoi_frac_mat <- ref_ctoi_sub %*% diag(sim_fracs)
 
         # Sample 1-10 control cell types
         controls2use <- sample(controls, sample(1:min(10, length(controls)), 1), replace = FALSE)
+
         # Generate controls matrix
         controls_mat <- sapply(controls2use, function(ctrl){
 
@@ -539,28 +627,18 @@ makeSimulations <- function(ref, labels, mix, gep_mat, cor_mat, dep_list, sim_fr
         })
         rownames(controls_mat) <- rownames(ref)
 
-        # Thin to adjust library size
-        data_adjusted <- adjustLibSize(ctoi_mat = ref_ctoi_sub, controls_mat = controls_mat)
-        ref_ctoi_sub <- data_adjusted$ctoi_mat_thin
-        controls_mat <- data_adjusted$controls_mat_thin
-
-        # Generete fractions ,at
-        ctoi_frac_mat <- ref_ctoi_sub %*% diag(sim_fracs)
-        control_frac_mat <- makeFractionMatrixControls(controls_mat, sim_fracs, controls = controls2use)
+        # Generete fractions mat
+        control_frac_mat <- makeFractionMatrixControls(controls_mat, sim_fracs)
 
 
         simulation <- ctoi_frac_mat + control_frac_mat
         colnames(simulation) <- paste0("mix", "%%", sim_fracs)
 
-        simulation
-
+        return(simulation)
 
       }
 
       if (sim_method == "mix_thin") {
-
-
-        mix_vec <- mix[,sample(1:ncol(mix), 1)]
 
         if (class(ref_ctoi)[1] != "numeric") {
           ctoi_vec <- ref_ctoi[,sample(1:ncol(ref_ctoi), sample(1:ncol(ref_ctoi), 1))]
@@ -571,29 +649,42 @@ makeSimulations <- function(ref, labels, mix, gep_mat, cor_mat, dep_list, sim_fr
         }else{
           ctoi_vec <- ref_ctoi
         }
-
         ctoi_vec[ctoi_vec == 0] <- 1 # In case ctoi_vec is 0 sizeEffect is -Inf
 
-        sizeEffect <- log2(ctoi_vec/mix_vec)
-        sizeEffect[is.nan(sizeEffect)] <- 0 # In case of 0/0
-        sizeEffect[sizeEffect == Inf] <- 0 # In case mix_vec is 0
 
-        mix_sub <- round(matrix(rep(mix_vec, length(sim_fracs)), ncol = length(sim_fracs), byrow = FALSE))
+        ctoi_sims <- lapply(1:ncol(mix), function(mix_sample){
+          mix_vec <- mix[,mix_sample]
 
-        design_mat <- matrix(0, nrow = length(sim_fracs), ncol = length(sim_fracs))
-        diag(design_mat) <- 1
+          sizeEffect <- log2(ctoi_vec/mix_vec)
+          # sizeEffect2 <- log2(controls_vec/mix_vec)
+          # sizeEffect <- sizeEffect1 - sizeEffect2
+          sizeEffect[is.nan(sizeEffect)] <- 0 # In case of 0/0
+          sizeEffect[sizeEffect == Inf] <- 0 # In case mix_vec is 0
 
-        betamat <- matrix(rep(sizeEffect, length(sim_fracs)), ncol = length(sim_fracs), byrow = FALSE)
-        rownames(betamat) <- rownames(mix)
-        betamat <- betamat %*% diag(sim_fracs)
+          mix_sub <- round(matrix(rep(mix_vec, length(sim_fracs)), ncol = length(sim_fracs), byrow = FALSE))
 
-        simulation <- seqgendiff::thin_diff(mat = mix_sub, design_fixed = design_mat, coef_fixed = betamat)$mat
-        rownames(simulation) <- rownames(mix)
-        colnames(simulation) <- paste0("mix", "%%", sim_fracs)
-        return(simulation)
+          design_mat <- matrix(0, nrow = length(sim_fracs), ncol = length(sim_fracs))
+          diag(design_mat) <- 1
 
+          betamat <- matrix(rep(sizeEffect, length(sim_fracs)), ncol = length(sim_fracs), byrow = FALSE)
+          rownames(betamat) <- rownames(mix)
+          betamat <- log2((2^betamat-1) %*% diag(sim_fracs)+1)
+          # betamat <- betamat %*% diag(sim_fracs)
+
+          simulation <- seqgendiff::thin_diff(mat = mix_sub, design_fixed = design_mat, coef_fixed = betamat)$mat
+          rownames(simulation) <- rownames(mix)
+          colnames(simulation) <- paste0("mix", "%%", sim_fracs)
+
+          return(simulation)
+
+        })
+
+        ctoi_sims <- do.call(cbind, ctoi_sims)
+
+        return(ctoi_sims)
         # good_genes <- unique(unlist(signatures[names(sort(c, decreasing = T)[1:5])]))
         # bad_genes <- unique(unlist(signatures[names(sort(c, decreasing = F)[1:5])]))
+        # good_genes <- good_genes[!good_genes %in% bad_genes]
         # bad_genes <- bad_genes[!bad_genes %in% good_genes]
         #
         # cor(simulation[good_genes,ncol(simulation)], gep_mat[good_genes, ctoi])
@@ -613,7 +704,6 @@ makeSimulations <- function(ref, labels, mix, gep_mat, cor_mat, dep_list, sim_fr
         # })
 
         # c[names(sort(rowMeans(all_cors), decreasing = TRUE))]
-
 
 
       }
@@ -638,10 +728,13 @@ makeSimulations <- function(ref, labels, mix, gep_mat, cor_mat, dep_list, sim_fr
   return(sim_list)
 
 }
-scoreSimulations <- function(signatures, simulations, ncores){
+scoreSimulations <- function(signatures, simulations, n_sims, ncores){
 
   param <- BiocParallel::MulticoreParam(workers = ncores)
   celltypes <- names(simulations)
+  normalize <- function(x) {
+    (x - min(x)) / (max(x) - min(x))
+  }
 
   sims_scored <- BiocParallel::bplapply(celltypes, function(ctoi){
 
@@ -651,11 +744,25 @@ scoreSimulations <- function(signatures, simulations, ncores){
     colnames(sim_ranked) <- make.unique(colnames(sim_ranked), sep = "%")
 
     scores <- sapply(signatures_ctoi, simplify = TRUE, function(sig){
-      singscore::simpleScore(sim_ranked, upSet = sig, centerScore = FALSE)$TotalScore
+      score <- singscore::simpleScore(sim_ranked, upSet = sig, centerScore = FALSE)$TotalScore
     })
 
-    score <- cbind(scores, frac = as.numeric(gsub("mix%%", "", colnames(ctoi_sim))))
-    score
+
+    # Normalize scores
+    indices <- cut(seq_along(scores[,1]), breaks=n_sims, labels = FALSE)
+    scores <- apply(scores, 2, function(sample){
+      sample_split <- split(sample, indices)
+      norm_scores <- as.numeric(sapply(sample_split, function(x){
+        normalize(x)
+      }))
+      return(norm_scores)
+    })
+
+    scores <- cbind(scores, frac = as.numeric(gsub("mix%%", "", colnames(ctoi_sim))))
+
+
+    return(scores)
+
 
   }, BPPARAM = param)
 
@@ -670,8 +777,57 @@ trainModels <- function(simulations_scored, ncores, seed2use){
 
   fitModel <- function(data){
 
-    # Signature filtering with Lasso
-    # cv_fit <- glmnet::cv.glmnet(data[,-ncol(data)], data[,ncol(data)], alpha = 0.5) # Using lasso penalty for feature selection
+    response_variable <- ncol(data)
+    predictors <- data[, -response_variable]
+    response <- data[, response_variable]
+
+    xgb_params <- list(
+      booster = "gbtree",  # Using linear booster
+      alpha = 1,          # Lasso regularization term
+      lambda = 1,            # No Ridge regularization
+      eta = 0.01,             # Learning rate
+      objective = "reg:squarederror",
+      max_depth = 6,
+      nthread = 1
+    )
+    model <- xgboost::xgboost(
+      data = predictors,
+      label = response,
+      params = xgb_params,
+      nrounds = 150,
+      verbose = 0
+    )
+    #cor(round(predict(model, scores, type = "response"), 4), fracs, method = "spearman", use = "pairwise.complete.obs")
+
+    importance_matrix <- xgboost::xgb.importance(feature_names = colnames(predictors), model = model)
+    gains.tmp <- importance_matrix$Gain
+    sigs_filtered <- c()
+    for (i in 1:nrow(importance_matrix)) {
+      p <- outliers::grubbs.test(gains.tmp)$p.value
+      if (p >= 0.01) {
+        break
+      }
+      sigs_filtered <- c(sigs_filtered, importance_matrix[i,1][[1]])
+      gains.tmp <- gains.tmp[-1]
+    }
+
+
+    if (length(sigs_filtered) < 3) {
+      sigs_filtered <- importance_matrix[1:3,1][[1]]
+    }
+
+    model <- xgboost::xgboost(
+      data = predictors[,sigs_filtered],
+      label = response,
+      params = xgb_params,
+      nrounds = 150,
+      verbose = 0
+    )
+    # cor(round(predict(model, scores[,sigs.filtered], type = "response"), 4), fracs, method = "spearman", use = "pairwise.complete.obs")
+
+
+    # # Signature filtering with Lasso
+    # cv_fit <- glmnet::cv.glmnet(data[,-ncol(data)], data[,ncol(data)], alpha = 1) # Using lasso penalty for feature selection
     # best_lambda <- cv_fit$lambda.min
     # coefficients <- as.matrix(coef(cv_fit, s = best_lambda))
     # sigs_filtered <- rownames(coefficients)[-1][coefficients[-1, , drop = FALSE] != 0]
@@ -683,13 +839,13 @@ trainModels <- function(simulations_scored, ncores, seed2use){
     # selected_features <- colnames(data)[RRF$feaSet]
     # data <- data[, c(selected_features, "frac")]
 
-    # model <- randomForestSRC::var.select(frac ~ ., as.data.frame(data), method = "vh.vimp", verbose = FALSE, refit = TRUE, conservative = "high", fast = TRUE)
+    # model <- randomForestSRC::var.select(frac ~ ., as.data.frame(data), method = "md", verbose = FALSE, refit = TRUE, fast = TRUE)
     # sigs_filtered <- model$topvars
-    #
+
     # model <- randomForestSRC::var.select(frac ~ ., as.data.frame(data)[,c(sigs_filtered, "frac")], method = "vh.vimp", verbose = FALSE, refit = TRUE, conservative = "high", fast = TRUE)
     # sigs_filtered <- model$topvars
 
-    # cor(round(randomForestSRC::predict.rfsrc(model$rfsrc.refit.obj, newdata = as.data.frame(scores[,sigs_filtered]))$predicted, 4), fracs, method = "spearman", use = "pairwise.complete.obs")
+    #cor(round(randomForestSRC::predict.rfsrc(model$rfsrc.refit.obj, newdata = as.data.frame(scores[,sigs_filtered]))$predicted, 4), fracs, method = "spearman", use = "pairwise.complete.obs")
 
     # Make sure there are at least three signatures
     # lasso_alpha <- 1
@@ -710,9 +866,9 @@ trainModels <- function(simulations_scored, ncores, seed2use){
 
     # cor(round(predict(model, scores[,sigs_filtered], s = best_lambda, type = "response")[,1], 4), fracs, method = "spearman", use = "pairwise.complete.obs")
 
-    options(rf.cores=1, mc.cores=1)
-    model <- randomForestSRC::rfsrc(frac ~ ., as.data.frame(data))
-    sigs_filtered <- colnames(data)[colnames(data) != "frac"]
+    # options(rf.cores=1, mc.cores=1)
+    # model <- randomForestSRC::rfsrc.fast(frac ~ ., as.data.frame(data), forest = TRUE)
+    # sigs_filtered <- colnames(data)[colnames(data) != "frac"]
 
     return(tibble(model = list(model), sigs_filtered = list(sigs_filtered)))
 
@@ -949,8 +1105,8 @@ setClass("xCell2Signatures", slots = list(
 #' @import readr
 #' @import BiocParallel
 #' @importFrom limma normalizeBetweenArrays
-#' @importFrom glmnet cv.glmnet glmnet
-#' @importFrom randomForestSRC predict.rfsrc var.select
+#' @importFrom outliers grubbs.test
+#' @importFrom xgboost xgboost xgb.importance
 #' @importFrom Rfast rowMedians rowmeans rowsums Sort
 #' @importFrom seqgendiff thin_lib thin_diff
 #' @importFrom Matrix rowMeans rowSums colSums
@@ -984,14 +1140,13 @@ setClass("xCell2Signatures", slots = list(
 xCell2Train <- function(ref, labels, mix = NULL, ref_type,  QN = TRUE, lineage_file = NULL, top_genes_frac = 1, medianGEP = TRUE, seed = 123, probs = c(0.01, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.4),
                         sim_fracs = c(0, seq(0.01, 0.25, 0.01), seq(0.3, 1, 0.05)), diff_vals = round(c(log2(1), log2(1.5), log2(2), log2(2.5), log2(3), log2(4), log2(5), log2(10), log2(20)), 3),
                         min_genes = 3, max_genes = 150, return_sigs = FALSE, return_sigs_filt = FALSE, sigsFile = NULL, minPBcells = 30, minPBsamples = 10,
-                        ct_sims = 20, samples_frac = 0.1, simMethod = "ref_multi", nCores = 1){
+                        ct_sims = 10, samples_frac = 0.1, simMethod = "ref_multi", nCores = 1){
 
 
   # Validate inputs
   inputs_validated <- validateInputs(ref, labels, ref_type)
   ref <- inputs_validated$ref
   labels <- inputs_validated$labels
-
 
   if (max(mix) <= 50) {
     message("Assuming mixture is in log-space (RMA), using 2-based exponentiation...")
@@ -1002,6 +1157,14 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type,  QN = TRUE, lineage_f
     message("Assuming referance is in log-space (RMA), using 2-based exponentiation...")
     ref <- (2^ref)-1
   }
+
+  # Split training/testing
+  # split.out <- splitRef(labels, train_prop = 0.7, seed2use = seed)
+  # labels_train <- split.out$training_set
+  # ref_train <- ref[,labels_train$sample]
+  # labels_test <- split.out$testing_set
+  # ref_test <- ref[,labels_test$sample]
+
 
   # Generate pseudo bulk from scRNA-Seq reference
   if (ref_type == "sc") {
@@ -1062,10 +1225,8 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type,  QN = TRUE, lineage_f
   #     return(signatures_filtered)
   #   }
 
-
-
   message("Scoring simulations...")
-  simulations_scored <- scoreSimulations(signatures, simulations, nCores)
+  simulations_scored <- scoreSimulations(signatures, simulations, ct_sims, nCores)
 
 
   # Filter signatures and train RF model

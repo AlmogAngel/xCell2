@@ -68,4 +68,3 @@ xCell2CleanGenes <- function(ref, mix, gene_groups = c("Rb", "Mrp", "other_Rb", 
 
   return(list("ref" = ref, "mix" = mix))
 }
-
