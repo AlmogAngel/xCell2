@@ -418,7 +418,7 @@ addEssentialGenes <- function(ref, signatures){
   return(signatures)
 
 }
-filterSignatures <- function(ref, labels, filtering_data, signatures, n_sigs, ncores){
+filterSignatures <- function(ref, labels, filtering_data, signatures, top_sigs_frac, ncores){
 
   param <- BiocParallel::MulticoreParam(workers = ncores)
 
@@ -477,7 +477,7 @@ filterSignatures <- function(ref, labels, filtering_data, signatures, n_sigs, nc
       mutate(z = 0.5 * log((1 + rho) / (1 - rho))) %>% # Fisher transformation
       group_by(sig) %>%
       summarise(mean_z = mean(z)) %>%
-      top_n(n_sigs, wt = mean_z) %>%
+      top_frac(top_sigs_frac, wt = mean_z) %>%
       pull(sig)
 
 
@@ -1070,12 +1070,13 @@ setClass("xCell2Signatures", slots = list(
 #' @param mix description
 #' @param simMethod description
 #' @param filtering_data description
+#' @param top_sigs_frac description
 #' @return An S4 object containing the signatures, cell type labels, and cell type dependencies.
 #' @export
 xCell2Train <- function(ref, labels, mix = NULL, ref_type, filtering_data = NULL, lineage_file = NULL, top_genes_frac = 1, medianGEP = TRUE, seed = 123, probs = c(0.01, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.4),
                         sim_fracs = c(0, seq(0.01, 0.25, 0.01), seq(0.3, 1, 0.05)), diff_vals = round(c(log2(1), log2(1.5), log2(2), log2(2.5), log2(3), log2(4), log2(5), log2(10), log2(20)), 3),
                         min_genes = 3, max_genes = 150, return_sigs = FALSE, return_sigs_filt = FALSE, sigsFile = NULL, minPBcells = 30, minPBsamples = 10,
-                        ct_sims = 10, samples_frac = 0.1, simMethod = "ref_multi", nCores = 1){
+                        ct_sims = 10, samples_frac = 0.1, simMethod = "ref_multi", nCores = 1, top_sigs_frac){
 
 
   # Validate inputs
@@ -1133,7 +1134,7 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type, filtering_data = NULL
 
   if (!is.null(filtering_data)) {
     message("Filtering signatures by external datasets...")
-    out <- filterSignatures(ref, labels, filtering_data, signatures, n_sigs = 3, ncores = nCores)
+    out <- filterSignatures(ref, labels, filtering_data, signatures, top_sigs_frac, ncores = nCores)
     # signatures <- out$filt_sigs
   }
 
