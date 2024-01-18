@@ -426,6 +426,7 @@ filterSignatures <- function(ref, labels, filtering_data, signatures, n_sigs, nc
     (x - min(x)) / (max(x) - min(x))
   }
 
+
   celltypes <- unique(labels$label)
   shared_cts <- intersect(celltypes, rownames(filtering_data$truth))
 
@@ -470,16 +471,13 @@ filterSignatures <- function(ref, labels, filtering_data, signatures, n_sigs, nc
     })
     names(ds_cors_list) <- unique(ctoi_datasets)
 
-    # Rank signatures by dataset
-    ranked_sigs <- lapply(ds_cors_list, function(ds) {
-      rank(ds)
-    })
 
-    best_sigs <- enframe(ranked_sigs, name = "dataset") %>%
-      unnest_longer(value, values_to = "rank", indices_to = "sig") %>%
+    best_sigs <- enframe(ds_cors_list, name = "dataset") %>%
+      unnest_longer(value, values_to = "rho", indices_to = "sig") %>%
+      mutate(z = 0.5 * log((1 + rho) / (1 - rho))) %>% # Fisher transformation
       group_by(sig) %>%
-      summarise(rank = mean(rank)) %>%
-      top_n(n_sigs, wt = rank) %>%
+      summarise(mean_z = mean(z)) %>%
+      top_n(n_sigs, wt = mean_z) %>%
       pull(sig)
 
 
@@ -1143,7 +1141,7 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type, filtering_data = NULL
     return(list(all_sigs = signatures,
                 filt_sigs = out$filt_sigs,
                 filt_cts = out$filt_cts,
-           genes_used = rownames(ref)))
+                genes_used = rownames(ref)))
   }
 
   # Make simulations
