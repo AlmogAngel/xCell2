@@ -1142,8 +1142,8 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type, filtering_data = NULL
   if (return_sigs_filt) {
     return(list(all_sigs = signatures,
                 filt_sigs = out$filt_sigs,
-                filt_cts = out$filt_cts),
-           genes_used = rownames(ref))
+                filt_cts = out$filt_cts,
+           genes_used = rownames(ref)))
   }
 
   # Make simulations
