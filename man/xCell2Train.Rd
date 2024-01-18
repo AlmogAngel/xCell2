@@ -7,24 +7,27 @@
 xCell2Train(
   ref,
   labels,
-  data_type,
   mix = NULL,
+  ref_type,
+  filtering_data = NULL,
   lineage_file = NULL,
-  top_genes_frac = 0.5,
+  top_genes_frac = 1,
   medianGEP = TRUE,
   seed = 123,
-  probs = c(0.01, 0.05, 0.1, 0.25, 0.333, 0.49),
-  sim_fracs = c(0, seq(0.01, 0.25, 0.005), seq(0.3, 1, 0.05)),
-  diff_vals = c(1, 1.585, 2, 3, 4, 5),
+  probs = c(0.01, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.4),
+  sim_fracs = c(0, seq(0.01, 0.25, 0.01), seq(0.3, 1, 0.05)),
+  diff_vals = round(c(log2(1), log2(1.5), log2(2), log2(2.5), log2(3), log2(4), log2(5),
+    log2(10), log2(20)), 3),
   min_genes = 3,
-  max_genes = 100,
+  max_genes = 150,
   return_sigs = FALSE,
+  return_sigs_filt = FALSE,
   sigsFile = NULL,
   minPBcells = 30,
   minPBsamples = 10,
-  ct_sims = 20,
+  ct_sims = 10,
   samples_frac = 0.1,
-  simMethod = "ref_thin",
+  simMethod = "ref_multi",
   nCores = 1
 )
 }
@@ -37,9 +40,9 @@ xCell2Train(
 "sample": the cell type sample should match the column name in ref.
 "dataset": the cell type sample dataset or subject (for single-cell) as a character.}
 
-\item{data_type}{Gene expression data type: "rnaseq", "array", or "sc".}
-
 \item{mix}{description}
+
+\item{ref_type}{Gene expression data type: "rnaseq", "array", or "sc".}
 
 \item{lineage_file}{Path to the cell type lineage file generated with `xCell2GetLineage` function (optional).}
 
@@ -57,6 +60,8 @@ xCell2Train(
 
 \item{return_sigs}{description}
 
+\item{return_sigs_filt}{description}
+
 \item{sigsFile}{description}
 
 \item{minPBcells}{description}
@@ -68,6 +73,8 @@ xCell2Train(
 \item{simMethod}{description}
 
 \item{nCores}{description}
+
+\item{mix_type}{Gene expression data type: "rnaseq", "array", or "sc".}
 
 \item{minPBgroups}{description}
 }

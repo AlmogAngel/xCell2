@@ -17,10 +17,10 @@ setwd("/bigdata/almogangel/xCell2_data/benchmarking_data/")
 
 # "/bigdata/almogangel/xCell2/dev_scripts/prep_ref_val_pairs.R"
 refval.tbl <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/ref_val_pairs/cyto_ref_val.rds")
-sc.refval.tbl <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/ref_val_pairs/sc_ref_val.rds")
+# sc.refval.tbl <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/ref_val_pairs/sc_ref_val.rds")
 # Load validation data
 cyto.vals <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/ref_val_pairs/cyto.vals.rds")
-sc.vals <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/ref_val_pairs/sc.vals.rds")
+# sc.vals <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/ref_val_pairs/sc.vals.rds")
 
 refList <- list(rna_seq = c(blood = "kass_blood", tumor = "kass_tumor", mixed = "bp"),
                 array = c(mixed = "lm22"),
@@ -45,15 +45,15 @@ vals.refs.res <- refval.tbl %>%
   filter(n_shared_celltypes > 2) %>%
   mutate(method = "xCell2", .before = everything())
 
-vals.refs.res.sc <- sc.refval.tbl %>%
-  # Get number of samples in the validation dataset
-  mutate(n_val_samples = ncol(sc.vals$truth[[val_type]][[val_dataset]])) %>%
-  filter(n_shared_celltypes > 2) %>%
-  mutate(method = "xCell2", .before = everything())
+# vals.refs.res.sc <- sc.refval.tbl %>%
+#   # Get number of samples in the validation dataset
+#   mutate(n_val_samples = ncol(sc.vals$truth[[val_type]][[val_dataset]])) %>%
+#   filter(n_shared_celltypes > 2) %>%
+#   mutate(method = "xCell2", .before = everything())
 
 # Load other methods results
-files <- list.files("/bigdata/almogangel/xCell2_data/benchmarking_data/results/correlations/", pattern = ".cyto.res.rds", full.names = TRUE)
-files <- files[!files %in% c("/bigdata/almogangel/xCell2_data/benchmarking_data/results/correlations//xcell2.fig1.cyto.res.rds")]
+files <- list.files("/bigdata/almogangel/xCell2_data/benchmarking_data/results/correlations", pattern = ".cyto.res.rds", full.names = TRUE)
+files <- files[!files %in% c("/bigdata/almogangel/xCell2_data/benchmarking_data/results/correlations/xcell2.fig1.cyto.res.rds")]
 cyto.Res <- lapply(files, function(f){
   readRDS(f) %>%
     dplyr::select(method, ref_tissue, ref_type, ref_name, val_type, val_dataset, n_val_samples, n_shared_celltypes, res) %>%
@@ -75,21 +75,20 @@ ProteinCodingSC <- TRUE
 genesGroups <- c("Rb", "Mrp", "other_Rb", "chrM", "MALAT1", "chrX", "chrY")
 genesGroupsSC <- c("Rb", "Mrp", "other_Rb", "chrM", "MALAT1", "chrX", "chrY")
 # signature settings
-topGenesFrac = 0.5
-load_sigs <- TRUE
-sigs_suffix <- "3dec"
+# topGenesFrac = 1
+load_sigs <- FALSE
+sigs_suffix <- "29dec"
 scores_results <- FALSE
 minpbcells <- 30
 minpbgroups <- 10
 # simulations settings
 # sim_method <- c("ref_multi", "ref_thin", "ref_mix_thin")
-sim_method <- "ref_mix_thin"
+sim_method <- "mix_thin"
 samplesFrac = 0.1
-simFracs <- c(0, seq(0.01, 0.25, 0.002), seq(0.3, 1, 0.05))
 # xCell2Analysis
 tranform <- TRUE
-spillover <- TRUE
-nSims <- 20
+spillover <- FALSE
+nSims <- 10
 
 
 
@@ -108,6 +107,14 @@ xCell2results <- lapply(1:nrow(vals.refs.res), function(i){
   refName <- vals.refs.res[i,]$ref_name
 
 
+  res_mat_file <-  paste0("/bigdata/almogangel/xCell2_data/dev_data/sigs/", val_ref, "_resXGB_", sigs_suffix, ".rds")
+  if (file.exists(res_mat_file)) {
+    res_mat <-  readRDS(res_mat_file)
+    print(paste0("reading ", val_ref, " skipping..."))
+    return(res_mat)
+  }
+
+
   # xCell2CleanGenes
   if (refType == "sc") {
     shared_cleaned_genes <-  xCell2::xCell2CleanGenes(ref = ref.in, mix = mix.in, top_var_genes = useTopVar, use_protein_coding = ProteinCodingSC, n_var_genes = nTopVar, gene_groups = genesGroupsSC)
@@ -119,52 +126,79 @@ xCell2results <- lapply(1:nrow(vals.refs.res), function(i){
     mix <- shared_cleaned_genes$mix
   }
 
-  xcell2object_file <-  paste0("/bigdata/almogangel/xCell2_data/dev_data/sigs/", val_ref, "_xCell2object_", sigs_suffix, ".rds")
 
-  if (!file.exists(xcell2object_file)) {
+  topGenesFrac.list <- lapply(c(1, 0.8, 0.4, 0.2, 0.1), function(topGenesFrac) {
 
     # Load signatures?
-    sig_file <-  paste0("/bigdata/almogangel/xCell2_data/dev_data/sigs/", val_ref, "_sigs_", sigs_suffix, ".rds")
+    sig_file <-  paste0("/bigdata/almogangel/xCell2_data/dev_data/sigs/", val_ref, "_sigs_topGF", topGenesFrac, "_", sigs_suffix, ".rds")
     if (load_sigs) {
       sigsFile <- sig_file
     }else{
       sigsFile <- NULL
     }
 
-
-    sigs <-  xCell2::xCell2Train(ref = ref, labels = labels, data_type = refType, lineage_file = lineage_file, return_sigs = !load_sigs,
+    sigs <-  xCell2::xCell2Train(ref = ref, labels = labels, ref_type = refType, lineage_file = lineage_file, return_sigs = TRUE,
                                  sigsFile = sigsFile, minPBcells = minpbcells, minPBsamples = minpbgroups, seed = thisseed, samples_frac = samplesFrac, top_genes_frac = topGenesFrac,
-                                 nCores = cores2use, simMethod = sim_method, mix = mix2use, sim_fracs = simFracs, ct_sims = nSims)
+                                 nCores = cores2use, simMethod = sim_method, mix = mix, sim_fracs = simFracs, ct_sims = nSims)
 
-    if (!load_sigs) {
-      saveRDS(sigs, sig_file)
-      print(paste0(val_ref, " sigs are ready."))
-      return(NA)
+
+    # Return signatures correlations
+    if (TRUE) {
+      mix_ranked <- singscore::rankGenes(mix)
+      truth_mat <- cyto.vals$truth[[valType]][[valDataset]]
+      sigs_celltypes <- unique(gsub("#.*", "", names(sigs)))
+      celltypes <- intersect(sigs_celltypes, rownames(truth_mat))
+      all_ctoi_res <- lapply(celltypes, function(ctoi){
+        signatures_ctoi <- sigs[startsWith(names(sigs), paste0(ctoi, "#"))]
+        scores <- sapply(signatures_ctoi, simplify = TRUE, function(sig){
+          suppressWarnings(singscore::simpleScore(mix_ranked, upSet = sig, centerScore = FALSE)$TotalScore)
+        })
+        fracs <- truth_mat[ctoi,colnames(mix_ranked)]
+        c <- apply(scores, 2, function(x){
+          cor(x, fracs, method = "spearman", use = "pairwise.complete.obs")
+        })
+        tibble(sig_name = names(c), n_samples = sum(!is.na(fracs)), cor = c) %>%
+          separate(sig_name, into = c("celltype", "prob", "diff", "ngenes"), sep = "_", remove = FALSE) %>%
+          return(.)
+      })
+      names(all_ctoi_res) <- celltypes
+
+      bind_rows(all_ctoi_res) %>%
+        mutate(val_ref = val_ref,
+               topGenesFrac = topGenesFrac)
     }
 
-    if (load_sigs) {
-      saveRDS(sigs, xcell2object_file)
-      print(paste0(val_ref, " xCell2 object is ready."))
-      return(NA)
-    }
-  }else{
-    sigs <- readRDS(xcell2object_file)
-  }
 
-  # xCell2Analysis
-  res_mat <- xCell2::xCell2Analysis(mix = mix, xcell2sigs = sigs, tranform = tranform, spillover = spillover, spillover_alpha = 0.5)
-  res_mat <- res_mat[vals.refs.res[i,]$shared_celltypes[[1]], ]
-  return(res_mat)
+  })
+
+  topGenesFrac.list %>%
+    bind_rows() %>%
+    return(.)
+
+  #   xcell2object_file <-  paste0("/bigdata/almogangel/xCell2_data/dev_data/sigs/", val_ref, "_xCell2object_", sigs_suffix, ".rds")
+  #   saveRDS(sigs, xcell2object_file)
+  #
+  #   if (!load_sigs) {
+  #     saveRDS(sigs, sig_file)
+  #     print(paste0(val_ref, " sigs are ready."))
+  #     return(NA)
+  #   }
+  #
+  #
+  # # xCell2Analysis
+  # res_mat <- xCell2::xCell2Analysis(mix = mix, xcell2sigs = sigs, tranform = tranform, spillover = spillover, spillover_alpha = 0.5)
+  # res_mat <- res_mat[vals.refs.res[i,]$shared_celltypes[[1]], ]
+  #
+  # print(paste0(val_ref, " res mat ready."))
+  #
+  # return(res_mat)
 })
 
-# saveRDS(xCell2results, "/bigdata/almogangel/xCell2_data/benchmarking_data/results/correlations/xcell2.fig1.cyto.res.rds")
+# saveRDS(xCell2results, "/bigdata/almogangel/xCell2_data/benchmarking_data/results/correlations/xcell2.fig1.cyto.res.7dec.rds")
+xCell2results <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/results/correlations/xcell2.fig1.cyto.res.9dec.rds")
 
-# xCell2results <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/results/correlations/xcell2.fig1.cyto.nospill.refmixthin.essenGenes.res.rds")
 
-# Rearrange vals.refs.res (BP was fist)
-vals.refs.res.tmp <- vals.refs.res %>%
-  arrange(ref_name) %>%
-  select(c(3,5))
+
 
 
 allLevel1plots <- list()
@@ -190,9 +224,8 @@ for (i in 1:nrow(vals.refs.res)) {
 
   xcell2.cyto.Res.tmp <- cyto.Res.tmp[1,]
   xcell2.cyto.Res.tmp$method <- "xCell2"
-  xCell2results.index <- which(vals.refs.res.tmp$val_dataset == vals.refs.res[i,]$val_dataset & vals.refs.res.tmp$ref_name == vals.refs.res[i,]$ref_name[[1]])
 
-  xcell2.cyto.Res.tmp$res[[1]]  <- xCell2results[[xCell2results.index]]
+  xcell2.cyto.Res.tmp$res[[1]]  <- xCell2results[[i]]
   cyto.Res.tmp <- rbind(cyto.Res.tmp, xcell2.cyto.Res.tmp)
 
 
@@ -309,6 +342,17 @@ for (i in 1:nrow(vals.refs.res)) {
     select(method, cors) %>%
     unnest(cols = c(cors))
 
+  celltypes_per_method <- df %>%
+    group_by(method) %>%
+    summarize(celltypes = list(celltype), .groups = 'keep')
+
+  shared_celltypes <- Reduce(intersect, celltypes_per_method$celltypes)
+
+  # Filter the original data to keep only rows with shared cell types
+  df <- df %>%
+    filter(celltype %in% shared_celltypes)
+
+
   # Reordering the factor levels based on median of correlation for each method
   df <- df %>%
     mutate(method = factor(method, levels = names(sort(tapply(cor, method, median, na.rm = TRUE), decreasing = TRUE))))
@@ -378,14 +422,8 @@ for (i in 1:nrow(vals.refs.res)) {
 }
 
 
-
-
-
-
-
-
 # Save level 1 plots
-pdf("/bigdata/almogangel/xCell2_data/benchmarking_data/results/correlations/level1plots.pdf",
+pdf("/bigdata/almogangel/xCell2_data/benchmarking_data/results/correlations/level1plots8dec.pdf",
     width = 12, height = 16)  # Adjust 'width' and 'height' as needed
 plot.new()
 
@@ -419,7 +457,7 @@ dev.off()
 
 
 # Save level 2 plots
-pdf("/bigdata/almogangel/xCell2_data/benchmarking_data/results/correlations/level2plots.pdf",
+pdf("/bigdata/almogangel/xCell2_data/benchmarking_data/results/correlations/level2plots8dec.pdf",
     width = 12, height = 16)  # Adjust 'width' and 'height' as needed
 for (plot in allLevel2plots) {
   grid.draw(plot)
@@ -428,3 +466,332 @@ for (plot in allLevel2plots) {
 }
 dev.off()
 
+
+# Level 3 plot
+
+# This function calculate the mean Rho value using Fisher's Z transformation
+combineRhos <- function(rhos, sample_sizes = NULL, use_median = TRUE, summarize = FALSE){
+
+  if (length(rhos) == 1) {
+    return(rhos)
+  }
+
+  if (is.null(sample_sizes)) {
+    sample_sizes <- rep(1, length(rhos))
+  }
+
+
+  if (length(sample_sizes) != length(rhos)) {
+    # sample_sizes <- rep(sample_sizes, length(rhos))
+    stop("values and weights must have the same length")
+  }
+
+  #weights <- sample_sizes/max(sample_sizes)
+
+
+  rhos[rhos == 1] <- 0.999999999
+  rhos[rhos == -1] <- -0.999999999
+
+  # Fisher's Z Transformation
+  z_values <- 0.5 * log((1 + rhos) / (1 - rhos))
+
+  if (!summarize) {
+    z_weighted <- sample_sizes * z_values / mean(sample_sizes)
+    rho_weighted <- (exp(2 * z_weighted) - 1) / (exp(2 * z_weighted) + 1)
+
+    return(rho_weighted)
+  }
+
+  if (use_median) {
+    weighted_median <- function(values, weights) {
+      if (length(values) != length(weights)) {
+        stop("values and weights must have the same length")
+      }
+
+      # Sort values and weights by values
+      order_index <- order(values)
+      values <- values[order_index]
+      weights <- weights[order_index]
+
+      # Calculate the cumulative sum of weights
+      cum_weights <- cumsum(weights)
+      total_weight <- sum(weights)
+
+      # Find the index where the cumulative weight exceeds half of the total weight
+      median_index <- which(cum_weights >= total_weight / 2)[1]
+
+      # Return the corresponding value
+      return(values[median_index])
+    }
+    z_median <- weighted_median(z_values, sample_sizes)
+    rho_weighted_median <- (exp(2 * z_median) - 1) / (exp(2 * z_median) + 1)
+
+    return(rho_weighted_median)
+  }
+
+  # Variance of Z values
+  # var_z <- 1.06 / (sample_sizes - 3)
+  # var_z <- (1 / (sample_sizes - 3)) + (0.57722 / (2 * (sample_sizes - 1)^2))
+  # var_z <- 1 / (sample_sizes - 3)
+
+  # Weighted Average of Z values
+  # weights <- 1 / var_z
+  weights <- sample_sizes
+  z_mean <- sum(weights * z_values) / sum(weights)
+
+  # Back Transformation
+  rho_weighted_mean <- (exp(2 * z_mean) - 1) / (exp(2 * z_mean) + 1)
+  return(rho_weighted_mean)
+
+}
+
+
+
+all_cors <- mclapply(1:nrow(vals.refs.res), function(i){
+
+  # Load data
+  val_ref <- paste0(vals.refs.res[i,]$val_dataset, "_", vals.refs.res[i,]$ref_name[[1]])
+  print(val_ref)
+  mix.in <- cyto.vals$mixtures[[vals.refs.res[i,]$val_type]][[vals.refs.res[i,]$val_dataset]]
+  ref.in <- refsRDSList[[vals.refs.res[i,]$ref_type]][[vals.refs.res[i,]$ref_name[[1]]]]$ref
+  labels <- refsRDSList[[vals.refs.res[i,]$ref_type]][[vals.refs.res[i,]$ref_name[[1]]]]$labels
+  lineage_file <- refsRDSList[[vals.refs.res[i,]$ref_type]][[vals.refs.res[i,]$ref_name[[1]]]]$lineage_file
+  refType <- ifelse(vals.refs.res[i,]$ref_type == "rna_seq", "rnaseq", vals.refs.res[i,]$ref_type)
+  valType <- vals.refs.res[i,]$val_type
+  valDataset <- vals.refs.res[i,]$val_dataset
+  refName <- vals.refs.res[i,]$ref_name
+
+
+  # # Load other methods results
+  cyto.Res.tmp <- cyto.Res %>%
+    filter(ref_name == refName, val_dataset == valDataset & method != "xCell2")
+
+  if (nrow(cyto.Res.tmp) != 7) {
+    stop("!!!!")
+  }
+
+  xcell2.cyto.Res.tmp <- cyto.Res.tmp[1,]
+  xcell2.cyto.Res.tmp$method <- "xCell2"
+
+
+
+  res_mat_file <-  paste0("/bigdata/almogangel/xCell2_data/dev_data/sigs/", val_ref, "_resXGB_29dec.rds")
+  if (file.exists(res_mat_file)) {
+    res_mat <- readRDS(res_mat_file)
+  }else{
+    return(NA)
+  }
+
+
+  xcell2.cyto.Res.tmp$res[[1]]  <- res_mat
+  cyto.Res.tmp <- rbind(cyto.Res.tmp, xcell2.cyto.Res.tmp)
+
+
+  # Calculate correlation with ground truth
+  truth_mat <- cyto.vals$truth[[valType]][[valDataset]]
+
+
+  shared_celltypes <- Reduce(intersect, lapply(cyto.Res.tmp$res, rownames))
+  shared_samples <- Reduce(intersect, lapply(cyto.Res.tmp$res, colnames))
+
+
+  getCors <- function(res, truth = truth_mat, shared_cts = shared_celltypes, shared_samp = shared_samples){
+
+    celltypes <- intersect(rownames(res), rownames(truth))
+    celltypes <- celltypes[celltypes %in% shared_celltypes]
+
+    samples <- intersect(colnames(res), colnames(truth))
+    samples <- samples[samples %in% shared_samp]
+
+
+    df <- lapply(celltypes, function(ct){
+
+      truth <- truth[ct,samples]
+      res <- res[ct,samples]
+
+
+      tibble(celltype = ct, truth = truth, prediction = res)
+
+    }) %>%
+      bind_rows()
+
+    df %>%
+      group_by(celltype) %>%
+      dplyr::summarize(
+        cor = cor(truth, prediction, method = "spearman", use = "pairwise.complete.obs"),
+        p_value = cor.test(truth, prediction, method = "spearman", exact = FALSE)$p.value,
+        n = sum(!is.na(truth) & !is.na(prediction))
+      ) %>%
+      mutate(cor = ifelse(is.na(cor), 0, cor))
+
+  }
+
+
+  df <- cyto.Res.tmp %>%
+    rowwise() %>%
+    mutate(cors = list(getCors(res))) %>%
+    dplyr::select(method, cors) %>%
+    unnest(cols = c(cors)) %>%
+    mutate(ref = refName,
+           val = valDataset)
+
+
+  celltypes_per_method <- df %>%
+    group_by(method) %>%
+    dplyr::summarize(celltypes = list(celltype), .groups = 'keep')
+
+  shared_celltypes <- Reduce(intersect, celltypes_per_method$celltypes)
+
+  # Filter the original data to keep only rows with shared cell types
+  df <- df %>%
+    filter(celltype %in% shared_celltypes)
+
+
+  return(df)
+}, mc.cores = 5) %>%
+  bind_rows()
+
+# all_cors <- all_cors %>%
+#   filter(n >= 15)
+
+# all_cors <- all_cors[!is.na(all_cors)] %>%
+#   bind_rows()
+
+# microarray_vals <- c("SDY311", "SDY420", "SDY67", "GSE64385", "GSE65133", "GSE106898", "GSE64655", "GSE59654", "GSE107990", "GSE20300", "GSE65135", "GSE77343", "GSE77344", "GSE93722")
+# all_cors <- all_cors %>%
+#   filter(!val %in% microarray_vals)
+
+
+tmp <- all_cors %>%
+  #filter(n<20) %>%
+  filter(!val %in% c("GSE65133")) %>%
+  group_by(method, ref) %>%
+  dplyr::summarise(cors_list = list(cor),
+            n_ct_samples = list(n)) %>% # Rhos are weighted by number of samples per cell type
+#            n_ct_samples = list(rep(1, length(cor)))) %>% # Rhos are weighted by number of samples per cell type
+  rowwise() %>%
+  #mutate(ref_rho = combineRhos(rhos = cors_list, sample_sizes = sqrt(n_ct_samples), use_median = FALSE, summarize = TRUE),
+  mutate(ref_rho = list(combineRhos(rhos = cors_list, sample_sizes = sqrt(n_ct_samples), use_median = FALSE, summarize = FALSE)),
+         n_val_cts = length(cors_list))
+# %>%
+#   group_by(method, ref) %>%
+#   summarise(cors_list2 = list(ref_val_rho),
+#             n_val_cts_combied = list(n_val_cts)) %>% # Rhos are weighted by number of cell types per validation dataset
+# #            n_val_cts_combied = list(rep(1, length(n_val_cts)))) %>% # Rhos are weighted by number of cell types per validation dataset
+#   rowwise() %>%
+#   mutate(ref_rho = combineRhos(rhos = cors_list2, sample_sizes = n_val_cts_combied))
+
+
+# Custom labeling function
+bold_xCell2_labels <- function(labels) {
+  lapply(labels, function(label) {
+    modified_label <- str_remove(label, "#.*")  # Remove everything after "#"
+    if (startsWith(modified_label, "xCell2")) {
+      bquote(bold(.(modified_label)))
+    } else {
+      modified_label
+    }
+  })
+}
+
+if (min(tmp$ref_rho) < 0) {
+  minRho <- round(min(tmp$ref_rho)-0.1, 1)
+}else{
+  minRho <- 0
+}
+
+tmp %>%
+  mutate(is_xcell2 = ifelse(startsWith(method, "xCell2"), "yes", "no")) %>%
+  ggplot(., aes(x = tidytext::reorder_within(method, ref_rho, ref, sep = "#"), y = ref_rho)) +
+  geom_bar(aes(fill=is_xcell2), stat="identity") +
+  scale_fill_manual(values = c("yes"="tomato", "no"="gray")) +
+  theme_minimal() +
+  scale_y_continuous(limits = c(minRho, 1), breaks = seq(minRho, 1, by = 0.1)) +
+  coord_flip() +
+  facet_wrap(~ ref, scales = "free", ncol = 1) +
+  tidytext::scale_x_reordered() +
+  scale_x_discrete(labels = bold_xCell2_labels) +
+  labs(x="", y="Mean Spearman Rho") +
+  guides(fill=FALSE)
+
+# per ref
+ds.info <- read_tsv("/bigdata/almogangel/xCell2_data/datasets.txt")
+
+tmp <- all_cors %>%
+  left_join(ds.info[,c(2,6,7)], by = c("val" = "Name")) %>%
+  #filter(n >= 10) %>%
+  #group_by(method, TruthMethod, DataType) %>%
+  group_by(method, val) %>%
+  summarise(cors_list = list(cor),
+            n_val_samples = list(n)) %>%
+  rowwise() %>%
+  mutate(val_rho = combineRhos(rhos = cors_list, sample_sizes = n_val_samples))
+
+# Custom labeling function
+bold_xCell2_labels <- function(labels) {
+  lapply(labels, function(label) {
+    modified_label <- str_remove(label, "#.*")  # Remove everything after "#"
+    if (startsWith(modified_label, "xCell2")) {
+      bquote(bold(.(modified_label)))
+    } else {
+      modified_label
+    }
+  })
+}
+
+if (min(tmp$val_rho) < 0) {
+  minRho <- round(min(tmp$val_rho)-0.1, 1)
+}else{
+  minRho <- 0
+}
+
+all_vals <- unique(tmp$val)
+tmp %>%
+  #mutate(TruthMethodType = paste0(TruthMethod, "-", DataType)) %>%
+  filter(val %in% all_vals[1:8]) %>%
+  mutate(is_xcell2 = ifelse(startsWith(method, "xCell2"), "yes", "no")) %>%
+  ggplot(., aes(x = method, y = val_rho)) +
+  geom_bar(aes(fill=is_xcell2), stat="identity") +
+  scale_fill_manual(values = c("yes"="tomato", "no"="gray")) +
+  theme_minimal() +
+  scale_y_continuous(limits = c(minRho, 1), breaks = seq(minRho, 1, by = 0.1)) +
+  coord_flip() +
+  facet_wrap(~ val, scales = "free", ncol = 1) +
+  tidytext::scale_x_reordered() +
+  scale_x_discrete(labels = bold_xCell2_labels) +
+  labs(x="", y="Mean Spearman Rho", title = "BG_blood") +
+  guides(fill=FALSE)
+
+p2 <- tmp %>%
+  filter(val %in% all_vals[9:17]) %>%
+  mutate(is_xcell2 = ifelse(startsWith(method, "xCell2"), "yes", "no")) %>%
+  ggplot(., aes(x = tidytext::reorder_within(method, val_rho, val, sep = "#"), y = val_rho)) +
+  geom_bar(aes(fill=is_xcell2), stat="identity") +
+  scale_fill_manual(values = c("yes"="tomato", "no"="gray")) +
+  theme_minimal() +
+  scale_y_continuous(limits = c(minRho, 1), breaks = seq(minRho, 1, by = 0.1)) +
+  coord_flip() +
+  facet_wrap(~ val, scales = "free", ncol = 1) +
+  tidytext::scale_x_reordered() +
+  scale_x_discrete(labels = bold_xCell2_labels) +
+  labs(x="", y="Mean Spearman Rho") +
+  guides(fill=FALSE)
+
+
+p3 <- tmp %>%
+  filter(val %in% all_vals[18:length(all_vals)]) %>%
+  mutate(is_xcell2 = ifelse(startsWith(method, "xCell2"), "yes", "no")) %>%
+  ggplot(., aes(x = tidytext::reorder_within(method, val_rho, val, sep = "#"), y = val_rho)) +
+  geom_bar(aes(fill=is_xcell2), stat="identity") +
+  scale_fill_manual(values = c("yes"="tomato", "no"="gray")) +
+  theme_minimal() +
+  scale_y_continuous(limits = c(minRho, 1), breaks = seq(minRho, 1, by = 0.1)) +
+  coord_flip() +
+  facet_wrap(~ val, scales = "free", ncol = 1) +
+  tidytext::scale_x_reordered() +
+  scale_x_discrete(labels = bold_xCell2_labels) +
+  labs(x="", y="Mean Spearman Rho") +
+  guides(fill=FALSE)
+
+
+p1 + p2 +p3

@@ -1,5 +1,6 @@
 library(tidyverse)
 library(Matrix)
+library(limma)
 
 setwd("/bigdata/almogangel/xCell2/")
 source("R/xCell2Train.R")
@@ -635,8 +636,19 @@ xCell2GetLineage(lm22.labels, out_file = "/bigdata/almogangel/xCell2_data/dev_da
 lm22_ref <- list(ref = as.matrix(lm22.ref),
                        labels = lm22.labels,
                        lineage_file = "/bigdata/almogangel/xCell2_data/dev_data/lm22_dependencies.tsv")
+
 saveRDS(lm22_ref, "/bigdata/almogangel/xCell2_data/dev_data/lm22_ref.rds")
 
+
+lm22.ref.rma <- backgroundCorrect(lm22.ref, method='normexp')
+lm22.ref.rma <- normalizeBetweenArrays(lm22.ref.rma)
+lm22.ref.rma <- log2(lm22.ref.rma + 1)
+
+lm22_ref_rma <- list(ref = as.matrix(lm22.ref.rma),
+                 labels = lm22.labels,
+                 lineage_file = "/bigdata/almogangel/xCell2_data/dev_data/lm22_dependencies.tsv")
+
+saveRDS(lm22_ref_rma, "/bigdata/almogangel/xCell2_data/dev_data/lm22_ref_rma.rds")
 
 # #old
 # lm22 <- readRDS("/bigdata/almogangel/xCell2_data/dev_data/lm22.rds")

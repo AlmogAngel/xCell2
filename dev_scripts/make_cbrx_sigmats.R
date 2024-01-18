@@ -77,6 +77,8 @@ makeCIBERSORTxSigMat <- function(ref, labels, lineage_file, refName, single_cell
   system(cmd, wait = TRUE)
 
   # Save signature matrix for future use:
+  # NOTE: manual fix for RNA-seq signature matrices: subtracting 1 from all expression values !!!
+  # NOTE: RMA normalization for lm22 sigmat !!!
   sigmat_file <- paste0(dir, "/", refName, "_sigmat.txt")
   file.copy(from = paste0(results_dir, "/CIBERSORTx_", refName, "_pheno.CIBERSORTx_", refName, "_ref.bm.K999.txt"), to = sigmat_file, overwrite = TRUE)
 
