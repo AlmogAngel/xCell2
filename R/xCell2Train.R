@@ -1071,6 +1071,7 @@ setClass("xCell2Signatures", slots = list(
 #' @param nCores description
 #' @param mix description
 #' @param simMethod description
+#' @param filtering_data description
 #' @return An S4 object containing the signatures, cell type labels, and cell type dependencies.
 #' @export
 xCell2Train <- function(ref, labels, mix = NULL, ref_type, filtering_data = NULL, lineage_file = NULL, top_genes_frac = 1, medianGEP = TRUE, seed = 123, probs = c(0.01, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.4),

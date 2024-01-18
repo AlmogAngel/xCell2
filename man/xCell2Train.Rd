@@ -44,6 +44,8 @@ xCell2Train(
 
 \item{ref_type}{Gene expression data type: "rnaseq", "array", or "sc".}
 
+\item{filtering_data}{description}
+
 \item{lineage_file}{Path to the cell type lineage file generated with `xCell2GetLineage` function (optional).}
 
 \item{top_genes_frac}{description}

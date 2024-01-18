@@ -67,17 +67,10 @@ cyto.Res <- lapply(files, function(f){
 set.seed(123)
 thisseed <- 123
 cores2use <- 60
-# gene settings
-useTopVar <- TRUE
-nTopVar <- 5000
-ProteinCoding <- FALSE
-ProteinCodingSC <- TRUE
-genesGroups <- c("Rb", "Mrp", "other_Rb", "chrM", "MALAT1", "chrX", "chrY")
-genesGroupsSC <- c("Rb", "Mrp", "other_Rb", "chrM", "MALAT1", "chrX", "chrY")
 # signature settings
 # topGenesFrac = 1
 load_sigs <- FALSE
-sigs_suffix <- "29dec"
+sigs_suffix <- "18jan"
 scores_results <- FALSE
 minpbcells <- 30
 minpbgroups <- 10
@@ -105,6 +98,7 @@ xCell2results <- lapply(1:nrow(vals.refs.res), function(i){
   valType <- vals.refs.res[i,]$val_type
   valDataset <- vals.refs.res[i,]$val_dataset
   refName <- vals.refs.res[i,]$ref_name
+  valDataType <- vals.refs.res[i,]$val_data_type[[1]]
 
 
   res_mat_file <-  paste0("/bigdata/almogangel/xCell2_data/dev_data/sigs/", val_ref, "_resXGB_", sigs_suffix, ".rds")
@@ -115,30 +109,38 @@ xCell2results <- lapply(1:nrow(vals.refs.res), function(i){
   }
 
 
-  # xCell2CleanGenes
-  if (refType == "sc") {
-    shared_cleaned_genes <-  xCell2::xCell2CleanGenes(ref = ref.in, mix = mix.in, top_var_genes = useTopVar, use_protein_coding = ProteinCodingSC, n_var_genes = nTopVar, gene_groups = genesGroupsSC)
-    ref <- shared_cleaned_genes$ref
-    mix <- shared_cleaned_genes$mix
+
+    # Load signatures?
+  sig_file <-  paste0("/bigdata/almogangel/xCell2_data/dev_data/sigs/", val_ref, "_sigs_topGF", topGenesFrac, "_", sigs_suffix, ".rds")
+  if (load_sigs) {
+    sigsFile <- sig_file
   }else{
-    shared_cleaned_genes <-  xCell2::xCell2CleanGenes(ref = ref.in, mix = mix.in, top_var_genes = FALSE, use_protein_coding = ProteinCoding, gene_groups = genesGroups)
-    ref <- shared_cleaned_genes$ref
-    mix <- shared_cleaned_genes$mix
+    sigsFile <- NULL
   }
 
 
-  topGenesFrac.list <- lapply(c(1, 0.8, 0.4, 0.2, 0.1), function(topGenesFrac) {
 
-    # Load signatures?
-    sig_file <-  paste0("/bigdata/almogangel/xCell2_data/dev_data/sigs/", val_ref, "_sigs_topGF", topGenesFrac, "_", sigs_suffix, ".rds")
-    if (load_sigs) {
-      sigsFile <- sig_file
+  # Load filtering data
+  if (valType == "tumor") {
+    filtering_data <- readRDS("/bigdata/almogangel/xCell2/data/tumor_rnaseq_filtering_data.rds")
+  }else{
+    if (valDataType == "rnaseq") {
+      filtering_data <- readRDS("/bigdata/almogangel/xCell2/data/blood_rnaseq_filtering_data.rds")
     }else{
-      sigsFile <- NULL
+      filtering_data <- readRDS("/bigdata/almogangel/xCell2/data/blood_array_filtering_data.rds")
     }
+  }
 
-    sigs <-  xCell2::xCell2Train(ref = ref, labels = labels, ref_type = refType, lineage_file = lineage_file, return_sigs = TRUE,
-                                 sigsFile = sigsFile, minPBcells = minpbcells, minPBsamples = minpbgroups, seed = thisseed, samples_frac = samplesFrac, top_genes_frac = topGenesFrac,
+  # Remove current validation from filtering data
+  filt_datasets <- gsub(x = colnames(filtering_data$mixture), pattern = "#.*", replacement = "")
+  filtering_data$mixture <- filtering_data$mixture[,filt_datasets != valDataset]
+  filtering_data$truth <- filtering_data$truth[,filt_datasets != valDataset]
+  filtering_data$truth <- filtering_data$truth[!apply(filtering_data$truth, 1, function(x){all(is.na(x))}),]
+
+
+
+    sigs <-  xCell2::xCell2Train(ref = ref.in, labels = labels, mix = mix.in, ref_type, filtering_data = filtering_data, ref_type = refType, lineage_file = lineage_file, return_sigs = FALSE,
+                                 return_sigs_filt = TRUE, sigsFile = sigsFile, minPBcells = minpbcells, minPBsamples = minpbgroups, seed = thisseed, samples_frac = samplesFrac, top_genes_frac = topGenesFrac,
                                  nCores = cores2use, simMethod = sim_method, mix = mix, sim_fracs = simFracs, ct_sims = nSims)
 
 
