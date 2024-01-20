@@ -1,30 +1,3 @@
-lineage_file = ref.in$lineage_file
-sim_fracs = c(0, seq(0.01, 0.25, 0.01), seq(0.3, 1, 0.05))
-diff_vals = round(c(log2(1), log2(1.5), log2(2), log2(2.5), log2(3), log2(4), log2(5), log2(10), log2(20)), 3)
-probs = c(0.01, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.4)
-min_genes = 3
-max_genes = 150
-return_sigs = FALSE
-sigsFile = NULL
-minPBcells = 30
-minPBsamples = 10
-top_genes_frac = 1
-medianGEP = TRUE
-sim_noise = NULL
-ct_sims = 10
-samples_frac = 0.1
-seed = 123
-nCores = 40
-simMethod = "mix_thin"
-top_sigs_frac = 0.05
-# c("ref_multi", "mix_thin")
-
-
-# Load signature
-# sigsFile = "/bigdata/almogangel/xCell2_data/dev_data/sigs/BG_blood_ts_blood_sigs.rds"
-
-
-
 validateInputs <- function(ref, labels, ref_type){
 
   if (length(unique(labels$label)) < 3) {
@@ -912,7 +885,7 @@ setClass("xCell2Signatures", slots = list(
 xCell2Train <- function(ref, labels, mix = NULL, ref_type, filtering_data = NULL, lineage_file = NULL, top_genes_frac = 1, medianGEP = TRUE, seed = 123, probs = c(0.01, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.4),
                         sim_fracs = c(0, seq(0.01, 0.25, 0.01), seq(0.3, 1, 0.05)), diff_vals = round(c(log2(1), log2(1.5), log2(2), log2(2.5), log2(3), log2(4), log2(5), log2(10), log2(20)), 3),
                         min_genes = 3, max_genes = 150, return_sigs = FALSE, return_sigs_filt = FALSE, sigsFile = NULL, minPBcells = 30, minPBsamples = 10,
-                        ct_sims = 10, samples_frac = 0.1, simMethod = "ref_multi", nCores = 1, top_sigs_frac = 0.5){
+                        ct_sims = 100, samples_frac = 0.1, simMethod = "ref_multi", nCores = 1, top_sigs_frac = 0.5){
 
 
   # Validate inputs
@@ -985,11 +958,11 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type, filtering_data = NULL
 
   # Make simulations
   message("Generating simulations...")
-  simulations <- makeSimulations(ref, labels, gep_mat, ref_type, dep_list, cor_mat, sim_fracs, n_sims, ncores = nCores, noise_level = 0.025, seed2use = seed)
+  simulations <- makeSimulations(ref, labels, gep_mat, ref_type, dep_list, cor_mat, sim_fracs, n_sims = ct_sims, ncores = nCores, noise_level = 0.025, seed2use = seed)
 
 
   message("Scoring simulations...")
-  simulations_scored <- scoreSimulations(signatures, simulations, n_sims, nCores)
+  simulations_scored <- scoreSimulations(signatures, simulations, n_sims = ct_sims, nCores)
 
 
   # Filter signatures and train RF model
