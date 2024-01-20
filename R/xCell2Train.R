@@ -647,30 +647,32 @@ trainModels <- function(simulations_scored, ncores, seed2use){
     )
     #cor(round(predict(model, scores_tmp, type = "response"), 4), fracs, method = "spearman", use = "pairwise.complete.obs")
 
-    importance_matrix <- xgboost::xgb.importance(feature_names = colnames(predictors), model = model)
-    gains.tmp <- importance_matrix$Gain
-    sigs_filtered <- c()
-    for (i in 1:nrow(importance_matrix)) {
-      p <- outliers::grubbs.test(gains.tmp)$p.value
-      if (p >= 0.01) {
-        break
-      }
-      sigs_filtered <- c(sigs_filtered, importance_matrix[i,1][[1]])
-      gains.tmp <- gains.tmp[-1]
-    }
+    return(model)
 
-
-    if (length(sigs_filtered) < 3) {
-      sigs_filtered <- importance_matrix[1:3,1][[1]]
-    }
-
-    model <- xgboost::xgboost(
-      data = predictors[,sigs_filtered],
-      label = response,
-      params = xgb_params,
-      nrounds = 150,
-      verbose = 0
-    )
+    # importance_matrix <- xgboost::xgb.importance(feature_names = colnames(predictors), model = model)
+    # gains.tmp <- importance_matrix$Gain
+    # sigs_filtered <- c()
+    # for (i in 1:nrow(importance_matrix)) {
+    #   p <- outliers::grubbs.test(gains.tmp)$p.value
+    #   if (p >= 0.01) {
+    #     break
+    #   }
+    #   sigs_filtered <- c(sigs_filtered, importance_matrix[i,1][[1]])
+    #   gains.tmp <- gains.tmp[-1]
+    # }
+    #
+    #
+    # if (length(sigs_filtered) < 3) {
+    #   sigs_filtered <- importance_matrix[1:3,1][[1]]
+    # }
+    #
+    # model <- xgboost::xgboost(
+    #   data = predictors[,sigs_filtered],
+    #   label = response,
+    #   params = xgb_params,
+    #   nrounds = 150,
+    #   verbose = 0
+    # )
     # cor(round(predict(model, scores_tmp[,sigs_filtered], type = "response"), 4), fracs, method = "spearman", use = "pairwise.complete.obs")
 
 
@@ -718,7 +720,7 @@ trainModels <- function(simulations_scored, ncores, seed2use){
     # model <- randomForestSRC::rfsrc.fast(frac ~ ., as.data.frame(data), forest = TRUE)
     # sigs_filtered <- colnames(data)[colnames(data) != "frac"]
 
-    return(tibble(model = list(model), sigs_filtered = list(sigs_filtered)))
+    # return(tibble(model = list(model), sigs_filtered = list(sigs_filtered)))
 
   }
 
@@ -732,9 +734,11 @@ trainModels <- function(simulations_scored, ncores, seed2use){
   #end <- Sys.time()
   #print(end-start)
 
+  # enframe(models_list, name = "celltype") %>%
+  #   unnest(value) %>%
+  #   return(.)
 
-  enframe(models_list, name = "celltype") %>%
-    unnest(value) %>%
+  enframe(models_list, name = "celltype", value = "model") %>%
     return(.)
 
 }
@@ -885,7 +889,7 @@ setClass("xCell2Signatures", slots = list(
 xCell2Train <- function(ref, labels, mix = NULL, ref_type, filtering_data = NULL, lineage_file = NULL, top_genes_frac = 1, medianGEP = TRUE, seed = 123, probs = c(0.01, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.4),
                         sim_fracs = c(0, seq(0.01, 0.25, 0.01), seq(0.3, 1, 0.05)), diff_vals = round(c(log2(1), log2(1.5), log2(2), log2(2.5), log2(3), log2(4), log2(5), log2(10), log2(20)), 3),
                         min_genes = 3, max_genes = 150, return_sigs = FALSE, return_sigs_filt = FALSE, sigsFile = NULL, minPBcells = 30, minPBsamples = 10,
-                        ct_sims = 100, samples_frac = 0.1, simMethod = "ref_multi", nCores = 1, top_sigs_frac = 0.5){
+                        ct_sims = 50, samples_frac = 0.1, simMethod = "ref_multi", nCores = 1, top_sigs_frac = 0.5){
 
 
   # Validate inputs
@@ -968,8 +972,8 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type, filtering_data = NULL
   # Filter signatures and train RF model
   message("Filtering signatures and training models...")
   models <- trainModels(simulations_scored, ncores = nCores, seed2use = seed)
-  signatures_filt <- signatures[unlist(models$sigs_filtered)]
-  models <- models[,-3]
+  # signatures_filt <- signatures[unlist(models$sigs_filtered)]
+  # models <- models[,-3]
 
 
   # Get spillover matrix
@@ -980,7 +984,7 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type, filtering_data = NULL
 
   # Save results in S4 object
   xCell2Sigs.S4 <- new("xCell2Signatures",
-                       signatures = signatures_filt,
+                       signatures = signatures,
                        dependencies = dep_list,
                        models = models,
                        spill_mat = matrix(),
