@@ -649,29 +649,39 @@ trainModels <- function(simulations_scored, ncores, seed2use){
     #cor(round(predict(model, scores_tmp, type = "response"), 4), fracs, method = "spearman", use = "pairwise.complete.obs")
 
     importance_matrix <- xgboost::xgb.importance(feature_names = colnames(predictors), model = model)
-    gains.tmp <- importance_matrix$Gain
-    sigs_filtered <- c()
-    for (i in 1:nrow(importance_matrix)) {
-      p <- outliers::grubbs.test(gains.tmp)$p.value
-      if (p >= 0.01) {
-        break
-      }
-      sigs_filtered <- c(sigs_filtered, importance_matrix[i,1][[1]])
-      gains.tmp <- gains.tmp[-1]
+    # gains.tmp <- importance_matrix$Gain
+    # sigs_filtered <- c()
+    # for (i in 1:nrow(importance_matrix)) {
+    #   p <- outliers::grubbs.test(gains.tmp)$p.value
+    #   if (p >= 0.01) {
+    #     break
+    #   }
+    #   sigs_filtered <- c(sigs_filtered, importance_matrix[i,1][[1]])
+    #   gains.tmp <- gains.tmp[-1]
+    # }
+    #
+
+    # if (length(sigs_filtered) < 20) {
+    #   sigs_filtered <- importance_matrix[1:20, 1][[1]]
+    # }
+
+
+    if (nrow(importance_matrix) > 50) {
+      sigs_filtered <- importance_matrix[1:50, 1][[1]]
+
+      model <- xgboost::xgboost(
+        data = predictors[,sigs_filtered],
+        label = response,
+        params = xgb_params,
+        nrounds = 150,
+        verbose = 0
+      )
+
+    }else{
+      sigs_filtered <- importance_matrix[,1][[1]]
     }
 
 
-    if (length(sigs_filtered) < 10) {
-      sigs_filtered <- importance_matrix[1:10, 1][[1]]
-    }
-
-    model <- xgboost::xgboost(
-      data = predictors[,sigs_filtered],
-      label = response,
-      params = xgb_params,
-      nrounds = 150,
-      verbose = 0
-    )
 
     return(list(model = model, sigs_filtered = sigs_filtered))
 
