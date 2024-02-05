@@ -483,8 +483,8 @@ filterSignatures <- function(ref, labels, filtering_data, signatures, top_sigs_f
       top_frac(top_sigs_frac, wt = mean_z) %>%
       pull(sig)
 
-    if (length(best_sigs) < 3) {
-      best_sigs <- sort(z_values$mean_z, decreasing = TRUE)[1:3]
+    if (length(best_sigs) < 10) {
+      best_sigs <- sort(z_values$mean_z, decreasing = TRUE)[1:10]
     }
 
 
@@ -638,6 +638,7 @@ trainModels <- function(simulations_scored, ncores, seed2use){
       max_depth = 6,
       nthread = 1
     )
+
     model <- xgboost::xgboost(
       data = predictors,
       label = response,
@@ -660,8 +661,8 @@ trainModels <- function(simulations_scored, ncores, seed2use){
     }
 
 
-    if (length(sigs_filtered) < 3) {
-      sigs_filtered <- importance_matrix[1:3,1][[1]]
+    if (length(sigs_filtered) < 10) {
+      sigs_filtered <- importance_matrix[1:10, 1][[1]]
     }
 
     model <- xgboost::xgboost(
@@ -892,7 +893,7 @@ setClass("xCell2Signatures", slots = list(
 xCell2Train <- function(ref, labels, mix = NULL, ref_type, filtering_data = NULL, lineage_file = NULL, top_genes_frac = 1, medianGEP = TRUE, seed = 123, probs = c(0.01, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.4),
                         sim_fracs = c(0, seq(0.01, 0.25, 0.01), seq(0.3, 1, 0.05)), diff_vals = round(c(log2(1), log2(1.5), log2(2), log2(2.5), log2(3), log2(4), log2(5), log2(10), log2(20)), 3),
                         min_genes = 3, max_genes = 150, return_sigs = FALSE, return_sigs_filt = FALSE, sigsFile = NULL, minPBcells = 30, minPBsamples = 10,
-                        ct_sims = 50, samples_frac = 0.1, simMethod = "ref_multi", nCores = 1, top_sigs_frac = 0.5){
+                        ct_sims = 50, samples_frac = 0.1, simMethod = "ref_multi", nCores = 1, top_sigs_frac = 0.05){
 
 
   # Validate inputs
