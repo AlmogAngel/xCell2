@@ -1,4 +1,4 @@
-alidateInputs <- function(ref, labels, ref_type){
+validateInputs <- function(ref, labels, ref_type){
 
   if (length(unique(labels$label)) < 3) {
     # TODO: What happens with 2 cell types
