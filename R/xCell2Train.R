@@ -631,6 +631,35 @@ trainModels <- function(simulations_scored, ncores, seed2use){
     predictors <- data[, -ncol(data)]
     response <- data[, ncol(data)]
 
+    # Remove redundant features
+    xgb_params <- list(
+      booster = "gbtree",
+      alpha = 0,          # Lasso
+      lambda = 0,            # Ridge
+      eta = 0.01,             # Learning rate
+      objective = "reg:squarederror",
+      max_depth = 6,
+      nthread = 1
+    )
+
+    model_tmp <- xgboost::xgboost(
+      data = predictors,
+      label = response,
+      params = xgb_params,
+      nrounds = 150,
+      verbose = 0
+    )
+
+    importance_matrix <- xgboost::xgb.importance(model = model_tmp)
+
+    if (nrow(importance_matrix) > 50) {
+      sigs_filtered <- importance_matrix[1:50, 1][[1]]
+
+    }else{
+      sigs_filtered <- importance_matrix[,1][[1]]
+    }
+
+    # Train model
     xgb_params <- list(
       booster = "gbtree",
       alpha = 1,          # Lasso
@@ -642,99 +671,15 @@ trainModels <- function(simulations_scored, ncores, seed2use){
     )
 
     model <- xgboost::xgboost(
-      data = predictors,
+      data = predictors[,sigs_filtered],
       label = response,
       params = xgb_params,
       nrounds = 150,
       verbose = 0
     )
-    #cor(round(predict(model, scores_tmp, type = "response"), 4), fracs, method = "spearman", use = "pairwise.complete.obs")
-
-    importance_matrix <- xgboost::xgb.importance(feature_names = colnames(predictors), model = model)
-    # gains.tmp <- importance_matrix$Gain
-    # sigs_filtered <- c()
-    # for (i in 1:nrow(importance_matrix)) {
-    #   p <- outliers::grubbs.test(gains.tmp)$p.value
-    #   if (p >= 0.01) {
-    #     break
-    #   }
-    #   sigs_filtered <- c(sigs_filtered, importance_matrix[i,1][[1]])
-    #   gains.tmp <- gains.tmp[-1]
-    # }
-    #
-
-    # if (length(sigs_filtered) < 20) {
-    #   sigs_filtered <- importance_matrix[1:20, 1][[1]]
-    # }
-
-
-    if (nrow(importance_matrix) > 50) {
-      sigs_filtered <- importance_matrix[1:50, 1][[1]]
-
-      model <- xgboost::xgboost(
-        data = predictors[,sigs_filtered],
-        label = response,
-        params = xgb_params,
-        nrounds = 150,
-        verbose = 0
-      )
-
-    }else{
-      sigs_filtered <- importance_matrix[,1][[1]]
-    }
-
 
 
     return(list(model = model, sigs_filtered = sigs_filtered))
-
-    # cor(round(predict(model, scores_tmp[,sigs_filtered], type = "response"), 4), fracs, method = "spearman", use = "pairwise.complete.obs")
-
-
-    # Signature filtering with Lasso
-    # cv_fit <- glmnet::cv.glmnet(data[,-ncol(data)], data[,ncol(data)], alpha = 1) # Using lasso penalty for feature selection
-    # best_lambda <- cv_fit$lambda.min
-    # coefficients <- as.matrix(coef(cv_fit, s = best_lambda))
-    # sigs_filtered <- rownames(coefficients)[-1][coefficients[-1, , drop = FALSE] != 0]
-
-
-    # RF <- RRF::RRF(x = as.data.frame(data[,-ncol(data)]), y = data[,ncol(data)], flagReg = 0, importance = TRUE, ntree = 1000)
-    # RF_imp <- RF$importance[,"%IncMSE"] / max(RF$importance[,"%IncMSE"])
-    # RRF <- RRF::RRF(x = data[,-ncol(data)], y = data[,ncol(data)], flagReg = 1, ntree = 1000, coefReg = (1-gamma) + gamma*RF_imp)
-    # selected_features <- colnames(data)[RRF$feaSet]
-    # data <- data[, c(selected_features, "frac")]
-
-    # model <- randomForestSRC::var.select(frac ~ ., as.data.frame(data), method = "md", verbose = FALSE, refit = TRUE, fast = TRUE)
-    # sigs_filtered <- model$topvars
-
-    # model <- randomForestSRC::var.select(frac ~ ., as.data.frame(data)[,c(sigs_filtered, "frac")], method = "vh.vimp", verbose = FALSE, refit = TRUE, conservative = "high", fast = TRUE)
-    # sigs_filtered <- model$topvars
-
-    #cor(round(randomForestSRC::predict.rfsrc(model$rfsrc.refit.obj, newdata = as.data.frame(scores_tmp[,sigs_filtered]))$predicted, 4), fracs, method = "spearman", use = "pairwise.complete.obs")
-
-    # Make sure there are at least three signatures
-    # lasso_alpha <- 1
-    # while(length(sigs_filtered) < 3) {
-    #   lasso_alpha <- lasso_alpha - 0.1
-    #   cv_fit <- glmnet::cv.glmnet(data[,-ncol(data)], data[,ncol(data)], alpha = lasso_alpha)
-    #   coefficients <- as.matrix(coef(cv_fit, s = best_lambda))
-    #   sigs_filtered <- rownames(coefficients)[-1][coefficients[-1, , drop = FALSE] != 0]
-    # }
-
-    # model <- glmnet::glmnet(data[,-ncol(data)], data[,ncol(data)], lambda = best_lambda, alpha = 0.5)
-    # sigs_filtered <- colnames(data[,-ncol(data)])
-
-    # Fit final model with Ridge
-    # cv_fit <- glmnet::cv.glmnet(data[,sigs_filtered], data[,ncol(data)], alpha = 0)
-    # best_lambda <- cv_fit$lambda.min
-    # model <- glmnet::glmnet(data[,sigs_filtered], data[,ncol(data)], alpha = 0, lambda = best_lambda)
-
-    # cor(round(predict(model, scores_tmp[,sigs_filtered], s = best_lambda, type = "response")[,1], 4), fracs, method = "spearman", use = "pairwise.complete.obs")
-
-    # options(rf.cores=1, mc.cores=1)
-    # model <- randomForestSRC::rfsrc.fast(frac ~ ., as.data.frame(data), forest = TRUE)
-    # sigs_filtered <- colnames(data)[colnames(data) != "frac"]
-
-    # return(tibble(model = list(model), sigs_filtered = list(sigs_filtered)))
 
   }
 
