@@ -642,13 +642,21 @@ trainModels <- function(simulations_scored, ncores, seed2use){
       nthread = 1
     )
 
-    model_tmp <- xgboost::xgboost(
-      data = predictors,
-      label = response,
-      params = xgb_params,
-      nrounds = 150,
-      verbose = 0
-    )
+
+
+    result <- try({
+      xgboost::xgboost(
+        data = predictors,
+        label = response,
+        params = xgb_params,
+        nrounds = 150,
+        verbose = 0
+      )
+    }, silent = TRUE)
+
+    if(inherits(result, "try-error")) {
+      return(predictors)
+    }
 
     importance_matrix <- xgboost::xgb.importance(model = model_tmp)
 
@@ -929,7 +937,6 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type, filtering_data = NULL
   message("Scoring simulations...")
   simulations_scored <- scoreSimulations(signatures, simulations, n_sims = ct_sims, nCores)
 
-  return(simulations_scored)
 
   # Filter signatures and train RF model
   message("Filtering signatures and training models...")
