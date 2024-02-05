@@ -650,33 +650,35 @@ trainModels <- function(simulations_scored, ncores, seed2use){
       verbose = 0
     )
 
-    importance_matrix <- xgboost::xgb.importance(model = model_tmp)
+    model_final <- model_tmp
+    sigs_filt <- colnames(predictors)
 
-    if (nrow(importance_matrix) > 50) {
-      sigs_filt <- importance_matrix[1:50, 1][[1]]
-
-    }else{
-      sigs_filt <- importance_matrix[,1][[1]]
-    }
-
-    # Train model
-    xgb_params <- list(
-      booster = "gbtree",
-      alpha = 1,          # Lasso
-      lambda = 1,            # Ridge
-      eta = 0.01,             # Learning rate
-      objective = "reg:squarederror",
-      max_depth = 6,
-      nthread = 1
-    )
-
-    model_final <- xgboost::xgboost(
-      data = predictors[,sigs_filt],
-      label = response,
-      params = xgb_params,
-      nrounds = 150,
-      verbose = 0
-    )
+    # importance_matrix <- xgboost::xgb.importance(model = model_tmp)
+    #
+    # if (nrow(importance_matrix) > 50) {
+    #   sigs_filt <- importance_matrix[1:50, 1][[1]]
+    # }else{
+    #   sigs_filt <- importance_matrix[,1][[1]]
+    # }
+    #
+    # # Train model
+    # xgb_params <- list(
+    #   booster = "gbtree",
+    #   alpha = 1,          # Lasso
+    #   lambda = 1,            # Ridge
+    #   eta = 0.01,             # Learning rate
+    #   objective = "reg:squarederror",
+    #   max_depth = 6,
+    #   nthread = 1
+    # )
+    #
+    # model_final <- xgboost::xgboost(
+    #   data = predictors[,sigs_filt],
+    #   label = response,
+    #   params = xgb_params,
+    #   nrounds = 150,
+    #   verbose = 0
+    # )
 
 
     return(list(model = model_final, sigs_filtered = sigs_filt))
