@@ -432,7 +432,7 @@ filterSignatures <- function(ref, labels, filtering_data, signatures, top_sigs_f
 
   filt_sigs <- BiocParallel::bplapply(shared_cts, function(ctoi){
 
-    # Get CTOi signatures
+    # Get CTOI signatures
     signatures_ctoi <- signatures[startsWith(names(signatures), paste0(ctoi, "#"))]
 
     # Use only samples with truth values
@@ -630,9 +630,9 @@ trainModels <- function(simulations_scored, ncores, seed2use){
     response <- data[, ncol(data)]
 
     xgb_params <- list(
-      booster = "gbtree",  # Using linear booster
-      alpha = 1,          # Lasso regularization term
-      lambda = 1,            # No Ridge regularization
+      booster = "gbtree",
+      alpha = 1,          # Lasso
+      lambda = 1,            # Ridge
       eta = 0.01,             # Learning rate
       objective = "reg:squarederror",
       max_depth = 6,
@@ -647,32 +647,33 @@ trainModels <- function(simulations_scored, ncores, seed2use){
     )
     #cor(round(predict(model, scores_tmp, type = "response"), 4), fracs, method = "spearman", use = "pairwise.complete.obs")
 
-    return(model)
+    importance_matrix <- xgboost::xgb.importance(feature_names = colnames(predictors), model = model)
+    gains.tmp <- importance_matrix$Gain
+    sigs_filtered <- c()
+    for (i in 1:nrow(importance_matrix)) {
+      p <- outliers::grubbs.test(gains.tmp)$p.value
+      if (p >= 0.01) {
+        break
+      }
+      sigs_filtered <- c(sigs_filtered, importance_matrix[i,1][[1]])
+      gains.tmp <- gains.tmp[-1]
+    }
 
-    # importance_matrix <- xgboost::xgb.importance(feature_names = colnames(predictors), model = model)
-    # gains.tmp <- importance_matrix$Gain
-    # sigs_filtered <- c()
-    # for (i in 1:nrow(importance_matrix)) {
-    #   p <- outliers::grubbs.test(gains.tmp)$p.value
-    #   if (p >= 0.01) {
-    #     break
-    #   }
-    #   sigs_filtered <- c(sigs_filtered, importance_matrix[i,1][[1]])
-    #   gains.tmp <- gains.tmp[-1]
-    # }
-    #
-    #
-    # if (length(sigs_filtered) < 3) {
-    #   sigs_filtered <- importance_matrix[1:3,1][[1]]
-    # }
-    #
-    # model <- xgboost::xgboost(
-    #   data = predictors[,sigs_filtered],
-    #   label = response,
-    #   params = xgb_params,
-    #   nrounds = 150,
-    #   verbose = 0
-    # )
+
+    if (length(sigs_filtered) < 3) {
+      sigs_filtered <- importance_matrix[1:3,1][[1]]
+    }
+
+    model <- xgboost::xgboost(
+      data = predictors[,sigs_filtered],
+      label = response,
+      params = xgb_params,
+      nrounds = 150,
+      verbose = 0
+    )
+
+    return(list(model = model, sigs_filtered = sigs_filtered))
+
     # cor(round(predict(model, scores_tmp[,sigs_filtered], type = "response"), 4), fracs, method = "spearman", use = "pairwise.complete.obs")
 
 
@@ -738,7 +739,9 @@ trainModels <- function(simulations_scored, ncores, seed2use){
   #   unnest(value) %>%
   #   return(.)
 
-  enframe(models_list, name = "celltype", value = "model") %>%
+  enframe(models_list, name = "celltype") %>%
+    unnest_longer(value) %>%
+    pivot_wider(names_from = value_id, values_from = value) %>%
     return(.)
 
 }
@@ -972,8 +975,8 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type, filtering_data = NULL
   # Filter signatures and train RF model
   message("Filtering signatures and training models...")
   models <- trainModels(simulations_scored, ncores = nCores, seed2use = seed)
-  # signatures_filt <- signatures[unlist(models$sigs_filtered)]
-  # models <- models[,-3]
+  signatures <- signatures[unlist(models$sigs_filtered)]
+  models <- models[,-3]
 
 
   # Get spillover matrix
