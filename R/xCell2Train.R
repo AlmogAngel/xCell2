@@ -929,6 +929,7 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type, filtering_data = NULL
   message("Scoring simulations...")
   simulations_scored <- scoreSimulations(signatures, simulations, n_sims = ct_sims, nCores)
 
+  return(simulations_scored)
 
   # Filter signatures and train RF model
   message("Filtering signatures and training models...")
