@@ -25,10 +25,11 @@ xCell2Train(
   sigsFile = NULL,
   minPBcells = 30,
   minPBsamples = 10,
-  ct_sims = 10,
+  ct_sims = 50,
   samples_frac = 0.1,
   simMethod = "ref_multi",
-  nCores = 1
+  nCores = 1,
+  top_sigs_frac = 0.05
 )
 }
 \arguments{
@@ -75,6 +76,8 @@ xCell2Train(
 \item{simMethod}{description}
 
 \item{nCores}{description}
+
+\item{top_sigs_frac}{description}
 
 \item{mix_type}{Gene expression data type: "rnaseq", "array", or "sc".}
 
