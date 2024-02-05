@@ -484,7 +484,9 @@ filterSignatures <- function(ref, labels, filtering_data, signatures, top_sigs_f
       pull(sig)
 
     if (length(best_sigs) < 10) {
-      best_sigs <- sort(z_values$mean_z, decreasing = TRUE)[1:10]
+      best_sigs <- z_values %>%
+        top_n(10, wt = mean_z) %>%
+        pull(sig)
     }
 
 
