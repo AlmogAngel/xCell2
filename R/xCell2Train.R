@@ -1,4 +1,4 @@
-validateInputs <- function(ref, labels, ref_type){
+alidateInputs <- function(ref, labels, ref_type){
 
   if (length(unique(labels$label)) < 3) {
     # TODO: What happens with 2 cell types
@@ -650,14 +650,13 @@ trainModels <- function(simulations_scored, ncores, seed2use){
       verbose = 0
     )
 
-
     importance_matrix <- xgboost::xgb.importance(model = model_tmp)
 
     if (nrow(importance_matrix) > 50) {
-      sigs_filtered <- importance_matrix[1:50, 1][[1]]
+      sigs_filt <- importance_matrix[1:50, 1][[1]]
 
     }else{
-      sigs_filtered <- importance_matrix[,1][[1]]
+      sigs_filt <- importance_matrix[,1][[1]]
     }
 
     # Train model
@@ -671,27 +670,16 @@ trainModels <- function(simulations_scored, ncores, seed2use){
       nthread = 1
     )
 
+    model_final <- xgboost::xgboost(
+      data = predictors[,sigs_filt],
+      label = response,
+      params = xgb_params,
+      nrounds = 150,
+      verbose = 0
+    )
 
 
-    result <- try({
-      # Code that might fail
-      xgboost::xgboost(
-        data = predictors[,sigs_filtered],
-        label = response,
-        params = xgb_params,
-        nrounds = 150,
-        verbose = 0
-      )
-    }, silent = TRUE)
-
-    if(inherits(result, "try-error")) {
-      return(predictors[,sigs_filtered])
-    } else {
-      message("Success!")
-    }
-
-
-    return(list(model = model, sigs_filtered = sigs_filtered))
+    return(list(model = model_final, sigs_filtered = sigs_filt))
 
   }
 
