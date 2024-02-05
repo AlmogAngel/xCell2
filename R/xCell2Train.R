@@ -642,21 +642,14 @@ trainModels <- function(simulations_scored, ncores, seed2use){
       nthread = 1
     )
 
+    model_tmp <- xgboost::xgboost(
+      data = predictors,
+      label = response,
+      params = xgb_params,
+      nrounds = 150,
+      verbose = 0
+    )
 
-
-    result <- try({
-      xgboost::xgboost(
-        data = predictors,
-        label = response,
-        params = xgb_params,
-        nrounds = 150,
-        verbose = 0
-      )
-    }, silent = TRUE)
-
-    if(inherits(result, "try-error")) {
-      return(predictors)
-    }
 
     importance_matrix <- xgboost::xgb.importance(model = model_tmp)
 
@@ -678,13 +671,24 @@ trainModels <- function(simulations_scored, ncores, seed2use){
       nthread = 1
     )
 
-    model <- xgboost::xgboost(
-      data = predictors[,sigs_filtered],
-      label = response,
-      params = xgb_params,
-      nrounds = 150,
-      verbose = 0
-    )
+
+
+    result <- try({
+      # Code that might fail
+      xgboost::xgboost(
+        data = predictors[,sigs_filtered],
+        label = response,
+        params = xgb_params,
+        nrounds = 150,
+        verbose = 0
+      )
+    }, silent = TRUE)
+
+    if(inherits(result, "try-error")) {
+      return(predictors[,sigs_filtered])
+    } else {
+      message("Success!")
+    }
 
 
     return(list(model = model, sigs_filtered = sigs_filtered))
