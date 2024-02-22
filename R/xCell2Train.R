@@ -425,11 +425,24 @@ weightFiltData <- function(mix, labels, filtering_data, ncores){
   celltypes <- unique(labels$label)
   shared_cts <- intersect(celltypes, rownames(filtering_data$truth))
   filtering_mat <- filtering_data$mixture
+  genes2use <- intersect(rownames(mix), rownames(filtering_mat))
+
+
+  # Find mixture top variable genes
+  if(max(mix) >= 50){
+    topVarGenes <- names(sort(apply(mix[genes2use,], 1, var), decreasing = TRUE)[1:5000])
+  }else{
+    topVarGenes <- names(sort(apply(2^mix[genes2use,]-1, 1, var), decreasing = TRUE)[1:5000])
+  }
+  mix_var <- mix[topVarGenes,]
+  colnames(mix_var) <- paste0("mix#", 1:ncol(mix_var))
 
   # Filtering data log-transformation
   if(max(filtering_mat) >= 50){
     filtering_mat <- log2(filtering_mat+1)
   }
+  filtering_mat <- filtering_mat[topVarGenes,]
+
 
   ds_simi_list <- BiocParallel::bplapply(shared_cts, function(ctoi){
 
@@ -440,19 +453,9 @@ weightFiltData <- function(mix, labels, filtering_data, ncores){
       return(tibble(celltype = ctoi, ds = filt_ds, similarity_scaled = 1))
     }
 
-
     # Combine filtering datasets with mixtures
-    genes2use <- intersect(rownames(mix), rownames(ctoi_filt_data))
-    mix_tmp <- mix[genes2use,]
-    colnames(mix_tmp) <- paste0("mix#", 1:ncol(mix_tmp))
-    if(max(mix_tmp) >= 50){
-      topVarGenes <- names(sort(apply(mix_tmp, 1, var), decreasing = TRUE)[1:5000])
-    }else{
-      topVarGenes <- names(sort(apply(2^mix_tmp-1, 1, var), decreasing = TRUE)[1:5000])
-    }
-    filtMix  <- cbind(ctoi_filt_data[topVarGenes,], mix_tmp[topVarGenes,])
+    filtMix  <- cbind(ctoi_filt_data, mix_var)
     datasets <- gsub("#.*", "", colnames(filtMix))
-
 
     # Run PCA
     pcaResults <- prcomp(t(filtMix))
