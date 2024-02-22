@@ -418,7 +418,7 @@ addEssentialGenes <- function(ref, signatures){
   return(signatures)
 
 }
-weightFiltData <- function(mix, filtering_data, ncores){
+weightFiltData <- function(mix, labels, filtering_data, ncores){
 
   param <- BiocParallel::MulticoreParam(workers = ncores)
 
@@ -1009,7 +1009,7 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type, filtering_data = NULL
 
   if (!is.null(filtering_data)) {
     message("Weighting external datasets by similarity to mixture input...")
-    ds_weighted <- weightFiltData(mix, filtering_data, ncores = nCores)
+    ds_weighted <- weightFiltData(mix, labels, filtering_data, ncores = nCores)
     message("Filtering signatures by external datasets...")
     out <- filterSignatures(ref, labels, filtering_data, ds_weighted, signatures, top_sigs_frac, ncores = nCores)
   }
