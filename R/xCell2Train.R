@@ -443,7 +443,7 @@ weightFiltData <- function(mix, labels, filtering_data, ncores){
 
     # Combine filtering datasets with mixtures
     genes2use <- intersect(rownames(mix), rownames(ctoi_filt_data))
-    mix_tmp[genes2use,] <- mix
+    mix_tmp <- mix[genes2use,]
     colnames(mix_tmp) <- paste0("mix#", 1:ncol(mix_tmp))
     filtMix  <- cbind(ctoi_filt_data[genes2use,], mix_tmp)
     datasets <- gsub("#.*", "", colnames(filtMix))
