@@ -418,13 +418,85 @@ addEssentialGenes <- function(ref, signatures){
   return(signatures)
 
 }
-filterSignatures <- function(ref, labels, filtering_data, signatures, top_sigs_frac, ncores){
+weightFiltData <- function(mix, filtering_data, ncores){
 
   param <- BiocParallel::MulticoreParam(workers = ncores)
 
-  normalize <- function(x) {
-    (x - min(x)) / (max(x) - min(x))
+  celltypes <- unique(labels$label)
+  shared_cts <- intersect(celltypes, rownames(filtering_data$truth))
+  filtering_mat <- filtering_data$mixture
+
+  # Filtering data log-transformation
+  if(max(filtering_mat) >= 50){
+    filtering_mat <- log2(filtering_mat+1)
   }
+
+  ds_simi_list <- BiocParallel::bplapply(shared_cts, function(ctoi){
+
+    ctoi_samples <- colnames(filtering_data$truth)[!is.na(filtering_data$truth[ctoi,])]
+    ctoi_filt_data <- filtering_mat[,ctoi_samples]
+    filt_ds <- unique(gsub("#.*", "", colnames(ctoi_filt_data)))
+    if (length(filt_ds) == 1) {
+      return(tibble(celltype = ctoi, ds = filt_ds, similarity_scaled = 1))
+    }
+
+
+    # Combine filtering datasets with mixtures
+    genes2use <- intersect(rownames(ref), rownames(ctoi_filt_data))
+    mix_tmp <- mix
+    colnames(mix_tmp) <- paste0("mix#", 1:ncol(mix_tmp))
+    filtMix  <- cbind(ctoi_filt_data[genes2use,], mix_tmp[genes2use,])
+    datasets <- gsub("#.*", "", colnames(filtMix))
+    if(max(mix) >= 50){
+      topVarGenes <- names(sort(apply(mix, 1, var), decreasing = TRUE)[1:5000])
+    }else{
+      topVarGenes <- names(sort(apply(2^mix-1, 1, var), decreasing = TRUE)[1:5000])
+    }
+    filtMix <- filtMix[topVarGenes,]
+
+    # Run PCA
+    pcaResults <- prcomp(t(filtMix))
+    pc1Var <- round(summary(pcaResults)$importance[1], 2)
+    pc2Var <- round(summary(pcaResults)$importance[2], 2)
+    # qplot(pcaResults$x[,1], pcaResults$x[,2], col=datasets, size=4) +
+    # labs(x=paste0("PC-1 (", pc1Var, "%)"),
+    #      y=paste0("PC-2 (", pc2Var, "%)"))
+    pca_scores <- pcaResults$x[,1:2]
+
+    ds_pc_coord <- as_tibble(pca_scores) %>%
+      mutate(ds = datasets) %>%
+      pivot_longer(-ds, names_to = "PC", values_to = "score") %>%
+      group_by(PC, ds) %>%
+      summarise(mean_score = mean(score), .groups = "drop_last") %>%
+      group_by(PC) %>%
+      mutate(mean_score = mean_score + abs(min(mean_score))) %>%
+      ungroup()
+
+    ctoi_ds_simi <- ds_pc_coord %>%
+      rowwise() %>%
+      mutate(dist = abs(ds_pc_coord[ds_pc_coord$ds == "mix" & ds_pc_coord$PC == PC,]$mean_score - mean_score)) %>%
+      mutate(dist = ifelse(PC == "PC1", dist*(pc1Var/100),
+                           dist*(pc2Var/100))) %>%
+      group_by(ds) %>%
+      summarise(similarity = (1/sum(dist))*100) %>%
+      filter(ds != "mix") %>%
+      arrange(-similarity) %>%
+      mutate(celltype = ctoi) %>%
+      select(celltype, ds, similarity) %>%
+      mutate(similarity_scaled = similarity/max(similarity))
+
+    ctoi_ds_simi
+
+  }, BPPARAM = param)
+  names(ds_simi_list) <- shared_cts
+
+  filt_ds_weighted <- bind_rows(ds_simi_list)
+  return(filt_ds_weighted)
+
+}
+filterSignatures <- function(ref, labels, filtering_data, ds_weighted, signatures, top_sigs_frac, ncores){
+
+  param <- BiocParallel::MulticoreParam(workers = ncores)
 
 
   celltypes <- unique(labels$label)
@@ -439,9 +511,13 @@ filterSignatures <- function(ref, labels, filtering_data, signatures, top_sigs_f
     ctoi_samples <- colnames(filtering_data$truth)[!is.na(filtering_data$truth[ctoi,])]
 
     # Get filtering data
-    ctoi_filt_data <- filtering_data$mixture[,ctoi_samples]
+    ctoi_filt_data <- filtering_data$mixture[, ctoi_samples]
 
-    # Calculate CTOI for each dataset in the filtering data
+    # Use shared genes
+    genes2use <- intersect(rownames(ref), rownames(ctoi_filt_data))
+    ctoi_filt_data <- ctoi_filt_data[genes2use,]
+
+    # Calculate CTOI correlations for each dataset in the filtering data
     ctoi_datasets <- gsub("#.*", "", ctoi_samples)
     ds_cors_list <- lapply(unique(ctoi_datasets), function(ds){
 
@@ -451,13 +527,10 @@ filterSignatures <- function(ref, labels, filtering_data, signatures, top_sigs_f
       #  Rank dataset
       mix_ranked <- singscore::rankGenes(ctoi_filt_data_ds)
 
-      # Score and normalize
+      # Score
       scores <- sapply(signatures_ctoi, simplify = TRUE, function(sig){
 
         suppressWarnings(singscore::simpleScore(mix_ranked, upSet = sig, centerScore = FALSE)$TotalScore)
-      })
-      scores <- apply(scores, 2, function(sample){
-        normalize(sample)
       })
 
       # Calculate correlations
@@ -471,21 +544,26 @@ filterSignatures <- function(ref, labels, filtering_data, signatures, top_sigs_f
     })
     names(ds_cors_list) <- unique(ctoi_datasets)
 
-
-    z_values <- enframe(ds_cors_list, name = "dataset") %>%
+    # Fisher transformation
+    z_values <- enframe(ds_cors_list, name = "ds") %>%
       unnest_longer(value, values_to = "rho", indices_to = "sig") %>%
-      mutate(z = 0.5 * log((1 + rho) / (1 - rho))) %>% # Fisher transformation
+      mutate(z = 0.5 * log((1 + rho) / (1 - rho))) %>%
+      mutate(celltype = ctoi)
+
+    # Filter signatures
+    sigs_scored <- z_values %>%
+      left_join(ds_weighted, by = c("ds", "celltype")) %>%
+      mutate(sig_score = z * similarity_scaled) %>%
       group_by(sig) %>%
-      summarise(mean_z = mean(z))
+      summarise(sig_score = mean(sig_score))
 
-
-    best_sigs <- z_values %>%
-      top_frac(top_sigs_frac, wt = mean_z) %>%
+    best_sigs <- sigs_scored %>%
+      top_frac(top_sigs_frac, wt = sig_score) %>%
       pull(sig)
 
     if (length(best_sigs) < 10) {
-      best_sigs <- z_values %>%
-        top_n(10, wt = mean_z) %>%
+      best_sigs <- sigs_scored %>%
+        top_n(10, wt = sig_score) %>%
         pull(sig)
     }
 
@@ -508,11 +586,10 @@ filterSignatures <- function(ref, labels, filtering_data, signatures, top_sigs_f
 
   return(out)
 }
-makeSimulations <- function(ref, labels, gep_mat, ref_type, dep_list, cor_mat, sim_fracs, n_sims, ncores, noise_level, seed2use){
+makeSimulations <- function(ref, labels, gep_mat, ref_type, dep_list, cor_mat, sim_fracs, n_sims, ncores, noise_level = NULL, seed2use){
 
   set.seed(seed2use)
   param <- BiocParallel::MulticoreParam(workers = ncores)
-
 
   celltypes <- unique(labels$label)
 
@@ -539,11 +616,20 @@ makeSimulations <- function(ref, labels, gep_mat, ref_type, dep_list, cor_mat, s
     # Generate n_sims simulations
     ctoi_sim_list <- lapply(1:n_sims, function(i){
 
-      # Sample 3-10 control cell types (if possible)
+      # Sample 3-9 non dependent control cell types (if possible)
       if (length(controls) > 3) {
-        controls2use <- sample(controls, sample(3:min(10, length(controls)), 1), replace = FALSE)
+        controls2use <- sample(controls, sample(3:min(8, length(controls)), 1), replace = FALSE)
       }else{
         controls2use <- controls
+      }
+
+      # Add one dependent control cell type or closely related cell type to mimic some spillover effect
+      if (length(dep_cts[dep_cts != ctoi]) > 0 ) {
+        dep_control <- names(sort(cor_mat[ctoi, dep_cts[dep_cts != ctoi]], decreasing = FALSE)[1])
+        controls2use <- c(controls2use, dep_control)
+      }else{
+        dep_control <- names(sort(cor_mat[ctoi,], decreasing = TRUE)[2])
+        controls2use <- unique(c(controls2use, dep_control))
       }
 
       # Generate controls matrix
@@ -556,7 +642,7 @@ makeSimulations <- function(ref, labels, gep_mat, ref_type, dep_list, cor_mat, s
         })
       }else{
         controls_mat <- matrix(rep(gep_mat_linear[,controls2use], length(sim_fracs)), byrow = FALSE, ncol = length(sim_fracs), dimnames = list(rownames(gep_mat_linear), sim_fracs))
-        controls_mat_frac <- controls_mat %*% diag(sim_fracs)
+        controls_mat_frac <- controls_mat %*% diag(1-sim_fracs)
       }
 
 
@@ -566,10 +652,25 @@ makeSimulations <- function(ref, labels, gep_mat, ref_type, dep_list, cor_mat, s
 
 
       # Add noise
-      eps_sigma <- sd(as.vector(ref)) * noise_level
-      epsilon_gaussian <- array(rnorm(prod(dim(simulation)), 0, eps_sigma), dim(simulation))
-      simulation_noised <- 2^(log2(simulation+1) + epsilon_gaussian)
-      return(simulation_noised)
+      if (!is.null(noise_level)) {
+
+        # y <- cbind(log2(simulation+1), mix)
+        # y <- limma::normalizeBetweenArrays(y)
+        # simulation <- y[,1:ncol(simulation)]
+
+        # eps_sigma <- sd(as.vector(simulation)) * noise_level
+        eps_sigma <- sd(as.vector(mix)) * noise_level
+        eps_gaussian <- array(rnorm(prod(dim(simulation)), 0, eps_sigma), dim(simulation))
+        simulation_noised <- 2^(log2(simulation+1) + eps_gaussian)
+        colnames(simulation_noised) <- paste0("mix", "%%", sim_fracs)
+
+        #simulation_noised <- 2^(simulation + eps_gaussian)-1
+
+        return(simulation_noised)
+      }else{
+        simulation
+      }
+
     })
     return(do.call(cbind, ctoi_sim_list))
 
@@ -907,8 +1008,10 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type, filtering_data = NULL
   }
 
   if (!is.null(filtering_data)) {
+    message("Weighting external datasets by similarity to mixture input...")
+    ds_weighted <- weightFiltData(mix, filtering_data, ncores = nCores)
     message("Filtering signatures by external datasets...")
-    out <- filterSignatures(ref, labels, filtering_data, signatures, top_sigs_frac, ncores = nCores)
+    out <- filterSignatures(ref, labels, filtering_data, ds_weighted, signatures, top_sigs_frac, ncores = nCores)
   }
 
   if (return_sigs_filt) {
