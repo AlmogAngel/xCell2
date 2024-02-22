@@ -445,14 +445,14 @@ weightFiltData <- function(mix, labels, filtering_data, ncores){
     genes2use <- intersect(rownames(mix), rownames(ctoi_filt_data))
     mix_tmp <- mix[genes2use,]
     colnames(mix_tmp) <- paste0("mix#", 1:ncol(mix_tmp))
-    filtMix  <- cbind(ctoi_filt_data[genes2use,], mix_tmp)
-    datasets <- gsub("#.*", "", colnames(filtMix))
-    if(max(mix) >= 50){
+    if(max(mix_tmp) >= 50){
       topVarGenes <- names(sort(apply(mix_tmp, 1, var), decreasing = TRUE)[1:5000])
     }else{
       topVarGenes <- names(sort(apply(2^mix_tmp-1, 1, var), decreasing = TRUE)[1:5000])
     }
-    filtMix <- filtMix[topVarGenes,]
+    filtMix  <- cbind(ctoi_filt_data[topVarGenes,], mix_tmp[topVarGenes,])
+    datasets <- gsub("#.*", "", colnames(filtMix))
+
 
     # Run PCA
     pcaResults <- prcomp(t(filtMix))
