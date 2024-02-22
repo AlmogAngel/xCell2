@@ -434,6 +434,7 @@ weightFiltData <- function(mix, labels, filtering_data, ncores){
   }else{
     topVarGenes <- names(sort(apply(2^mix[genes2use,]-1, 1, var), decreasing = TRUE)[1:5000])
   }
+  message("aaa")
   return(mix) ##################################
   mix_var <- mix[topVarGenes,]
   colnames(mix_var) <- paste0("mix#", 1:ncol(mix_var))
@@ -1014,7 +1015,7 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type, filtering_data = NULL
   if (!is.null(filtering_data)) {
     message("Weighting external datasets by similarity to mixture input...")
     ds_weighted <- weightFiltData(mix, labels, filtering_data, ncores = nCores)
-    return(ds_weighted)
+    return(ds_weighted) # #########################
     message("Filtering signatures by external datasets...")
     out <- filterSignatures(ref, labels, filtering_data, ds_weighted, signatures, top_sigs_frac, ncores = nCores)
   }
