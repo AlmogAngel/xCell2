@@ -443,14 +443,14 @@ weightFiltData <- function(mix, labels, filtering_data, ncores){
 
     # Combine filtering datasets with mixtures
     genes2use <- intersect(rownames(mix), rownames(ctoi_filt_data))
-    mix_tmp <- mix
+    mix_tmp[genes2use,] <- mix
     colnames(mix_tmp) <- paste0("mix#", 1:ncol(mix_tmp))
-    filtMix  <- cbind(ctoi_filt_data[genes2use,], mix_tmp[genes2use,])
+    filtMix  <- cbind(ctoi_filt_data[genes2use,], mix_tmp)
     datasets <- gsub("#.*", "", colnames(filtMix))
     if(max(mix) >= 50){
-      topVarGenes <- names(sort(apply(mix, 1, var), decreasing = TRUE)[1:5000])
+      topVarGenes <- names(sort(apply(mix_tmp, 1, var), decreasing = TRUE)[1:5000])
     }else{
-      topVarGenes <- names(sort(apply(2^mix-1, 1, var), decreasing = TRUE)[1:5000])
+      topVarGenes <- names(sort(apply(2^mix_tmp-1, 1, var), decreasing = TRUE)[1:5000])
     }
     filtMix <- filtMix[topVarGenes,]
 
