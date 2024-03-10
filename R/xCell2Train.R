@@ -516,7 +516,8 @@ filterSignatures <- function(ref, labels, filtering_data, signatures, top_sigs_f
   }, BPPARAM = param)
   names(filt_sigs) <- shared_cts
 
-  n_ct_filtered <- sum(lengths(filt_sigs) > 1)
+  filt_sigs <- filt_sigs[lengths(filt_sigs) > 1]
+  filts_ct <- names(filt_sigs)
 
   for(ctoi in shared_cts){
     if (all(is.na(filt_sigs[[ctoi]]))) {
@@ -527,9 +528,9 @@ filterSignatures <- function(ref, labels, filtering_data, signatures, top_sigs_f
     signatures <- signatures[!names(signatures) %in% sigs2remove]
   }
 
-  message("> Signatures from ", n_ct_filtered, " cell types have been filtered.")
+  message("> Signatures from ", length(filts_ct), " cell types have been filtered.")
   out <- list(filt_sigs = signatures,
-              filt_cts = shared_cts)
+              filt_cts = filts_ct)
 
   return(out)
 }
