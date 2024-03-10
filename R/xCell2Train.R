@@ -428,18 +428,10 @@ filterSignatures <- function(ref, labels, filtering_data, signatures, top_sigs_f
     # Get CTOI signatures
     signatures_ctoi <- signatures[startsWith(names(signatures), paste0(ctoi, "#"))]
 
-    # # Use only samples with truth values
-    # ctoi_samples <- colnames(filtering_data$truth)[!is.na(filtering_data$truth[ctoi,])]
-    #
-    # # Get filtering data
-    # ctoi_filt_data <- filtering_data$mixture[, ctoi_samples]
-    #
-    # # Use shared genes
-    # genes2use <- intersect(rownames(ref), rownames(ctoi_filt_data))
-    # ctoi_filt_data <- ctoi_filt_data[genes2use,]
 
     # Calculate CTOI correlations for each dataset in the filtering data
     ds_cors_list <- sapply(names(filtering_data$mixture), function(ds){
+
 
       if(!ctoi %in% rownames(filtering_data$truth[[ds]])){
         return(NA)
@@ -456,6 +448,12 @@ filterSignatures <- function(ref, labels, filtering_data, signatures, top_sigs_f
       scores <- sapply(signatures_ctoi, simplify = TRUE, function(sig){
         suppressWarnings(singscore::simpleScore(ctoi_filt_ds_ranked, upSet = sig, centerScore = FALSE)$TotalScore)
       })
+
+      # Remove signatures that failed to score
+      if (class(scores)[1] == "list") {
+        scores <- scores[lengths(scores) != 0]
+        scores <- sapply(scores, cbind)
+      }
 
       # Calculate correlations
       fracs <- filtering_data$truth[[ds]][ctoi, ctoi_samples]
@@ -477,9 +475,23 @@ filterSignatures <- function(ref, labels, filtering_data, signatures, top_sigs_f
       n_samples
     }), name = "ds", value = "n_samples")
 
+    ds_sigs_cors <- enframe(ds_cors_list, name = "ds") %>%
+      unnest_longer(value, values_to = "rho", indices_to = "sig")
+
+    # External dataset must max(rho) >= 0.6 to be used in filtering
+    ds2use <- ds_sigs_cors %>%
+      group_by(ds) %>%
+      summarise(max_rho = max(rho)) %>%
+      filter(max_rho >= 0.6) %>%
+      pull(ds)
+
+    if (length(ds2use) == 0) {
+      return(NA)
+    }
+
     # Weight signatures correlations
-    z_weighted_sigs <- enframe(ds_cors_list, name = "ds") %>%
-      unnest_longer(value, values_to = "rho", indices_to = "sig") %>%
+    z_weighted_sigs <- ds_sigs_cors %>%
+      filter(ds %in% ds2use) %>%
       mutate(z = 0.5 * log((1 + rho) / (1 - rho))) %>%
       left_join(ds2n_samples, by = "ds") %>%
       group_by(sig) %>%
@@ -504,14 +516,18 @@ filterSignatures <- function(ref, labels, filtering_data, signatures, top_sigs_f
   }, BPPARAM = param)
   names(filt_sigs) <- shared_cts
 
+  n_ct_filtered <- sum(lengths(filt_sigs) > 1)
 
   for(ctoi in shared_cts){
+    if (is.na(filt_sigs[[ctoi]])) {
+      next
+    }
     ctoi_sigs <- names(signatures)[startsWith(names(signatures), paste0(ctoi, "#"))]
     sigs2remove <- ctoi_sigs[!ctoi_sigs %in% filt_sigs[[ctoi]]]
     signatures <- signatures[!names(signatures) %in% sigs2remove]
   }
 
-  message("> Signatures from ", length(shared_cts), " cell types have been filtered.")
+  message("> Signatures from ", n_ct_filtered, " cell types have been filtered.")
   out <- list(filt_sigs = signatures,
               filt_cts = shared_cts)
 
