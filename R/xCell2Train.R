@@ -519,7 +519,7 @@ filterSignatures <- function(ref, labels, filtering_data, signatures, top_sigs_f
   n_ct_filtered <- sum(lengths(filt_sigs) > 1)
 
   for(ctoi in shared_cts){
-    if (is.na(filt_sigs[[ctoi]])) {
+    if (all(is.na(filt_sigs[[ctoi]]))) {
       next
     }
     ctoi_sigs <- names(signatures)[startsWith(names(signatures), paste0(ctoi, "#"))]
