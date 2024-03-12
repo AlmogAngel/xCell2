@@ -1194,7 +1194,7 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type, filtering_data = NULL
   }else{
     # Load signatures
     message("Loading signatures...")
-    signatures <- readRDS(sigsFile)
+    signatures <- sigsFile
   }
 
 
