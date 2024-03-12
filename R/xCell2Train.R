@@ -562,15 +562,15 @@ makeSimulations <- function(ref, mix, signatures, labels, gep_mat, ref_type, dep
   getControls <- function(ctoi, controls, mix_ranked, gep_mat_linear, signatures, dep_cts, sim_fracs, cor_mat, n_sims){
 
     # Learn shift value from mixture
-    signatures_ctoi <- signatures[startsWith(names(signatures), paste0(ctoi, "#"))]
-    scores_ctoi_mix <- sapply(signatures_ctoi, simplify = TRUE, function(sig){
-      suppressWarnings(singscore::simpleScore(mix_ranked, upSet = sig, centerScore = FALSE)$TotalScore)
-    })
-    shift_values <- min(Rfast::rowMedians(scores_ctoi_mix))
+    # signatures_ctoi <- signatures[startsWith(names(signatures), paste0(ctoi, "#"))]
+    # scores_ctoi_mix <- sapply(signatures_ctoi, simplify = TRUE, function(sig){
+    #   suppressWarnings(singscore::simpleScore(mix_ranked, upSet = sig, centerScore = FALSE)$TotalScore)
+    # })
+    # shift_value <- min(Rfast::rowmeans(scores_ctoi_mix))
 
 
     # Generate sets of different controls combinations
-    n_sets <- n_sims*200
+    n_sets <- n_sims*1
     controls_sets <- lapply(1:n_sets, function(c){
       sampleControls(ctoi, controls, dep_cts, cor_mat)
     })
@@ -582,34 +582,33 @@ makeSimulations <- function(ref, mix, signatures, labels, gep_mat, ref_type, dep
       fracs2use <- numbers / sum(numbers)
     })
 
-    controls_sets_mat <- sapply(1:n_sets, function(s){
+    # controls_sets_mat <- sapply(1:n_sets, function(s){
+    #
+    #   controls2use <- controls_sets[[s]]
+    #
+    #   if (length(controls2use) > 1) {
+    #     controls_mat <- gep_mat_linear[,controls2use]
+    #   }else{
+    #     controls_mat <- matrix(rep(gep_mat_linear[,controls2use], length(sim_fracs)), byrow = FALSE, ncol = length(sim_fracs), dimnames = list(rownames(gep_mat_linear), sim_fracs))
+    #   }
+    #
+    #   fracs2use <- controls_props[[s]]
+    #
+    #   rowSums(controls_mat %*% diag(fracs2use))
+    # })
+    #
+    # controls_mat_ranked <- singscore::rankGenes(controls_sets_mat)
+    # controls_mat_scores <- sapply(signatures_ctoi, simplify = TRUE, function(sig){
+    #   suppressWarnings(singscore::simpleScore(controls_mat_ranked, upSet = sig, centerScore = FALSE)$TotalScore)
+    # })
+    #
+    # controls_shift_values <- Rfast::rowmeans(controls_mat_scores)
+    # controls_shifts_distance <- abs(controls_shift_values - shift_value)
+    # names(controls_shifts_distance) <- names(controls_sets)
+    # best_sims <- names(sort(controls_shifts_distance)[1:n_sims])
 
-      controls2use <- controls_sets[[s]]
-
-      if (length(controls2use) > 1) {
-        controls_mat <- gep_mat_linear[,controls2use]
-      }else{
-        controls_mat <- matrix(rep(gep_mat_linear[,controls2use], length(sim_fracs)), byrow = FALSE, ncol = length(sim_fracs), dimnames = list(rownames(gep_mat_linear), sim_fracs))
-      }
-
-      fracs2use <- controls_props[[s]]
-
-      rowSums(controls_mat %*% diag(fracs2use))
-    })
-
-    controls_mat_ranked <- singscore::rankGenes(controls_sets_mat)
-    controls_mat_scores <- sapply(signatures_ctoi, simplify = TRUE, function(sig){
-      suppressWarnings(singscore::simpleScore(controls_mat_ranked, upSet = sig, centerScore = FALSE)$TotalScore)
-    })
-
-    controls_shift_values <- Rfast::rowMedians(controls_mat_scores)
-    controls_shifts_distance <- abs(controls_shift_values - shift_value)
-    names(controls_shifts_distance) <- names(controls_sets)
-    best_sims <- names(sort(controls_shifts_distance)[1:n_sims])
-
-    return(list(c = controls_sets[best_sims],
-                p = controls_props[best_sims],
-                s = shift_value))
+    return(list(c = controls_sets,
+                p = controls_props))
 
   }
 
@@ -655,7 +654,7 @@ makeSimulations <- function(ref, mix, signatures, labels, gep_mat, ref_type, dep
       controls_mat_frac <- sapply(1-sim_fracs, function(s){
         perturbed_vec <- -1
         while (min(perturbed_vec) < 0) {
-          perturbed_vec <- fracs2use + runif(length(fracs2use), min=-0.05, max=0.05) # Change the proportions a little bit
+          perturbed_vec <- fracs2use + runif(length(fracs2use), min=-0.1, max=0.1) # Change the proportions a little bit
 
         }
         fracs <- s * perturbed_vec / sum(perturbed_vec)
@@ -917,19 +916,31 @@ trainModels <- function(simulations_scored, ncores, seed2use){
 
   fitModel <- function(data){
 
-    predictors <- data[, -ncol(data)]
-    response <- data[, ncol(data)]
+    data <- data %>%
+      group_by(celltype, sim, sig) %>%
+      mutate(score = score - min(score))
+
+    data.mat <- data %>%
+      ungroup() %>%
+      pivot_wider(names_from = sig, values_from = score) %>%
+      select(-c(sim, celltype)) %>%
+      as.matrix()
+
+
+    predictors <- data.mat[, -1]
+    response <- data.mat[, 1]
 
 
     # Train model
     xgb_params <- list(
       booster = "gbtree",
-      alpha = 1,          # Lasso
+      alpha = 0,          # Lasso
       lambda = 1,            # Ridge
       eta = 0.01,             # Learning rate
       objective = "reg:squarederror",
       max_depth = 6,
-      nthread = 1
+      nthread = 1,
+      min_child_weight = 10
     )
 
     model <- xgboost::xgboost(
@@ -1108,12 +1119,13 @@ setClass("xCell2Signatures", slots = list(
 #' @param filtering_data description
 #' @param top_sigs_frac description
 #' @param essential_genes description
+#' @param return_sims description
 #' @return An S4 object containing the signatures, cell type labels, and cell type dependencies.
 #' @export
 xCell2Train <- function(ref, labels, mix = NULL, ref_type, filtering_data = NULL, lineage_file = NULL, top_genes_frac = 1, medianGEP = TRUE, seed = 123, probs = c(0.01, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.4),
                         sim_fracs = c(seq(0, 0.05, 0.001), seq(0.06, 0.1, 0.005), seq(0.11, 0.25, 0.01)), diff_vals = round(c(log2(1), log2(1.5), log2(2), log2(2.5), log2(3), log2(4), log2(5), log2(10), log2(20)), 3),
                         min_genes = 3, max_genes = 150, return_sigs = FALSE, return_sigs_filt = FALSE, sigsFile = NULL, minPBcells = 30, minPBsamples = 10,
-                        ct_sims = 10, samples_frac = 0.1, simMethod = "ref_multi", nCores = 1, top_sigs_frac = 0.1, essential_genes = TRUE){
+                        ct_sims = 10, samples_frac = 0.1, simMethod = "ref_multi", nCores = 1, top_sigs_frac = 0.1, essential_genes = FALSE, return_sims = FALSE){
 
 
   # Validate inputs
@@ -1166,35 +1178,39 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type, filtering_data = NULL
       return(signatures)
     }
 
+    if (!is.null(filtering_data)) {
+      message("Filtering signatures by external datasets...")
+      out <- filterSignatures(ref, labels, filtering_data, signatures, top_sigs_frac, ncores = nCores)
+    }
+
+    if (return_sigs_filt) {
+      return(list(all_sigs = signatures,
+                  filt_sigs = out$filt_sigs,
+                  filt_cts = out$filt_cts,
+                  genes_used = rownames(ref)))
+    }
+    signatures <- out$filt_sigs
+
   }else{
     # Load signatures
     message("Loading signatures...")
     signatures <- readRDS(sigsFile)
   }
 
-  if (!is.null(filtering_data)) {
-    message("Filtering signatures by external datasets...")
-    out <- filterSignatures(ref, labels, filtering_data, signatures, top_sigs_frac, ncores = nCores)
-  }
-
-  if (return_sigs_filt) {
-    return(list(all_sigs = signatures,
-                filt_sigs = out$filt_sigs,
-                filt_cts = out$filt_cts,
-                genes_used = rownames(ref)))
-  }
-  signatures <- out$filt_sigs
 
 
   # Make simulations
   message("Generating simulations...")
-  simulations <- makeSimulations(ref, mix, signatures, labels, gep_mat, ref_type, dep_list, cor_mat, sim_fracs, n_sims = 20, ncores = nCores, noise_level = 0.1, seed2use = seed)
+  simulations <- makeSimulations(ref, mix, signatures, labels, gep_mat, ref_type, dep_list, cor_mat, sim_fracs, n_sims = ct_sims, ncores = nCores, noise_level = 0.1, seed2use = seed)
   simulations_scored <- scoreSimulations(signatures, simulations, n_sims, sim_fracs, nCores)
 
+  if (return_sims) {
+    return(simulations_scored)
+  }
 
   # Learn transformation parameters
-  message("Learning linear transformation parameters...")
-  params <- learnParams(signatures, simulations_scored, filtering_data, cor_mat, nCores)
+  #message("Learning linear transformation parameters...")
+  #params <- learnParams(signatures, simulations_scored, filtering_data, cor_mat, nCores)
 
   # Filter signatures and train RF model
   message("Filtering signatures and training models...")
