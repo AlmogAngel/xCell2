@@ -17,7 +17,7 @@
 
 #' @return A data frame containing the cell type enrichment for each sample in the input matrix, as estimated by xCell2.
 #' @export
-xCell2Analysis <- function(mix, xcell2sigs, min_intersect = 0.9, predict, spillover, spillover_alpha = 0.2, ncores){
+xCell2Analysis <- function(mix, xcell2sigs, min_intersect = 0.9, predict, spillover, spillover_alpha = 0.2, ncores = 1){
 
   scoreMix <- function(ctoi, mix_ranked, signatures_ctoi){
 
