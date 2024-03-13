@@ -381,40 +381,7 @@ createSignatures <- function(labels, dep_list, quantiles_matrix, probs, cor_mat,
 
   return(all_sigs)
 }
-addEssentialGenes <- function(ref, signatures){
-
-  data("celltype.data", package = "xCell2")
-  celltypes <- unique(gsub("#.*", "", names(signatures)))
-
-  for (ct in celltypes) {
-
-    # Check if cell type exists in celltype.data
-    if (!ct %in% celltype.data$all_labels) {
-      next
-    }
-
-    # Get essential genes
-    ct_label <- celltype.data[celltype.data$all_labels == ct,]$xCell2_labels
-    essen_genes <- unique(unlist(celltype.data[celltype.data$xCell2_labels == ct_label,]$essential_genes))
-
-    if (all(is.na(essen_genes))) {
-      next
-    }
-
-    essen_genes <- intersect(rownames(ref), essen_genes) # Use only essential genes which are in ref
-
-    # Add to signature
-    ct_sigs <- which(startsWith(names(signatures), paste0(ct, "#")))
-    for (sig in ct_sigs) {
-      signatures[sig][[1]] <- unique(c(signatures[sig][[1]], essen_genes))
-    }
-
-  }
-
-  return(signatures)
-
-}
-filterSignatures <- function(ref, labels, filtering_data, signatures, top_sigs_frac, ncores){
+filterSignatures <- function(ref, labels, filtering_data, signatures, top_sigs_frac, add_essential_genes, ncores){
 
   param <- BiocParallel::MulticoreParam(workers = ncores)
 
@@ -427,7 +394,6 @@ filterSignatures <- function(ref, labels, filtering_data, signatures, top_sigs_f
 
     # Get CTOI signatures
     signatures_ctoi <- signatures[startsWith(names(signatures), paste0(ctoi, "#"))]
-
 
     # Calculate CTOI correlations for each dataset in the filtering data
     ds_cors_list <- sapply(names(filtering_data$mixture), function(ds){
@@ -486,8 +452,55 @@ filterSignatures <- function(ref, labels, filtering_data, signatures, top_sigs_f
       pull(ds)
 
     if (length(ds2use) == 0) {
-      return(NA)
+      return(list(best_sigs = NA,
+                  essential_genes = NA))
     }
+
+    # Find essential genes
+    top_sigs <- ds_sigs_cors %>%
+      filter(ds %in% ds2use) %>%
+      group_by(ds) %>%
+      top_frac(0.5, wt=rho) %>% # Top 50% correlation per dataset
+      group_by(sig) %>%
+      summarise(n_sigs = n()) %>%
+      mutate(ds_frac = n_sigs/length(ds2use)) %>%
+      filter(ds_frac >= 0.5) %>% # Must be in at least 50% of the datasets
+      pull(sig)
+
+    top_genes <- sort(table(unlist(signatures_ctoi[top_sigs])),decreasing = T)/length(top_sigs)
+    top_genes <- names(top_genes[top_genes>=0.5]) # Must be in at least 50% of the signatures
+
+    ds_top_genes_cors <- lapply(ds2use, function(ds){
+
+      true_fracs <- filtering_data$truth[[ds]][ctoi,]
+      true_fracs <- true_fracs[!is.na(true_fracs)]
+      top_genes_ctoi_mat <- filtering_data$mixture[[ds]]
+      ds_top_genes <- intersect(top_genes, rownames(top_genes_ctoi_mat))
+      samples <- intersect(names(true_fracs) , colnames(top_genes_ctoi_mat))
+      true_fracs <- true_fracs[samples]
+      top_genes_ctoi_mat <- top_genes_ctoi_mat[ds_top_genes, samples]
+
+      cors <- apply(top_genes_ctoi_mat, 1, function(x){
+        cor(x, true_fracs, method = "spearman", use = "pairwise.complete.obs")
+      })
+
+
+      return(cors)
+
+    })
+    names(ds_top_genes_cors) <- ds2use
+
+    essential_genes <- enframe(ds_top_genes_cors, name = "ds", value = "rho") %>%
+      left_join(ds2n_samples, by = "ds") %>%
+      unnest_longer(rho, indices_to = "genes") %>%
+      mutate(z = 0.5 * log((1 + rho) / (1 - rho))) %>%
+      mutate(weights = log(n_samples)) %>%
+      group_by(genes) %>%
+      summarise(weighted_z = weighted.mean(x=z, w=weights)) %>%
+      mutate(rho_weigted = (exp(2 * weighted_z) - 1) / (exp(2 * weighted_z) + 1)) %>%
+      filter(rho_weigted >= 0.3) %>% # Genes must have at least 0.3 weighted correlation with the filtering data
+      pull(genes)
+
 
     # Weight signatures correlations
     z_weighted_sigs <- ds_sigs_cors %>%
@@ -511,28 +524,74 @@ filterSignatures <- function(ref, labels, filtering_data, signatures, top_sigs_f
     }
 
 
-    return(best_sigs)
+    return(list(best_sigs = best_sigs,
+                essential_genes = essential_genes))
 
   }, BPPARAM = param)
   names(filt_sigs) <- shared_cts
 
-  filt_sigs <- filt_sigs[lengths(filt_sigs) > 1]
+  # Remove cell types with no filtering
+  filt_sigs <- filt_sigs[sapply(shared_cts, function(ctoi){
+    all(!is.na(filt_sigs[[ctoi]]$best_sigs))
+  })]
   filts_ct <- names(filt_sigs)
 
-  for(ctoi in shared_cts){
-    if (all(is.na(filt_sigs[[ctoi]]))) {
-      next
-    }
+  # Filter genes
+  for(ctoi in filts_ct){
     ctoi_sigs <- names(signatures)[startsWith(names(signatures), paste0(ctoi, "#"))]
-    sigs2remove <- ctoi_sigs[!ctoi_sigs %in% filt_sigs[[ctoi]]]
+    sigs2remove <- ctoi_sigs[!ctoi_sigs %in% filt_sigs[[ctoi]]$best_sigs]
     signatures <- signatures[!names(signatures) %in% sigs2remove]
+
+    if (add_essential_genes) {
+      # Add essential genes
+      for (sig in filt_sigs[[ctoi]]$best_sigs) {
+        signatures[sig][[1]] <- unique(c(signatures[sig][[1]], filt_sigs[[ctoi]]$essential_genes))
+      }
+    }
   }
 
+
   message("> Signatures from ", length(filts_ct), " cell types have been filtered.")
+  if (add_essential_genes) {
+    message("> ", length(unique(unlist(lapply(filt_sigs, function(x){x$essential_genes})))), " essential genes have been add to the filtered signatures.")
+  }
   out <- list(filt_sigs = signatures,
               filt_cts = filts_ct)
 
   return(out)
+}
+addEssentialGenes <- function(ref, signatures){
+
+  data("celltype.data", package = "xCell2")
+  celltypes <- unique(gsub("#.*", "", names(signatures)))
+
+  for (ct in celltypes) {
+
+    # Check if cell type exists in celltype.data
+    if (!ct %in% celltype.data$all_labels) {
+      next
+    }
+
+    # Get essential genes
+    ct_label <- celltype.data[celltype.data$all_labels == ct,]$xCell2_labels
+    essen_genes <- unique(unlist(celltype.data[celltype.data$xCell2_labels == ct_label,]$essential_genes))
+
+    if (all(is.na(essen_genes))) {
+      next
+    }
+
+    essen_genes <- intersect(rownames(ref), essen_genes) # Use only essential genes which are in ref
+
+    # Add to signature
+    ct_sigs <- which(startsWith(names(signatures), paste0(ct, "#")))
+    for (sig in ct_sigs) {
+      signatures[sig][[1]] <- unique(c(signatures[sig][[1]], essen_genes))
+    }
+
+  }
+
+  return(signatures)
+
 }
 makeSimulations <- function(ref, mix, signatures, labels, gep_mat, ref_type, dep_list, cor_mat, sim_fracs, n_sims, ncores, noise_level = NULL, seed2use){
 
@@ -1116,14 +1175,15 @@ setClass("xCell2Signatures", slots = list(
 #' @param simMethod description
 #' @param filtering_data description
 #' @param top_sigs_frac description
-#' @param essential_genes description
+#' @param external_essential_genes description
+#' @param add_essential_genes description
 #' @param return_analysis description
 #' @return An S4 object containing the signatures, cell type labels, and cell type dependencies.
 #' @export
 xCell2Train <- function(ref, labels, mix = NULL, ref_type, filtering_data = NULL, lineage_file = NULL, top_genes_frac = 1, medianGEP = TRUE, seed = 123, probs = c(0.01, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.4),
                         sim_fracs = c(seq(0, 0.05, 0.001), seq(0.06, 0.1, 0.005), seq(0.11, 0.25, 0.01)), diff_vals = round(c(log2(1), log2(1.5), log2(2), log2(2.5), log2(3), log2(4), log2(5), log2(10), log2(20)), 3),
                         min_genes = 3, max_genes = 150, return_sigs = FALSE, return_sigs_filt = FALSE, sigsFile = NULL, minPBcells = 30, minPBsamples = 10,
-                        ct_sims = 10, samples_frac = 0.1, simMethod = "ref_multi", nCores = 1, top_sigs_frac = 0.1, essential_genes = FALSE, return_analysis = FALSE){
+                        ct_sims = 10, samples_frac = 0.1, simMethod = "ref_multi", nCores = 1, top_sigs_frac = 0.1, external_essential_genes = NULL, return_analysis = FALSE, add_essential_genes = TRUE){
 
 
   # Validate inputs
@@ -1168,9 +1228,6 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type, filtering_data = NULL
     quantiles_matrix <- makeQuantiles(ref, labels, probs, ncores = nCores)
     message("Generating signatures...")
     signatures <- createSignatures(labels, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, top_genes_frac, ncores = nCores)
-    if (essential_genes) {
-      signatures <- addEssentialGenes(ref, signatures) # Add essential genes
-    }
 
     if (return_sigs) {
       return(signatures)
@@ -1178,7 +1235,7 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type, filtering_data = NULL
 
     if (!is.null(filtering_data)) {
       message("Filtering signatures by external datasets...")
-      out <- filterSignatures(ref, labels, filtering_data, signatures, top_sigs_frac, ncores = nCores)
+      out <- filterSignatures(ref, labels, filtering_data, signatures, top_sigs_frac, add_essential_genes, ncores = nCores)
     }
 
     if (return_sigs_filt) {
@@ -1187,6 +1244,11 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type, filtering_data = NULL
                   filt_cts = out$filt_cts,
                   genes_used = rownames(ref)))
     }
+
+    if (!is.null(external_essential_genes)) {
+      # TODO: Make a function that add external essential genes
+    }
+
     signatures <- out$filt_sigs
 
   }else{
