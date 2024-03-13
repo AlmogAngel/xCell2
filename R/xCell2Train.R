@@ -503,56 +503,25 @@ filterSignatures <- function(ref, labels, filtering_data, signatures, top_sigs_f
       pull(genes)
 
 
-    # Weight signatures correlations
-    top_sigs <- ds_sigs_cors %>%
+    rho_weighted_sigs <- ds_sigs_cors %>%
       filter(ds %in% ds2use) %>%
-      group_by(ds) %>%
-      top_frac(0.5, wt=rho) %>% # Top 50% correlation per dataset
-      filter(rho >= 0.6) %>% # !!!!!!!!!!!!!!!!!!!!!! new
+      filter(rho >= 0.6) %>%
       group_by(sig) %>%
-      summarise(n_sigs = n()) %>%
+      mutate(n_sigs = n()) %>%
       mutate(ds_frac = n_sigs/length(ds2use)) %>%
       filter(ds_frac >= 0.5) %>% # Must be in at least 50% of the datasets
+      left_join(ds2n_samples, by = "ds") %>%
+      ungroup() %>%
+      mutate(weights = log(n_samples)*n_sigs) %>%
+      mutate(z = 0.5 * log((1 + rho) / (1 - rho))) %>%
+      group_by(sig) %>%
+      summarise(weighted_z = weighted.mean(x=z, w=weights)) %>%
+      mutate(rho_weigted = (exp(2 * weighted_z) - 1) / (exp(2 * weighted_z) + 1))
+
+    top_sigs_frac_adjusted <- ifelse(nrow(rho_weighted_sigs) > 10, top_sigs_frac, 1)
+    best_sigs <- rho_weighted_sigs %>%
+      top_frac(top_sigs_frac_adjusted, wt = rho_weigted) %>%
       pull(sig)
-
-    best_sigs <- c()
-    top_sigs_fracs <- top_sigs_frac + seq(0, 0.4, 0.05)
-    for (tFrac in top_sigs_fracs) {
-      best_sigs <- ds_sigs_cors %>%
-        filter(ds %in% ds2use) %>%
-        group_by(ds) %>%
-        top_frac(tFrac, wt=rho) %>% # Top 50% correlation per dataset
-        filter(rho >= 0.6) %>% # !!!!!!!!!!!!!!!!!!!!!! new
-        group_by(sig) %>%
-        summarise(n_sigs = n()) %>%
-        mutate(ds_frac = n_sigs/length(ds2use)) %>%
-        filter(ds_frac >= 0.5) %>%
-        pull(sig)
-      if (length(best_sigs) >= 3) {
-        break
-      }
-    }
-
-    best_sigs <- c()
-    if (length(best_sigs) < 3) {
-      rho_cutoffs <- 0.6 - seq(0, 0.2, 0.05)
-      for (rhoC in rho_cutoffs) {
-        best_sigs <- ds_sigs_cors %>%
-          filter(ds %in% ds2use) %>%
-          group_by(ds) %>%
-          top_frac(top_sigs_frac, wt=rho) %>% # Top 50% correlation per dataset
-          filter(rho >= rhoC) %>% # !!!!!!!!!!!!!!!!!!!!!! new
-          group_by(sig) %>%
-          summarise(n_sigs = n()) %>%
-          mutate(ds_frac = n_sigs/length(ds2use)) %>%
-          filter(ds_frac >= 0.5) %>%
-          pull(sig)
-        if (length(best_sigs) >= 3) {
-          break
-        }
-      }
-    }
-
 
     # rho_weighted_sigs <- ds_sigs_cors %>%
     #   filter(ds %in% ds2use) %>%
@@ -570,8 +539,8 @@ filterSignatures <- function(ref, labels, filtering_data, signatures, top_sigs_f
     #   pull(sig)
     #
     # if (length(best_sigs) < 10) {
-    #   best_sigs <- z_weighted_sigs %>%
-    #     top_n(10, wt = weighted_z) %>%
+    #   best_sigs <- rho_weighted_sigs %>%
+    #     top_n(10, wt = rho_weigted) %>%
     #     pull(sig)
     # }
 
