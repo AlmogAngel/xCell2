@@ -952,7 +952,7 @@ trainModels <- function(simulations_scored, ncores, seed2use){
     )
 
 
-    return(list(model = model_final, sigs_filtered = sigs_filt))
+    return(model)
 
   }
 
@@ -970,9 +970,7 @@ trainModels <- function(simulations_scored, ncores, seed2use){
   #   unnest(value) %>%
   #   return(.)
 
-  enframe(models_list, name = "celltype") %>%
-    unnest_longer(value) %>%
-    pivot_wider(names_from = value_id, values_from = value) %>%
+  enframe(models_list, name = "celltype", value = "model") %>%
     return(.)
 
 }
@@ -1119,13 +1117,12 @@ setClass("xCell2Signatures", slots = list(
 #' @param filtering_data description
 #' @param top_sigs_frac description
 #' @param essential_genes description
-#' @param return_sims description
 #' @return An S4 object containing the signatures, cell type labels, and cell type dependencies.
 #' @export
 xCell2Train <- function(ref, labels, mix = NULL, ref_type, filtering_data = NULL, lineage_file = NULL, top_genes_frac = 1, medianGEP = TRUE, seed = 123, probs = c(0.01, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.4),
                         sim_fracs = c(seq(0, 0.05, 0.001), seq(0.06, 0.1, 0.005), seq(0.11, 0.25, 0.01)), diff_vals = round(c(log2(1), log2(1.5), log2(2), log2(2.5), log2(3), log2(4), log2(5), log2(10), log2(20)), 3),
                         min_genes = 3, max_genes = 150, return_sigs = FALSE, return_sigs_filt = FALSE, sigsFile = NULL, minPBcells = 30, minPBsamples = 10,
-                        ct_sims = 10, samples_frac = 0.1, simMethod = "ref_multi", nCores = 1, top_sigs_frac = 0.1, essential_genes = FALSE, return_sims = FALSE){
+                        ct_sims = 10, samples_frac = 0.1, simMethod = "ref_multi", nCores = 1, top_sigs_frac = 0.1, essential_genes = FALSE){
 
 
   # Validate inputs
@@ -1204,19 +1201,11 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type, filtering_data = NULL
   simulations <- makeSimulations(ref, mix, signatures, labels, gep_mat, ref_type, dep_list, cor_mat, sim_fracs, n_sims = ct_sims, ncores = nCores, noise_level = 0.1, seed2use = seed)
   simulations_scored <- scoreSimulations(signatures, simulations, n_sims, sim_fracs, nCores)
 
-  if (return_sims) {
-    return(simulations_scored)
-  }
-
-  # Learn transformation parameters
-  #message("Learning linear transformation parameters...")
-  #params <- learnParams(signatures, simulations_scored, filtering_data, cor_mat, nCores)
 
   # Filter signatures and train RF model
-  message("Filtering signatures and training models...")
+  message("Training models...")
   models <- trainModels(simulations_scored, ncores = nCores, seed2use = seed)
-  signatures <- signatures[unlist(models$sigs_filtered)]
-  models <- models[,-3]
+
 
 
   # Get spillover matrix
@@ -1236,6 +1225,14 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type, filtering_data = NULL
 
   message("Custom xCell2.0 reference ready!")
 
-  return(xCell2Sigs.S4)
+
+
+  if (return_analysis) {
+    res <-  xCell2::xCell2Analysis(mix, xcell2sigs = xCell2Sigs.S4, predict = TRUE, spillover = FALSE)
+    return(res)
+  }else{
+    return(xCell2Sigs.S4)
+  }
+
 
 }
