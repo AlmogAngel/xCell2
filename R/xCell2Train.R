@@ -461,6 +461,7 @@ filterSignatures <- function(ref, labels, filtering_data, signatures, top_sigs_f
       filter(ds %in% ds2use) %>%
       group_by(ds) %>%
       top_frac(0.5, wt=rho) %>% # Top 50% correlation per dataset
+      filter(rho >= 0.6) %>% # !!!!!!!!!!!!!!!!!!!!!! new
       group_by(sig) %>%
       summarise(n_sigs = n()) %>%
       mutate(ds_frac = n_sigs/length(ds2use)) %>%
@@ -503,25 +504,76 @@ filterSignatures <- function(ref, labels, filtering_data, signatures, top_sigs_f
 
 
     # Weight signatures correlations
-    z_weighted_sigs <- ds_sigs_cors %>%
+    top_sigs <- ds_sigs_cors %>%
       filter(ds %in% ds2use) %>%
-      mutate(z = 0.5 * log((1 + rho) / (1 - rho))) %>%
-      left_join(ds2n_samples, by = "ds") %>%
+      group_by(ds) %>%
+      top_frac(0.5, wt=rho) %>% # Top 50% correlation per dataset
+      filter(rho >= 0.6) %>% # !!!!!!!!!!!!!!!!!!!!!! new
       group_by(sig) %>%
-      mutate(weights = log(n_samples)) %>%
-      summarise(weighted_z = weighted.mean(x=z, w=weights)) %>%
-      mutate(celltype = ctoi)
-
-    # Filter signatures
-    best_sigs <- z_weighted_sigs %>%
-      top_frac(top_sigs_frac, wt = weighted_z) %>%
+      summarise(n_sigs = n()) %>%
+      mutate(ds_frac = n_sigs/length(ds2use)) %>%
+      filter(ds_frac >= 0.5) %>% # Must be in at least 50% of the datasets
       pull(sig)
 
-    if (length(best_sigs) < 10) {
-      best_sigs <- z_weighted_sigs %>%
-        top_n(10, wt = weighted_z) %>%
+    best_sigs <- c()
+    top_sigs_fracs <- top_sigs_frac + seq(0, 0.4, 0.05)
+    for (tFrac in top_sigs_fracs) {
+      best_sigs <- ds_sigs_cors %>%
+        filter(ds %in% ds2use) %>%
+        group_by(ds) %>%
+        top_frac(tFrac, wt=rho) %>% # Top 50% correlation per dataset
+        filter(rho >= 0.6) %>% # !!!!!!!!!!!!!!!!!!!!!! new
+        group_by(sig) %>%
+        summarise(n_sigs = n()) %>%
+        mutate(ds_frac = n_sigs/length(ds2use)) %>%
+        filter(ds_frac >= 0.5) %>%
         pull(sig)
+      if (length(best_sigs) >= 3) {
+        break
+      }
     }
+
+    best_sigs <- c()
+    if (length(best_sigs) < 3) {
+      rho_cutoffs <- 0.6 - seq(0, 0.2, 0.05)
+      for (rhoC in rho_cutoffs) {
+        best_sigs <- ds_sigs_cors %>%
+          filter(ds %in% ds2use) %>%
+          group_by(ds) %>%
+          top_frac(top_sigs_frac, wt=rho) %>% # Top 50% correlation per dataset
+          filter(rho >= rhoC) %>% # !!!!!!!!!!!!!!!!!!!!!! new
+          group_by(sig) %>%
+          summarise(n_sigs = n()) %>%
+          mutate(ds_frac = n_sigs/length(ds2use)) %>%
+          filter(ds_frac >= 0.5) %>%
+          pull(sig)
+        if (length(best_sigs) >= 3) {
+          break
+        }
+      }
+    }
+
+
+    # rho_weighted_sigs <- ds_sigs_cors %>%
+    #   filter(ds %in% ds2use) %>%
+    #   mutate(z = 0.5 * log((1 + rho) / (1 - rho))) %>%
+    #   left_join(ds2n_samples, by = "ds") %>%
+    #   group_by(sig) %>%
+    #   mutate(weights = log(n_samples)) %>%
+    #   summarise(weighted_z = weighted.mean(x=z, w=weights)) %>%
+    #   mutate(rho_weigted = (exp(2 * weighted_z) - 1) / (exp(2 * weighted_z) + 1)) %>%
+    #   mutate(celltype = ctoi)
+
+    # # Filter signatures
+    # best_sigs <- rho_weighted_sigs %>%
+    #   top_frac(top_sigs_frac, wt = weighted_z) %>%
+    #   pull(sig)
+    #
+    # if (length(best_sigs) < 10) {
+    #   best_sigs <- z_weighted_sigs %>%
+    #     top_n(10, wt = weighted_z) %>%
+    #     pull(sig)
+    # }
 
 
     return(list(best_sigs = best_sigs,
@@ -593,7 +645,7 @@ addEssentialGenes <- function(ref, signatures){
   return(signatures)
 
 }
-makeSimulations <- function(ref, mix, signatures, labels, gep_mat, ref_type, dep_list, cor_mat, sim_fracs, n_sims, ncores, noise_level = NULL, seed2use){
+makeSimulations <- function(ref, mix, signatures, labels, gep_mat, ref_type, dep_list, cor_mat, sim_fracs, n_sims, ncores, noise_level, seed2use){
 
 
   sampleControls <- function(ctoi, controls, dep_cts, cor_mat){
@@ -620,7 +672,7 @@ makeSimulations <- function(ref, mix, signatures, labels, gep_mat, ref_type, dep
   }
   getControls <- function(ctoi, controls, mix_ranked, gep_mat_linear, signatures, dep_cts, sim_fracs, cor_mat, n_sims){
 
-    # Learn shift value from mixture
+    # # Learn shift value from mixture
     # signatures_ctoi <- signatures[startsWith(names(signatures), paste0(ctoi, "#"))]
     # scores_ctoi_mix <- sapply(signatures_ctoi, simplify = TRUE, function(sig){
     #   suppressWarnings(singscore::simpleScore(mix_ranked, upSet = sig, centerScore = FALSE)$TotalScore)
@@ -665,6 +717,9 @@ makeSimulations <- function(ref, mix, signatures, labels, gep_mat, ref_type, dep
     # controls_shifts_distance <- abs(controls_shift_values - shift_value)
     # names(controls_shifts_distance) <- names(controls_sets)
     # best_sims <- names(sort(controls_shifts_distance)[1:n_sims])
+    #
+    # return(list(c = controls_sets[best_sims],
+    #             p = controls_props[best_sims]))
 
     return(list(c = controls_sets,
                 p = controls_props))
@@ -977,14 +1032,14 @@ trainModels <- function(simulations_scored, ncores, seed2use){
 
     data <- data %>%
       group_by(celltype, sim, sig) %>%
-      mutate(score = score - min(score))
+      mutate(score = score - min(score)) %>%
+      ungroup()
+
 
     data.mat <- data %>%
-      ungroup() %>%
       pivot_wider(names_from = sig, values_from = score) %>%
       select(-c(sim, celltype)) %>%
       as.matrix()
-
 
     predictors <- data.mat[, -1]
     response <- data.mat[, 1]
@@ -998,8 +1053,7 @@ trainModels <- function(simulations_scored, ncores, seed2use){
       eta = 0.01,             # Learning rate
       objective = "reg:squarederror",
       max_depth = 6,
-      nthread = 1,
-      min_child_weight = 10
+      nthread = 1
     )
 
     model <- xgboost::xgboost(
