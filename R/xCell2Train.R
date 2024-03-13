@@ -444,6 +444,7 @@ filterSignatures <- function(ref, labels, filtering_data, signatures, top_sigs_f
     ds_sigs_cors <- enframe(ds_cors_list, name = "ds") %>%
       unnest_longer(value, values_to = "rho", indices_to = "sig")
 
+
     # External dataset must max(rho) >= 0.6 to be used in filtering
     ds2use <- ds_sigs_cors %>%
       group_by(ds) %>%
@@ -456,6 +457,25 @@ filterSignatures <- function(ref, labels, filtering_data, signatures, top_sigs_f
                   essential_genes = NA))
     }
 
+    ds_sigs_cors_filt <- ds_sigs_cors %>%
+      filter(ds %in% ds2use) %>%
+      filter(rho >= 0.6) %>%
+      group_by(sig) %>%
+      mutate(n_sigs = n()) %>%
+      mutate(ds_frac = n_sigs/length(ds2use))
+
+    if (nrow(ds_sigs_cors_filt) == 0 | max(ds_sigs_cors_filt$n_sigs) == 1) {
+      return(list(best_sigs = NA,
+                  essential_genes = NA))
+    }
+
+    if (max(ds_sigs_cors_filt$ds_frac) < 0.5) {
+      ds_frac_cutoff <- max(ds_sigs_cors_filt$ds_frac)
+    }else{
+      ds_frac_cutoff <- 0.5
+    }
+
+
     # Find essential genes
     top_sigs <- ds_sigs_cors %>%
       filter(ds %in% ds2use) %>%
@@ -465,7 +485,7 @@ filterSignatures <- function(ref, labels, filtering_data, signatures, top_sigs_f
       group_by(sig) %>%
       summarise(n_sigs = n()) %>%
       mutate(ds_frac = n_sigs/length(ds2use)) %>%
-      filter(ds_frac >= 0.5) %>% # Must be in at least 50% of the datasets
+      filter(ds_frac >= ds_frac_cutoff) %>% # Must be in at least 50% of the datasets
       pull(sig)
 
     top_genes <- sort(table(unlist(signatures_ctoi[top_sigs])),decreasing = T)/length(top_sigs)
@@ -503,13 +523,8 @@ filterSignatures <- function(ref, labels, filtering_data, signatures, top_sigs_f
       pull(genes)
 
 
-    rho_weighted_sigs <- ds_sigs_cors %>%
-      filter(ds %in% ds2use) %>%
-      filter(rho >= 0.6) %>%
-      group_by(sig) %>%
-      mutate(n_sigs = n()) %>%
-      mutate(ds_frac = n_sigs/length(ds2use)) %>%
-      filter(ds_frac >= 0.5) %>% # Must be in at least 50% of the datasets
+    rho_weighted_sigs <- ds_sigs_cors_filt %>%
+      filter(ds_frac >= ds_frac_cutoff) %>% # Must be in at least 50% of the datasets
       left_join(ds2n_samples, by = "ds") %>%
       ungroup() %>%
       mutate(weights = log(n_samples)*n_sigs) %>%
