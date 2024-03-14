@@ -59,7 +59,7 @@ xCell2Analysis <- function(mix, xcell2sigs, min_intersect = 0.9, predict, spillo
 
 
   # Rank mix gene expression matrix
-  mix_ranked <- singscore::rankGenes(mix)
+  mix_ranked <- singscore::rankGenes(mix[xcell2sigs@genes_used,])
 
   # Score and predict
   sigs_celltypes <- unique(unlist(lapply(names(xcell2sigs@signatures), function(x){strsplit(x, "#")[[1]][1]})))

@@ -383,6 +383,7 @@ createSignatures <- function(labels, dep_list, quantiles_matrix, probs, cor_mat,
 }
 filterSignatures <- function(ref, labels, filtering_data, signatures, top_sigs_frac, add_essential_genes, ncores){
 
+
   param <- BiocParallel::MulticoreParam(workers = ncores)
 
 
@@ -403,12 +404,14 @@ filterSignatures <- function(ref, labels, filtering_data, signatures, top_sigs_f
         return(NA)
       }
 
+      ctoi_mix <- filtering_data$mixture[[ds]]
       ctoi_samples <- filtering_data$truth[[ds]][ctoi,]
       ctoi_samples <- names(ctoi_samples[!is.na(ctoi_samples)])
-      ctoi_samples <- ctoi_samples[ctoi_samples %in% colnames(filtering_data$mixture[[ds]])]
+      ctoi_samples <- ctoi_samples[ctoi_samples %in% colnames(ctoi_mix)]
+      genes2use <- intersect(rownames(ctoi_mix), rownames(ref))
 
       #  Rank filtering dataset
-      ctoi_filt_ds_ranked <- singscore::rankGenes(filtering_data$mixture[[ds]][, ctoi_samples])
+      ctoi_filt_ds_ranked <- singscore::rankGenes(ctoi_mix[, ctoi_samples])
 
       # Score
       scores <- sapply(signatures_ctoi, simplify = TRUE, function(sig){
@@ -457,21 +460,18 @@ filterSignatures <- function(ref, labels, filtering_data, signatures, top_sigs_f
                   essential_genes = NA))
     }
 
-    # Remove signatures with low correlation
-    ds_sigs_cors_filt <- ds_sigs_cors %>%
-      filter(ds %in% ds2use) %>%
-      filter(rho >= 0.6)
-
-    if (nrow(ds_sigs_cors_filt) == 0) {
-      return(list(best_sigs = NA,
-                  essential_genes = NA))
-    }
-
+    ds_sigs_cors <- ds_sigs_cors %>%
+      filter(ds %in% ds2use)
 
     # Find essential genes
-    top_sigs <- ds_sigs_cors_filt %>%
-      group_by(ds) %>%
-      top_frac(0.25, wt=rho) %>% # Top 25% signatures per dataset
+    top_sigs <- ds_sigs_cors %>%
+      filter(rho >= 0.6) %>%
+      # group_by(ds) %>%
+      # top_frac(0.25, wt=rho) %>% # Top 25% correlation per dataset
+      group_by(sig) %>%
+      summarise(n_sigs = n()) %>%
+      mutate(ds_frac = n_sigs/length(ds2use)) %>%
+      filter(ds_frac >= 0.5) %>% # Must be in at least 50% of the datasets %>%
       pull(sig) %>%
       unique()
 
@@ -508,27 +508,29 @@ filterSignatures <- function(ref, labels, filtering_data, signatures, top_sigs_f
         summarise(weighted_z = weighted.mean(x=z, w=weights)) %>%
         mutate(rho_weigted = (exp(2 * weighted_z) - 1) / (exp(2 * weighted_z) + 1)) %>%
         filter(rho_weigted >= 0.3) %>% # Genes must have at least 0.3 weighted correlation with the filtering data
+        top_frac(0.1, wt=rho_weigted) %>%
         pull(genes)
+
+      if (length(essential_genes) == 0) {
+        essential_genes <- NA
+      }
+
     }else{
       essential_genes <- NA
     }
 
 
     # Find best signatures
-    n_ds <- length(unique(ds_sigs_cors_filt$ds))
-
-    rho_weighted_sigs <- ds_sigs_cors_filt %>%
-      group_by(sig) %>%
-      mutate(n_sigs = n()) %>%
+    rho_weighted_sigs <- ds_sigs_cors[ds_sigs_cors$sig %in% top_sigs,] %>%
       left_join(ds2n_samples, by = "ds") %>%
       ungroup() %>%
-      mutate(weights = log(n_samples)*(n_sigs)^2) %>%
+      mutate(weights = log(n_samples)) %>%
       mutate(z = 0.5 * log((1 + rho) / (1 - rho))) %>%
       group_by(sig) %>%
       summarise(weighted_z = weighted.mean(x=z, w=weights)) %>%
       mutate(rho_weigted = (exp(2 * weighted_z) - 1) / (exp(2 * weighted_z) + 1))
 
-    top_sigs_frac_adjusted <- ifelse(nrow(rho_weighted_sigs) > 3, top_sigs_frac, 1)
+    top_sigs_frac_adjusted <- ifelse(nrow(rho_weighted_sigs)*top_sigs_frac > 10, top_sigs_frac, 10/nrow(rho_weighted_sigs)) # Minimum 10 signatures
 
     best_sigs <- rho_weighted_sigs %>%
       top_frac(top_sigs_frac_adjusted, wt = rho_weigted) %>%
