@@ -510,7 +510,7 @@ filterSignatures <- function(ref, labels, filtering_data, signatures, top_sigs_f
         filter(rho_weigted >= 0.3) %>% # Genes must have at least 0.3 weighted correlation with the filtering data
         pull(genes)
     }else{
-      essential_genes <- c()
+      essential_genes <- NA
     }
 
 
@@ -534,27 +534,9 @@ filterSignatures <- function(ref, labels, filtering_data, signatures, top_sigs_f
       top_frac(top_sigs_frac_adjusted, wt = rho_weigted) %>%
       pull(sig)
 
-    # rho_weighted_sigs <- ds_sigs_cors %>%
-    #   filter(ds %in% ds2use) %>%
-    #   mutate(z = 0.5 * log((1 + rho) / (1 - rho))) %>%
-    #   left_join(ds2n_samples, by = "ds") %>%
-    #   group_by(sig) %>%
-    #   mutate(weights = log(n_samples)) %>%
-    #   summarise(weighted_z = weighted.mean(x=z, w=weights)) %>%
-    #   mutate(rho_weigted = (exp(2 * weighted_z) - 1) / (exp(2 * weighted_z) + 1)) %>%
-    #   mutate(celltype = ctoi)
-
-    # # Filter signatures
-    # best_sigs <- rho_weighted_sigs %>%
-    #   top_frac(top_sigs_frac, wt = weighted_z) %>%
-    #   pull(sig)
-    #
-    # if (length(best_sigs) < 10) {
-    #   best_sigs <- rho_weighted_sigs %>%
-    #     top_n(10, wt = rho_weigted) %>%
-    #     pull(sig)
-    # }
-
+    if(length(best_sigs) == 0){
+      best_sigs <- NA
+    }
 
     return(list(best_sigs = best_sigs,
                 essential_genes = essential_genes))
@@ -562,30 +544,35 @@ filterSignatures <- function(ref, labels, filtering_data, signatures, top_sigs_f
   }, BPPARAM = param)
   names(filt_sigs) <- shared_cts
 
+
+  # Filter genes
+  for(ctoi in shared_cts){
+    ctoi_best_sigs <- filt_sigs[[ctoi]]$best_sigs
+    if (!is.na(ctoi_best_sigs)) {
+      ctoi_sigs <- names(signatures)[startsWith(names(signatures), paste0(ctoi, "#"))]
+      sigs2remove <- ctoi_sigs[!ctoi_sigs %in% ctoi_best_sigs]
+      signatures <- signatures[!names(signatures) %in% sigs2remove]
+    }
+
+    ctoi_essential_genes <- filt_sigs[[ctoi]]$essential_genes
+    if (add_essential_genes & all(!is.na(ctoi_essential_genes))) {
+      # Add essential genes
+      ctoi_sigs <- names(signatures)[startsWith(names(signatures), paste0(ctoi, "#"))]
+      for (sig in ctoi_sigs) {
+        signatures[sig][[1]] <- unique(c(signatures[sig][[1]], ctoi_essential_genes))
+      }
+    }
+  }
+
   # Remove cell types with no filtering
   filt_sigs <- filt_sigs[sapply(shared_cts, function(ctoi){
     all(!is.na(filt_sigs[[ctoi]]$best_sigs))
   })]
   filts_ct <- names(filt_sigs)
 
-  # Filter genes
-  for(ctoi in filts_ct){
-    ctoi_sigs <- names(signatures)[startsWith(names(signatures), paste0(ctoi, "#"))]
-    sigs2remove <- ctoi_sigs[!ctoi_sigs %in% filt_sigs[[ctoi]]$best_sigs]
-    signatures <- signatures[!names(signatures) %in% sigs2remove]
-
-    if (add_essential_genes) {
-      # Add essential genes
-      for (sig in filt_sigs[[ctoi]]$best_sigs) {
-        signatures[sig][[1]] <- unique(c(signatures[sig][[1]], filt_sigs[[ctoi]]$essential_genes))
-      }
-    }
-  }
-
-
   message("> Signatures from ", length(filts_ct), " cell types have been filtered.")
   if (add_essential_genes) {
-    message("> ", length(unique(unlist(lapply(filt_sigs, function(x){x$essential_genes})))), " essential genes have been add to the filtered signatures.")
+    message("> ", length(unique(unlist(lapply(filt_sigs, function(x){x$essential_genes})))), " essential genes have been added to signatures.")
   }
   out <- list(filt_sigs = signatures,
               filt_cts = filts_ct)
