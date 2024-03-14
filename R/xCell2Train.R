@@ -548,7 +548,7 @@ filterSignatures <- function(ref, labels, filtering_data, signatures, top_sigs_f
   # Filter genes
   for(ctoi in shared_cts){
     ctoi_best_sigs <- filt_sigs[[ctoi]]$best_sigs
-    if (!is.na(ctoi_best_sigs)) {
+    if (all(!is.na(ctoi_best_sigs))) {
       ctoi_sigs <- names(signatures)[startsWith(names(signatures), paste0(ctoi, "#"))]
       sigs2remove <- ctoi_sigs[!ctoi_sigs %in% ctoi_best_sigs]
       signatures <- signatures[!names(signatures) %in% sigs2remove]
