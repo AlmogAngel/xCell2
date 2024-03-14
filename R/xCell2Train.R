@@ -465,9 +465,8 @@ filterSignatures <- function(ref, labels, filtering_data, signatures, top_sigs_f
 
     # Find essential genes
     top_sigs <- ds_sigs_cors %>%
-      filter(rho >= 0.6) %>%
-      # group_by(ds) %>%
-      # top_frac(0.25, wt=rho) %>% # Top 25% correlation per dataset
+      group_by(ds) %>%
+      top_frac(0.25, wt=rho) %>% # Top 25% correlation per dataset
       group_by(sig) %>%
       summarise(n_sigs = n()) %>%
       mutate(ds_frac = n_sigs/length(ds2use)) %>%
@@ -508,7 +507,7 @@ filterSignatures <- function(ref, labels, filtering_data, signatures, top_sigs_f
         summarise(weighted_z = weighted.mean(x=z, w=weights)) %>%
         mutate(rho_weigted = (exp(2 * weighted_z) - 1) / (exp(2 * weighted_z) + 1)) %>%
         filter(rho_weigted >= 0.3) %>% # Genes must have at least 0.3 weighted correlation with the filtering data
-        top_frac(0.1, wt=rho_weigted) %>%
+        top_frac(0.5, wt=rho_weigted) %>%
         pull(genes)
 
       if (length(essential_genes) == 0) {
