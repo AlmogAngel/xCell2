@@ -564,7 +564,13 @@ filterSignatures <- function(ref, labels, filtering_data, signatures, top_sigs_f
     }
   }
 
-  # Remove cell types with no filtering
+  # Remove duplicate signatures
+  sigs_sorted <- lapply(signatures, function(x) sort(x))
+  sigs_sorted_collapsed <- sapply(sigs_sorted, paste, collapse = ",")
+  duplicated_sigs <- duplicated(sigs_sorted_collapsed)
+  signatures <- signatures[!duplicated_sigs]
+
+  # Number of  cell types passed filtering
   filt_sigs <- filt_sigs[sapply(shared_cts, function(ctoi){
     all(!is.na(filt_sigs[[ctoi]]$best_sigs))
   })]
@@ -639,16 +645,16 @@ makeSimulations <- function(ref, mix, signatures, labels, gep_mat, ref_type, dep
   }
   getControls <- function(ctoi, controls, mix_ranked, gep_mat_linear, signatures, dep_cts, sim_fracs, cor_mat, n_sims){
 
-    # # Learn shift value from mixture
-    # signatures_ctoi <- signatures[startsWith(names(signatures), paste0(ctoi, "#"))]
-    # scores_ctoi_mix <- sapply(signatures_ctoi, simplify = TRUE, function(sig){
-    #   suppressWarnings(singscore::simpleScore(mix_ranked, upSet = sig, centerScore = FALSE)$TotalScore)
-    # })
-    # shift_value <- min(Rfast::rowmeans(scores_ctoi_mix))
+    # Learn shift value from mixture
+    signatures_ctoi <- signatures[startsWith(names(signatures), paste0(ctoi, "#"))]
+    scores_ctoi_mix <- sapply(signatures_ctoi, simplify = TRUE, function(sig){
+      suppressWarnings(singscore::simpleScore(mix_ranked, upSet = sig, centerScore = FALSE)$TotalScore)
+    })
+    shift_value <- min(Rfast::rowmeans(scores_ctoi_mix))
 
 
     # Generate sets of different controls combinations
-    n_sets <- n_sims*1
+    n_sets <- n_sims*200
     controls_sets <- lapply(1:n_sets, function(c){
       sampleControls(ctoi, controls, dep_cts, cor_mat)
     })
@@ -660,36 +666,36 @@ makeSimulations <- function(ref, mix, signatures, labels, gep_mat, ref_type, dep
       fracs2use <- numbers / sum(numbers)
     })
 
-    # controls_sets_mat <- sapply(1:n_sets, function(s){
-    #
-    #   controls2use <- controls_sets[[s]]
-    #
-    #   if (length(controls2use) > 1) {
-    #     controls_mat <- gep_mat_linear[,controls2use]
-    #   }else{
-    #     controls_mat <- matrix(rep(gep_mat_linear[,controls2use], length(sim_fracs)), byrow = FALSE, ncol = length(sim_fracs), dimnames = list(rownames(gep_mat_linear), sim_fracs))
-    #   }
-    #
-    #   fracs2use <- controls_props[[s]]
-    #
-    #   rowSums(controls_mat %*% diag(fracs2use))
-    # })
-    #
-    # controls_mat_ranked <- singscore::rankGenes(controls_sets_mat)
-    # controls_mat_scores <- sapply(signatures_ctoi, simplify = TRUE, function(sig){
-    #   suppressWarnings(singscore::simpleScore(controls_mat_ranked, upSet = sig, centerScore = FALSE)$TotalScore)
-    # })
-    #
-    # controls_shift_values <- Rfast::rowmeans(controls_mat_scores)
-    # controls_shifts_distance <- abs(controls_shift_values - shift_value)
-    # names(controls_shifts_distance) <- names(controls_sets)
-    # best_sims <- names(sort(controls_shifts_distance)[1:n_sims])
-    #
-    # return(list(c = controls_sets[best_sims],
-    #             p = controls_props[best_sims]))
+    controls_sets_mat <- sapply(1:n_sets, function(s){
 
-    return(list(c = controls_sets,
-                p = controls_props))
+      controls2use <- controls_sets[[s]]
+
+      if (length(controls2use) > 1) {
+        controls_mat <- gep_mat_linear[,controls2use]
+      }else{
+        controls_mat <- matrix(rep(gep_mat_linear[,controls2use], length(sim_fracs)), byrow = FALSE, ncol = length(sim_fracs), dimnames = list(rownames(gep_mat_linear), sim_fracs))
+      }
+
+      fracs2use <- controls_props[[s]]
+
+      rowSums(controls_mat %*% diag(fracs2use))
+    })
+
+    controls_mat_ranked <- singscore::rankGenes(controls_sets_mat)
+    controls_mat_scores <- sapply(signatures_ctoi, simplify = TRUE, function(sig){
+      suppressWarnings(singscore::simpleScore(controls_mat_ranked, upSet = sig, centerScore = FALSE)$TotalScore)
+    })
+
+    controls_shift_values <- Rfast::rowmeans(controls_mat_scores)
+    controls_shifts_distance <- abs(controls_shift_values - shift_value)
+    names(controls_shifts_distance) <- names(controls_sets)
+    best_sims <- names(sort(controls_shifts_distance)[1:n_sims])
+
+    return(list(c = controls_sets[best_sims],
+                p = controls_props[best_sims]))
+
+    # return(list(c = controls_sets,
+    #             p = controls_props))
 
   }
 
@@ -1204,7 +1210,7 @@ setClass("xCell2Signatures", slots = list(
 xCell2Train <- function(ref, labels, mix = NULL, ref_type, filtering_data = NULL, lineage_file = NULL, top_genes_frac = 1, medianGEP = TRUE, seed = 123, probs = c(0.01, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.4),
                         sim_fracs = c(seq(0, 0.05, 0.001), seq(0.06, 0.1, 0.005), seq(0.11, 0.25, 0.01)), diff_vals = round(c(log2(1), log2(1.5), log2(2), log2(2.5), log2(3), log2(4), log2(5), log2(10), log2(20)), 3),
                         min_genes = 3, max_genes = 150, return_sigs = FALSE, return_sigs_filt = FALSE, sigsFile = NULL, minPBcells = 30, minPBsamples = 10,
-                        ct_sims = 10, samples_frac = 0.1, simMethod = "ref_multi", nCores = 1, top_sigs_frac = 0.05, external_essential_genes = NULL, return_analysis = FALSE, add_essential_genes = TRUE){
+                        ct_sims = 5, samples_frac = 0.1, simMethod = "ref_multi", nCores = 1, top_sigs_frac = 0.05, external_essential_genes = NULL, return_analysis = FALSE, add_essential_genes = TRUE){
 
 
   # Validate inputs
