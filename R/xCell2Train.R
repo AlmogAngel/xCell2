@@ -457,83 +457,79 @@ filterSignatures <- function(ref, labels, filtering_data, signatures, top_sigs_f
                   essential_genes = NA))
     }
 
+    # Remove signatures with low correlation
     ds_sigs_cors_filt <- ds_sigs_cors %>%
       filter(ds %in% ds2use) %>%
-      filter(rho >= 0.6) %>%
-      group_by(sig) %>%
-      mutate(n_sigs = n()) %>%
-      mutate(ds_frac = n_sigs/length(ds2use))
+      filter(rho >= 0.6)
 
-    if (nrow(ds_sigs_cors_filt) == 0 | max(ds_sigs_cors_filt$n_sigs) == 1) {
+    if (nrow(ds_sigs_cors_filt) == 0) {
       return(list(best_sigs = NA,
                   essential_genes = NA))
     }
 
-    if (max(ds_sigs_cors_filt$ds_frac) < 0.5) {
-      ds_frac_cutoff <- max(ds_sigs_cors_filt$ds_frac)
+
+    # Find essential genes
+    top_sigs <- ds_sigs_cors_filt %>%
+      group_by(ds) %>%
+      top_frac(0.25, wt=rho) %>% # Top 25% signatures per dataset
+      pull(sig) %>%
+      unique()
+
+    top_genes <- sort(table(unlist(signatures_ctoi[top_sigs])), decreasing = T)/length(top_sigs)
+    top_genes <- names(top_genes[top_genes>=0.5]) # Must be in at least 50% of the signatures
+
+    if (length(top_genes) > 0) {
+      ds_top_genes_cors <- lapply(ds2use, function(ds){
+
+        true_fracs <- filtering_data$truth[[ds]][ctoi,]
+        true_fracs <- true_fracs[!is.na(true_fracs)]
+        top_genes_ctoi_mat <- filtering_data$mixture[[ds]]
+        ds_top_genes <- intersect(top_genes, rownames(top_genes_ctoi_mat))
+        samples <- intersect(names(true_fracs) , colnames(top_genes_ctoi_mat))
+        true_fracs <- true_fracs[samples]
+        top_genes_ctoi_mat <- top_genes_ctoi_mat[ds_top_genes, samples]
+
+        cors <- apply(top_genes_ctoi_mat, 1, function(x){
+          cor(x, true_fracs, method = "spearman", use = "pairwise.complete.obs")
+        })
+
+
+        return(cors)
+
+      })
+      names(ds_top_genes_cors) <- ds2use
+
+      essential_genes <- enframe(ds_top_genes_cors, name = "ds", value = "rho") %>%
+        left_join(ds2n_samples, by = "ds") %>%
+        unnest_longer(rho, indices_to = "genes") %>%
+        mutate(z = 0.5 * log((1 + rho) / (1 - rho))) %>%
+        mutate(weights = log(n_samples)) %>%
+        group_by(genes) %>%
+        summarise(weighted_z = weighted.mean(x=z, w=weights)) %>%
+        mutate(rho_weigted = (exp(2 * weighted_z) - 1) / (exp(2 * weighted_z) + 1)) %>%
+        filter(rho_weigted >= 0.3) %>% # Genes must have at least 0.3 weighted correlation with the filtering data
+        pull(genes)
     }else{
-      ds_frac_cutoff <- 0.5
+      essential_genes <- c()
     }
 
 
-    # Find essential genes
-    top_sigs <- ds_sigs_cors %>%
-      filter(ds %in% ds2use) %>%
-      group_by(ds) %>%
-      top_frac(0.5, wt=rho) %>% # Top 50% correlation per dataset
-      filter(rho >= 0.6) %>% # !!!!!!!!!!!!!!!!!!!!!! new
-      group_by(sig) %>%
-      summarise(n_sigs = n()) %>%
-      mutate(ds_frac = n_sigs/length(ds2use)) %>%
-      filter(ds_frac >= ds_frac_cutoff) %>% # Must be in at least 50% of the datasets
-      pull(sig)
-
-    top_genes <- sort(table(unlist(signatures_ctoi[top_sigs])),decreasing = T)/length(top_sigs)
-    top_genes <- names(top_genes[top_genes>=0.5]) # Must be in at least 50% of the signatures
-
-    ds_top_genes_cors <- lapply(ds2use, function(ds){
-
-      true_fracs <- filtering_data$truth[[ds]][ctoi,]
-      true_fracs <- true_fracs[!is.na(true_fracs)]
-      top_genes_ctoi_mat <- filtering_data$mixture[[ds]]
-      ds_top_genes <- intersect(top_genes, rownames(top_genes_ctoi_mat))
-      samples <- intersect(names(true_fracs) , colnames(top_genes_ctoi_mat))
-      true_fracs <- true_fracs[samples]
-      top_genes_ctoi_mat <- top_genes_ctoi_mat[ds_top_genes, samples]
-
-      cors <- apply(top_genes_ctoi_mat, 1, function(x){
-        cor(x, true_fracs, method = "spearman", use = "pairwise.complete.obs")
-      })
-
-
-      return(cors)
-
-    })
-    names(ds_top_genes_cors) <- ds2use
-
-    essential_genes <- enframe(ds_top_genes_cors, name = "ds", value = "rho") %>%
-      left_join(ds2n_samples, by = "ds") %>%
-      unnest_longer(rho, indices_to = "genes") %>%
-      mutate(z = 0.5 * log((1 + rho) / (1 - rho))) %>%
-      mutate(weights = log(n_samples)) %>%
-      group_by(genes) %>%
-      summarise(weighted_z = weighted.mean(x=z, w=weights)) %>%
-      mutate(rho_weigted = (exp(2 * weighted_z) - 1) / (exp(2 * weighted_z) + 1)) %>%
-      filter(rho_weigted >= 0.3) %>% # Genes must have at least 0.3 weighted correlation with the filtering data
-      pull(genes)
-
+    # Find best signatures
+    n_ds <- length(unique(ds_sigs_cors_filt$ds))
 
     rho_weighted_sigs <- ds_sigs_cors_filt %>%
-      filter(ds_frac >= ds_frac_cutoff) %>% # Must be in at least 50% of the datasets
+      group_by(sig) %>%
+      mutate(n_sigs = n()) %>%
       left_join(ds2n_samples, by = "ds") %>%
       ungroup() %>%
-      mutate(weights = log(n_samples)*n_sigs) %>%
+      mutate(weights = log(n_samples)*(n_sigs)^2) %>%
       mutate(z = 0.5 * log((1 + rho) / (1 - rho))) %>%
       group_by(sig) %>%
       summarise(weighted_z = weighted.mean(x=z, w=weights)) %>%
       mutate(rho_weigted = (exp(2 * weighted_z) - 1) / (exp(2 * weighted_z) + 1))
 
-    top_sigs_frac_adjusted <- ifelse(nrow(rho_weighted_sigs) > 10, top_sigs_frac, 1)
+    top_sigs_frac_adjusted <- ifelse(nrow(rho_weighted_sigs) > 3, top_sigs_frac, 1)
+
     best_sigs <- rho_weighted_sigs %>%
       top_frac(top_sigs_frac_adjusted, wt = rho_weigted) %>%
       pull(sig)
@@ -1221,7 +1217,7 @@ setClass("xCell2Signatures", slots = list(
 xCell2Train <- function(ref, labels, mix = NULL, ref_type, filtering_data = NULL, lineage_file = NULL, top_genes_frac = 1, medianGEP = TRUE, seed = 123, probs = c(0.01, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.4),
                         sim_fracs = c(seq(0, 0.05, 0.001), seq(0.06, 0.1, 0.005), seq(0.11, 0.25, 0.01)), diff_vals = round(c(log2(1), log2(1.5), log2(2), log2(2.5), log2(3), log2(4), log2(5), log2(10), log2(20)), 3),
                         min_genes = 3, max_genes = 150, return_sigs = FALSE, return_sigs_filt = FALSE, sigsFile = NULL, minPBcells = 30, minPBsamples = 10,
-                        ct_sims = 10, samples_frac = 0.1, simMethod = "ref_multi", nCores = 1, top_sigs_frac = 0.1, external_essential_genes = NULL, return_analysis = FALSE, add_essential_genes = TRUE){
+                        ct_sims = 10, samples_frac = 0.1, simMethod = "ref_multi", nCores = 1, top_sigs_frac = 0.05, external_essential_genes = NULL, return_analysis = FALSE, add_essential_genes = TRUE){
 
 
   # Validate inputs
