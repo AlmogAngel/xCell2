@@ -1209,7 +1209,7 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type, filtering_data = NULL
   # Learn linear transformation parameters
   message("Learning linear transformation parameters...")
   params <- learnParams(simulations_scored, ncores = nCores)
-  data_transfomed <- linearTransform(params, simulations_scored, filtering_data, signatures, min_filt_ds, ref, ncores)
+  data_transfomed <- linearTransform(params, simulations_scored, filtering_data, signatures, min_filt_ds, ref, nCores)
 
   # Train linear models
   message("Training models...")
