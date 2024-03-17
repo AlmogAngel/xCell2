@@ -823,12 +823,11 @@ learnParams <- function(simulations_scored, ncores){
   linearParams <- BiocParallel::bplapply(celltypes, function(ctoi){
     tp <- simulations_scored[[ctoi]] %>%
       group_by(celltype, sig, frac) %>%
-      summarise(score = mean(score)) %>%
+      summarise(score = mean(score), .groups = "drop") %>%
       group_by(celltype, frac) %>%
-      summarise(score = mean(score)) %>%
+      summarise(score = mean(score), .groups = "drop") %>%
       mutate(score = score - min(score)) %>%
       filter(frac > 0) %>%
-      group_by(celltype) %>%
       summarise(tp = list(try(minpack.lm::nlsLM(score ~ a * frac^b, start = list(a=1, b=1), control = list(maxiter = 500)), silent = TRUE))) %>%
       pull(tp)
 
@@ -851,12 +850,14 @@ linearTransform <- function(params, simulations_scored, filtering_data, signatur
   simulations_transformed <- simulations_scored %>%
     bind_rows() %>%
     group_by(celltype, sig, frac) %>%
-    summarise(score = mean(score)) %>%
+    summarise(score = mean(score), .groups = "drop") %>%
     group_by(celltype, frac) %>%
-    summarise(score = mean(score)) %>%
+    summarise(score = mean(score), .groups = "drop_last") %>%
     mutate(score = score - min(score)) %>%
+    left_join(params, by = "celltype") %>%
+    group_by(celltype) %>%
     mutate(score = (score^(1/b)) / a) %>%
-    ungroup() %>%
+    select(-c(a, b)) %>%
     pivot_wider(names_from = celltype, values_from = score) %>%
     as.data.frame()
 
@@ -1066,6 +1067,7 @@ setClass("xCell2Signatures", slots = list(
   signatures = "list",
   dependencies = "list",
   models = "data.frame",
+  params = "data.frame",
   spill_mat = "matrix",
   genes_used = "character"
 ))
@@ -1118,11 +1120,12 @@ setClass("xCell2Signatures", slots = list(
 #' @param add_essential_genes description
 #' @param return_analysis description
 #' @param min_filt_ds description
+#' @param predict_res description
 #' @return An S4 object containing the signatures, cell type labels, and cell type dependencies.
 #' @export
 xCell2Train <- function(ref, labels, mix = NULL, ref_type, filtering_data = NULL, lineage_file = NULL, top_genes_frac = 1, medianGEP = TRUE, seed = 123, probs = c(0.01, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.4),
                         sim_fracs = c(seq(0, 0.05, 0.001), seq(0.06, 0.1, 0.005), seq(0.11, 0.25, 0.01)), diff_vals = round(c(log2(1), log2(1.5), log2(2), log2(2.5), log2(3), log2(4), log2(5), log2(10), log2(20)), 3),
-                        min_genes = 3, max_genes = 150, return_sigs = FALSE, return_sigs_filt = FALSE, sigsFile = NULL, minPBcells = 30, minPBsamples = 10, min_filt_ds = 2,
+                        min_genes = 3, max_genes = 150, return_sigs = FALSE, return_sigs_filt = FALSE, sigsFile = NULL, minPBcells = 30, minPBsamples = 10, min_filt_ds = 2, predict_res = TRUE,
                         ct_sims = 10, samples_frac = 0.1, simMethod = "ref_multi", nCores = 1, top_sigs_frac = 0.05, external_essential_genes = NULL, return_analysis = FALSE, add_essential_genes = TRUE){
 
 
@@ -1206,7 +1209,7 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type, filtering_data = NULL
   # Learn linear transformation parameters
   message("Learning linear transformation parameters...")
   params <- learnParams(simulations_scored, ncores = nCores)
-  data_transfomed <- linearTransform(params, simulations_scored, filtering_data, min_filt_ds, signatures, ref, ncores)
+  data_transfomed <- linearTransform(params, simulations_scored, filtering_data, signatures, min_filt_ds, ref, ncores)
 
   # Train linear models
   message("Training models...")
@@ -1224,17 +1227,16 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type, filtering_data = NULL
   xCell2Sigs.S4 <- new("xCell2Signatures",
                        signatures = signatures,
                        dependencies = dep_list,
+                       params = params,
                        models = models,
                        spill_mat = matrix(),
-                       genes_used = rownames(ref)) ###################### Important!!!!
-
-
+                       genes_used = rownames(ref))
   message("Custom xCell2.0 reference ready!")
 
 
-
   if (return_analysis) {
-    res <-  xCell2::xCell2Analysis(mix, xcell2sigs = xCell2Sigs.S4, predict = TRUE, spillover = FALSE, ncores = nCores)
+    message("Running xCell2Analysis...")
+    res <-  xCell2::xCell2Analysis(mix, xcell2sigs = xCell2Sigs.S4, predict = predict_res, spillover = FALSE, ncores = nCores)
     return(res)
   }else{
     return(xCell2Sigs.S4)

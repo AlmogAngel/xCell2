@@ -36,11 +36,14 @@ xCell2Analysis <- function(mix, xcell2sigs, min_intersect = 0.9, predict, spillo
   }
   predictFracs <- function(ctoi, scores, model_ctoi){
 
-    # predictions <- round(randomForestSRC::predict.rfsrc(model, newdata = as.data.frame(scores))$predicted, 4)
-    # predictions <- round(predict(model, scores, s = model$lambda, type = "response")[,1], 4)
-    predictions <- round(predict(model_ctoi, scores, type = "response"), 8)
 
+    if (class(model_ctoi) == "cv.glmnet") {
+      predictions <- round(as.numeric(predict(model_ctoi, newx = scores, s = "lambda.min")), 5)
+    }else{
+      predictions <- round(as.numeric(predict(model_ctoi, newdata = data.frame(score = rowMeans(scores)))), 5)
+    }
 
+    predictions[predictions<0] <- 0
     names(predictions) <- rownames(scores)
 
     return(predictions)
@@ -71,6 +74,12 @@ xCell2Analysis <- function(mix, xcell2sigs, min_intersect = 0.9, predict, spillo
 
     scores <- scoreMix(ctoi, mix_ranked, signatures_ctoi)
     if (predict) {
+      # Transform
+      a <- pull(filter(xcell2sigs@params, celltype == ctoi), a)
+      b <- pull(filter(xcell2sigs@params, celltype == ctoi), b)
+      scores <- apply(scores, 2, function(x){
+        (x^(1/b)) / a
+      })
       return(predictFracs(ctoi, scores, model_ctoi))
     }else{
       return(rowMeans(scores))
