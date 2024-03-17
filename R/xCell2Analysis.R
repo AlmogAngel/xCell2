@@ -38,6 +38,7 @@ xCell2Analysis <- function(mix, xcell2sigs, min_intersect = 0.9, predict, spillo
 
 
     if (class(model_ctoi) == "cv.glmnet") {
+      scores <- scores[,model_ctoi$glmnet.fit$beta@Dimnames[[1]]]
       predictions <- round(as.numeric(predict(model_ctoi, newx = scores, s = "lambda.min")), 5)
     }else{
       predictions <- round(as.numeric(predict(model_ctoi, newdata = data.frame(score = rowMeans(scores)))), 5)

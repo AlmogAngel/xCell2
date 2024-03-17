@@ -906,6 +906,8 @@ linearTransform <- function(params, simulations_scored, filtering_data, signatur
         cbind(frac = fracs, scores)
 
       })
+      sigs2use <- Reduce(intersect, lapply(ds_scores_list, colnames))
+      ds_scores_list <- lapply(ds_scores_list, function(x){x[,sigs2use]})
       ds_scores_mat <- Reduce(rbind, ds_scores_list)
 
       fracs <- ds_scores_mat[,1]
@@ -1214,7 +1216,6 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type, filtering_data = NULL
   # Train linear models
   message("Training models...")
   models <- trainModels(data_transfomed, ncores = nCores, seed2use = seed)
-
 
 
   # Get spillover matrix
