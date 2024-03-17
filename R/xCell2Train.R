@@ -937,7 +937,7 @@ linearTransform <- function(params, simulations_scored, filtering_data, signatur
               filt = filtering_transformed_list))
 
 }
-trainModels <- function(simulations_scored, params, ncores, seed2use){
+trainModels <- function(data_transfomed, params, ncores){
 
 
   fitModel <- function(data){
@@ -1215,7 +1215,7 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type, filtering_data = NULL
 
   # Train linear models
   message("Training models...")
-  models <- trainModels(data_transfomed, ncores = nCores, seed2use = seed)
+  models <- trainModels(data_transfomed, params, ncores = nCores)
 
 
   # Get spillover matrix
