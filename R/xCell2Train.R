@@ -452,7 +452,7 @@ filterSignatures <- function(ref, labels, filtering_data, signatures, top_sigs_f
     ds2use <- ds_sigs_cors %>%
       group_by(ds) %>%
       summarise(max_rho = max(rho)) %>%
-      filter(max_rho >= 0.6) %>%
+      filter(max_rho >= 0.5) %>%
       pull(ds)
 
     if (length(ds2use) == 0) {
@@ -470,7 +470,7 @@ filterSignatures <- function(ref, labels, filtering_data, signatures, top_sigs_f
       group_by(sig) %>%
       summarise(n_sigs = n()) %>%
       mutate(ds_frac = n_sigs/length(ds2use)) %>%
-      filter(ds_frac >= 0.5) %>% # Must be in at least 50% of the datasets %>%
+      filter(ds_frac > 0.5) %>% # Must be in at least 50% of the datasets %>%
       pull(sig) %>%
       unique()
 
@@ -491,7 +491,7 @@ filterSignatures <- function(ref, labels, filtering_data, signatures, top_sigs_f
         cors <- apply(top_genes_ctoi_mat, 1, function(x){
           cor(x, true_fracs, method = "spearman", use = "pairwise.complete.obs")
         })
-
+        cors[is.na(cors)] <- -1
 
         return(cors)
 
@@ -501,6 +501,8 @@ filterSignatures <- function(ref, labels, filtering_data, signatures, top_sigs_f
       essential_genes <- enframe(ds_top_genes_cors, name = "ds", value = "rho") %>%
         left_join(ds2n_samples, by = "ds") %>%
         unnest_longer(rho, indices_to = "genes") %>%
+        mutate(rho = ifelse(rho == 1, 0.99999, rho),
+               rho = ifelse(rho == -1, -0.99999, rho)) %>%
         mutate(z = 0.5 * log((1 + rho) / (1 - rho))) %>%
         mutate(weights = log(n_samples)) %>%
         group_by(genes) %>%
@@ -522,6 +524,8 @@ filterSignatures <- function(ref, labels, filtering_data, signatures, top_sigs_f
     # Find best signatures
     rho_weighted_sigs <- ds_sigs_cors[ds_sigs_cors$sig %in% top_sigs,] %>%
       left_join(ds2n_samples, by = "ds") %>%
+      mutate(rho = ifelse(rho == 1, 0.99999, rho),
+             rho = ifelse(rho == -1, -0.99999, rho)) %>%
       ungroup() %>%
       mutate(weights = log(n_samples)) %>%
       mutate(z = 0.5 * log((1 + rho) / (1 - rho))) %>%
