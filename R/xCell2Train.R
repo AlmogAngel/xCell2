@@ -448,7 +448,7 @@ filterSignatures <- function(ref, labels, filtering_data, signatures, top_sigs_f
       unnest_longer(value, values_to = "rho", indices_to = "sig")
 
 
-    # External dataset must max(rho) >= 0.6 to be used in filtering
+    # External dataset must max(rho) >= 0.5 to be used in filtering
     ds2use <- ds_sigs_cors %>%
       group_by(ds) %>%
       summarise(max_rho = max(rho)) %>%
@@ -466,13 +466,18 @@ filterSignatures <- function(ref, labels, filtering_data, signatures, top_sigs_f
     # Find essential genes
     top_sigs <- ds_sigs_cors %>%
       group_by(ds) %>%
-      top_frac(0.25, wt=rho) %>% # Top 25% correlation per dataset
+      top_frac(0.5, wt=rho) %>% # Top 50% correlation per dataset
       group_by(sig) %>%
       summarise(n_sigs = n()) %>%
       mutate(ds_frac = n_sigs/length(ds2use)) %>%
       filter(ds_frac > 0.5) %>% # Must be in at least 50% of the datasets %>%
       pull(sig) %>%
       unique()
+
+    if (length(top_sigs) == 0) {
+      return(list(best_sigs = NA,
+                  essential_genes = NA))
+    }
 
     top_genes <- sort(table(unlist(signatures_ctoi[top_sigs])), decreasing = T)/length(top_sigs)
     top_genes <- names(top_genes[top_genes>=0.5]) # Must be in at least 50% of the signatures
