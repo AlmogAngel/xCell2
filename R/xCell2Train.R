@@ -466,11 +466,12 @@ filterSignatures <- function(ref, labels, filtering_data, signatures, top_sigs_f
     # Find essential genes
     top_sigs <- ds_sigs_cors %>%
       group_by(ds) %>%
-      top_frac(0.5, wt=rho) %>% # Top 50% correlation per dataset
+      top_frac(0.25, wt=rho) %>% # Top 25% correlation per dataset
+      filter(rho >= 0.3) %>%
       group_by(sig) %>%
       summarise(n_sigs = n()) %>%
       mutate(ds_frac = n_sigs/length(ds2use)) %>%
-      filter(ds_frac > 0.5) %>% # Must be in at least 50% of the datasets %>%
+      filter(ds_frac >= 0.5) %>% # Must be in at least 50% of the datasets %>%
       pull(sig) %>%
       unique()
 
