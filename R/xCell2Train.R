@@ -451,8 +451,9 @@ filterSignatures <- function(ref, labels, filtering_data, signatures, top_sigs_f
     # External dataset must max(rho) >= 0.5 to be used in filtering
     ds2use <- ds_sigs_cors %>%
       group_by(ds) %>%
-      summarise(max_rho = max(rho)) %>%
-      filter(max_rho >= 0.5) %>%
+      #summarise(max_rho = max(rho)) %>%
+      summarise(median_rho = median(rho)) %>%
+      filter(median_rho >= 0.5) %>%
       pull(ds)
 
     if (length(ds2use) == 0) {
