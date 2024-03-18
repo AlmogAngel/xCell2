@@ -451,9 +451,8 @@ filterSignatures <- function(ref, labels, filtering_data, signatures, top_sigs_f
     # External dataset must max(rho) >= 0.5 to be used in filtering
     ds2use <- ds_sigs_cors %>%
       group_by(ds) %>%
-      #summarise(max_rho = max(rho)) %>%
-      summarise(median_rho = median(rho)) %>%
-      filter(median_rho >= 0.5) %>%
+      summarise(max_rho = max(rho)) %>%
+      filter(max_rho >= 0.2) %>%
       pull(ds)
 
     if (length(ds2use) == 0) {
@@ -464,14 +463,17 @@ filterSignatures <- function(ref, labels, filtering_data, signatures, top_sigs_f
     ds_sigs_cors <- ds_sigs_cors %>%
       filter(ds %in% ds2use)
 
-    # Find essential genes
-    top_sigs <- ds_sigs_cors %>%
+    # How many signatures are common in the top 25%
+    sig2ds_frac <- ds_sigs_cors %>%
+      filter(rho >= 0.2) %>%
       group_by(ds) %>%
       top_frac(0.25, wt=rho) %>% # Top 25% correlation per dataset
-      filter(rho >= 0.3) %>%
       group_by(sig) %>%
       summarise(n_sigs = n()) %>%
-      mutate(ds_frac = n_sigs/length(ds2use)) %>%
+      mutate(ds_frac = n_sigs/length(ds2use))
+
+    # Find essential genes
+    top_sigs <- sig2ds_frac %>%
       filter(ds_frac >= 0.5) %>% # Must be in at least 50% of the datasets %>%
       pull(sig) %>%
       unique()
@@ -540,16 +542,20 @@ filterSignatures <- function(ref, labels, filtering_data, signatures, top_sigs_f
 
 
     # Find best signatures
-    rho_weighted_sigs <- ds_sigs_cors[ds_sigs_cors$sig %in% top_sigs,] %>%
+    rho_weighted_sigs <- ds_sigs_cors %>%
+      left_join(sig2ds_frac, by ="sig") %>%
+      drop_na() %>%
       left_join(ds2n_samples, by = "ds") %>%
       mutate(rho = ifelse(rho == 1, 0.99999, rho),
              rho = ifelse(rho == -1, -0.99999, rho)) %>%
       ungroup() %>%
-      mutate(weights = log(n_samples)) %>%
+      mutate(weights = log(n_samples)*(n_sigs^2)) %>%
       mutate(z = 0.5 * log((1 + rho) / (1 - rho))) %>%
       group_by(sig) %>%
       summarise(weighted_z = weighted.mean(x=z, w=weights)) %>%
       mutate(rho_weigted = (exp(2 * weighted_z) - 1) / (exp(2 * weighted_z) + 1))
+
+
 
     top_sigs_frac_adjusted <- ifelse(nrow(rho_weighted_sigs)*top_sigs_frac > 10, top_sigs_frac, 10/nrow(rho_weighted_sigs)) # Minimum 10 signatures
 
