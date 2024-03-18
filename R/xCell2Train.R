@@ -906,12 +906,44 @@ linearTransform <- function(params, simulations_scored, filtering_data, signatur
         cbind(frac = fracs, scores)
 
       })
+
+      # Sort datasets by number of samples
+      nsamples <- sapply(ds_scores_list, nrow)
+      ds_scores_list <- ds_scores_list[order(nsamples)]
+      min_size <- min(nsamples)
+
+      # Split true fracs to bins
+      fracs_list <- sapply(ds_scores_list, function(ds){ds[,1]})
+      q_bins <- cut(unlist(fracs), breaks = quantile(fracs, probs = seq(0, 1, length.out = min_size + 1)), include.lowest = TRUE)
+      names(q_bins) <- names(unlist(fracs))
+
+      # Balance datasets
+      samples2use <- c()
+      for (q in unique(q_bins)) {
+
+        qbinsampsle2use <- c()
+        for (ds in fracs_list) {
+          qbinsampsle2use <- c(qbinsampsle2use, names(ds)[names(ds) %in% names(q_bins[q_bins == q])])
+          if (length(qbinsampsle2use) >=  min_size) {
+            qbinsampsle2use <- qbinsampsle2use[1:min_size]
+            break
+          }
+        }
+        samples2use <- c(samples2use, qbinsampsle2use)
+
+      }
+
+
       sigs2use <- Reduce(intersect, lapply(ds_scores_list, colnames))
       ds_scores_list <- lapply(ds_scores_list, function(x){x[,sigs2use]})
       ds_scores_mat <- Reduce(rbind, ds_scores_list)
 
-      fracs <- ds_scores_mat[,1]
-      scores <- ds_scores_mat[,-1]
+      fracs <- ds_scores_mat[samples2use, 1]
+      # Range of fracs must be at least 3% and at least 10 samples
+      if (max(fracs) - min(fracs) < 0.03 | length(fracs) < 10) {
+        return(NULL)
+      }
+      scores <- ds_scores_mat[samples2use, -1]
 
       # Transform
       a <- params[params$celltype == ctoi,]$a
@@ -1112,10 +1144,8 @@ setClass("xCell2Signatures", slots = list(
 #' @param minPBcells description
 #' @param minPBgroups description
 #' @param ct_sims description
-#' @param samples_frac description
 #' @param nCores description
 #' @param mix description
-#' @param simMethod description
 #' @param filtering_data description
 #' @param top_sigs_frac description
 #' @param external_essential_genes description
@@ -1128,7 +1158,7 @@ setClass("xCell2Signatures", slots = list(
 xCell2Train <- function(ref, labels, mix = NULL, ref_type, filtering_data = NULL, lineage_file = NULL, top_genes_frac = 1, medianGEP = TRUE, seed = 123, probs = c(0.01, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.4),
                         sim_fracs = c(seq(0, 0.05, 0.001), seq(0.06, 0.1, 0.005), seq(0.11, 0.25, 0.01)), diff_vals = round(c(log2(1), log2(1.5), log2(2), log2(2.5), log2(3), log2(4), log2(5), log2(10), log2(20)), 3),
                         min_genes = 3, max_genes = 150, return_sigs = FALSE, return_sigs_filt = FALSE, sigsFile = NULL, minPBcells = 30, minPBsamples = 10, min_filt_ds = 2, predict_res = TRUE,
-                        ct_sims = 10, samples_frac = 0.1, simMethod = "ref_multi", nCores = 1, top_sigs_frac = 0.05, external_essential_genes = NULL, return_analysis = FALSE, add_essential_genes = TRUE){
+                        ct_sims = 10,  nCores = 1, top_sigs_frac = 0.05, external_essential_genes = NULL, return_analysis = FALSE, add_essential_genes = TRUE){
 
 
   # Validate inputs
