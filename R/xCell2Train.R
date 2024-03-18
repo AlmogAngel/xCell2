@@ -482,6 +482,7 @@ filterSignatures <- function(ref, labels, filtering_data, signatures, top_sigs_f
 
     top_genes <- sort(table(unlist(signatures_ctoi[top_sigs])), decreasing = T)/length(top_sigs)
     top_genes <- names(top_genes[top_genes>=0.5]) # Must be in at least 50% of the signatures
+    top_genes <- intersect(top_genes, rownames(ref))
 
     if (length(top_genes) > 0) {
       ds_top_genes_cors <- lapply(ds2use, function(ds){
@@ -490,19 +491,29 @@ filterSignatures <- function(ref, labels, filtering_data, signatures, top_sigs_f
         true_fracs <- true_fracs[!is.na(true_fracs)]
         top_genes_ctoi_mat <- filtering_data$mixture[[ds]]
         ds_top_genes <- intersect(top_genes, rownames(top_genes_ctoi_mat))
+        if (length(ds_top_genes) == 0) {
+          return(NULL)
+
+        }
+
         samples <- intersect(names(true_fracs) , colnames(top_genes_ctoi_mat))
         true_fracs <- true_fracs[samples]
         top_genes_ctoi_mat <- top_genes_ctoi_mat[ds_top_genes, samples]
 
-        cors <- apply(top_genes_ctoi_mat, 1, function(x){
-          cor(x, true_fracs, method = "spearman", use = "pairwise.complete.obs")
-        })
-        cors[is.na(cors)] <- -1
+        if (class(top_genes_ctoi_mat)[1] == "numeric") {
+          cors <- cor(top_genes_ctoi_mat, true_fracs, method = "spearman", use = "pairwise.complete.obs")
+        }else{
+          cors <- apply(top_genes_ctoi_mat, 1, function(x){
+            cor(x, true_fracs, method = "spearman", use = "pairwise.complete.obs")
+          })
+        }
 
+        cors[is.na(cors)] <- -1
         return(cors)
 
       })
       names(ds_top_genes_cors) <- ds2use
+      ds_top_genes_cors <- ds_top_genes_cors[!sapply(ds_top_genes_cors, function(x){is.null(x[1])})]
 
       essential_genes <- enframe(ds_top_genes_cors, name = "ds", value = "rho") %>%
         left_join(ds2n_samples, by = "ds") %>%
