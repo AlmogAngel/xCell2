@@ -558,7 +558,6 @@ filterSignatures <- function(ref, labels, filtering_data, signatures, top_sigs_f
     # Find best signatures
     rho_weighted_sigs <- ds_sigs_cors %>%
       left_join(ds2n_samples, by = "ds") %>%
-      filter(rho >= 0.2) %>%  # Remove signatures with no correlation
       mutate(rho = ifelse(rho == 1, 0.99999, rho),
              rho = ifelse(rho == -1, -0.99999, rho)) %>%
       ungroup() %>%
