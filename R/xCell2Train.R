@@ -461,11 +461,12 @@ filterSignatures <- function(ref, labels, filtering_data, signatures, top_sigs_f
     }
 
     ds_sigs_cors <- ds_sigs_cors %>%
-      filter(ds %in% ds2use)
+      filter(ds %in% ds2use) %>%
+      filter(rho >= 0) # Remove signatures with no correlation
+
 
     # How many signatures are common in the top 25%
     sig2ds_frac <- ds_sigs_cors %>%
-      filter(rho >= 0.2) %>%  # Remove signatures with no correlation
       group_by(ds) %>%
       top_frac(0.25, wt=rho) %>% # Take top 25% correlation per dataset
       group_by(sig) %>%
@@ -541,27 +542,14 @@ filterSignatures <- function(ref, labels, filtering_data, signatures, top_sigs_f
 
 
     # Find best signatures
-    # rho_weighted_sigs <- ds_sigs_cors %>%
-    #   left_join(sig2ds_frac, by ="sig") %>%
-    #   drop_na() %>%
-    #   left_join(ds2n_samples, by = "ds") %>%
-    #   filter(rho >= 0.2) %>%  # Remove signatures with no correlation
-    #   mutate(rho = ifelse(rho == 1, 0.99999, rho),
-    #          rho = ifelse(rho == -1, -0.99999, rho)) %>%
-    #   ungroup() %>%
-    #   mutate(weights = log(n_samples)*(n_sigs^2)) %>%
-    #   mutate(z = 0.5 * log((1 + rho) / (1 - rho))) %>%
-    #   group_by(sig) %>%
-    #   summarise(weighted_z = weighted.mean(x=z, w=weights)) %>%
-    #   mutate(rho_weigted = (exp(2 * weighted_z) - 1) / (exp(2 * weighted_z) + 1))
-
-    # Find best signatures
     rho_weighted_sigs <- ds_sigs_cors %>%
+      left_join(sig2ds_frac, by ="sig") %>%
+      drop_na() %>%
       left_join(ds2n_samples, by = "ds") %>%
       mutate(rho = ifelse(rho == 1, 0.99999, rho),
              rho = ifelse(rho == -1, -0.99999, rho)) %>%
       ungroup() %>%
-      mutate(weights = log(n_samples)) %>%
+      mutate(weights = log(n_samples)*(n_sigs^2)) %>%
       mutate(z = 0.5 * log((1 + rho) / (1 - rho))) %>%
       group_by(sig) %>%
       summarise(weighted_z = weighted.mean(x=z, w=weights)) %>%
