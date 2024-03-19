@@ -448,11 +448,11 @@ filterSignatures <- function(ref, labels, filtering_data, signatures, top_sigs_f
       unnest_longer(value, values_to = "rho", indices_to = "sig")
 
 
-    # External dataset must max(rho) >= 0.6 to be used in filtering
+    # External dataset must max(rho) >= 0.5 to be used in filtering
     ds2use <- ds_sigs_cors %>%
       group_by(ds) %>%
       summarise(max_rho = max(rho)) %>%
-      filter(max_rho >= 0.6) %>%
+      filter(max_rho >= 0.5) %>%
       pull(ds)
 
     if (length(ds2use) == 0) {
@@ -467,7 +467,7 @@ filterSignatures <- function(ref, labels, filtering_data, signatures, top_sigs_f
     sig2ds_frac <- ds_sigs_cors %>%
       filter(rho >= 0.2) %>%  # Remove signatures with no correlation
       group_by(ds) %>%
-      top_frac(0.5, wt=rho) %>% # Take top 50% correlation per dataset
+      top_frac(0.25, wt=rho) %>% # Take top 25% correlation per dataset
       group_by(sig) %>%
       summarise(n_sigs = n()) %>%
       mutate(ds_frac = n_sigs/length(ds2use))
