@@ -452,7 +452,7 @@ filterSignatures <- function(ref, labels, filtering_data, signatures, top_sigs_f
     ds2use <- ds_sigs_cors %>%
       group_by(ds) %>%
       summarise(max_rho = max(rho)) %>%
-      filter(max_rho >= 0.5) %>%
+      filter(max_rho >= 0.6) %>%
       pull(ds)
 
     if (length(ds2use) == 0) {
@@ -461,8 +461,7 @@ filterSignatures <- function(ref, labels, filtering_data, signatures, top_sigs_f
     }
 
     ds_sigs_cors <- ds_sigs_cors %>%
-      filter(ds %in% ds2use) %>%
-      filter(rho >= 0) # Remove signatures with no correlation
+      filter(ds %in% ds2use)
 
 
     # How many signatures are common in the top 25%
