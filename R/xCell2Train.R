@@ -879,7 +879,7 @@ filterSignatures <- function(ref, labels, filtering_data, signatures, top_sigs_f
     top_sigs <- ds_sigs_cors %>%
       group_by(ds) %>%
       top_frac(0.25, wt=rho) %>% # Top 25% correlation per dataset
-      filter(rho >= 0.3) %>%
+      #filter(rho >= 0.3) %>%
       group_by(sig) %>%
       summarise(n_sigs = n()) %>%
       mutate(ds_frac = n_sigs/length(ds2use)) %>%
