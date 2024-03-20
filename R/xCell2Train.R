@@ -614,7 +614,7 @@ filterSignatures2 <- function(ref, labels, filtering_data, signatures, top_sigs_
 
   return(out)
 }
-filterSignatures <- function(ref, labels, filtering_data, signatures, top_sigs_frac, add_essential_genes, ncores){
+filterSignatures3 <- function(ref, labels, filtering_data, signatures, top_sigs_frac, add_essential_genes, ncores){
 
   param <- BiocParallel::MulticoreParam(workers = ncores)
 
@@ -787,6 +787,232 @@ filterSignatures <- function(ref, labels, filtering_data, signatures, top_sigs_f
   message("> Signatures from ", length(filts_ct), " cell types have been filtered.")
   if (add_essential_genes) {
     message("> ", length(unique(unlist(lapply(filt_sigs, function(x){x$essential_genes})))), " essential genes have been add to the filtered signatures.")
+  }
+  out <- list(filt_sigs = signatures,
+              filt_cts = filts_ct)
+
+  return(out)
+}
+filterSignatures <- function(ref, labels, filtering_data, signatures, top_sigs_frac, add_essential_genes, ncores){
+
+
+  param <- BiocParallel::MulticoreParam(workers = ncores)
+
+
+  celltypes <- unique(labels$label)
+  shared_cts <- intersect(celltypes, unlist(sapply(filtering_data$truth, rownames)))
+
+
+  filt_sigs <- BiocParallel::bplapply(shared_cts, function(ctoi){
+
+    # Get CTOI signatures
+    signatures_ctoi <- signatures[startsWith(names(signatures), paste0(ctoi, "#"))]
+
+    # Calculate CTOI correlations for each dataset in the filtering data
+    ds_cors_list <- sapply(names(filtering_data$mixture), function(ds){
+
+
+      if(!ctoi %in% rownames(filtering_data$truth[[ds]])){
+        return(NA)
+      }
+
+      ctoi_mix <- filtering_data$mixture[[ds]]
+      ctoi_samples <- filtering_data$truth[[ds]][ctoi,]
+      ctoi_samples <- names(ctoi_samples[!is.na(ctoi_samples)])
+      ctoi_samples <- ctoi_samples[ctoi_samples %in% colnames(ctoi_mix)]
+      genes2use <- intersect(rownames(ctoi_mix), rownames(ref))
+
+      #  Rank filtering dataset
+      ctoi_filt_ds_ranked <- singscore::rankGenes(ctoi_mix[, ctoi_samples])
+
+      # Score
+      scores <- sapply(signatures_ctoi, simplify = TRUE, function(sig){
+        suppressWarnings(singscore::simpleScore(ctoi_filt_ds_ranked, upSet = sig, centerScore = FALSE)$TotalScore)
+      })
+
+      # Remove signatures that failed to score
+      if (class(scores)[1] == "list") {
+        scores <- scores[lengths(scores) != 0]
+        scores <- sapply(scores, cbind)
+      }
+
+      # Calculate correlations
+      fracs <- filtering_data$truth[[ds]][ctoi, ctoi_samples]
+      cors <- apply(scores, 2, function(x){
+        cor(x, fracs, method = "spearman", use = "pairwise.complete.obs")
+      })
+
+      return(cors)
+
+    })
+    ds_cors_list <- ds_cors_list[lengths(ds_cors_list) > 1] # Remove NAs
+
+    # Get number of samples per dataset
+    ds2n_samples <- enframe(sapply(names(ds_cors_list), function(ds){
+      mix_samples <- colnames(filtering_data$mixture[[ds]])
+      truth_samples <- filtering_data$truth[[ds]][ctoi,]
+      truth_samples <- names(truth_samples[!is.na(truth_samples)])
+      n_samples <- length(intersect(mix_samples, truth_samples))
+      n_samples
+    }), name = "ds", value = "n_samples")
+
+    ds_sigs_cors <- enframe(ds_cors_list, name = "ds") %>%
+      unnest_longer(value, values_to = "rho", indices_to = "sig")
+
+
+    # External dataset must max(rho) >= 0.5 to be used in filtering
+    ds2use <- ds_sigs_cors %>%
+      group_by(ds) %>%
+      summarise(max_rho = max(rho)) %>%
+      filter(max_rho >= 0.5) %>%
+      pull(ds)
+
+    if (length(ds2use) == 0) {
+      return(list(best_sigs = NA,
+                  essential_genes = NA))
+    }
+
+    ds_sigs_cors <- ds_sigs_cors %>%
+      filter(ds %in% ds2use)
+
+    # Find essential genes
+    top_sigs <- ds_sigs_cors %>%
+      group_by(ds) %>%
+      top_frac(0.25, wt=rho) %>% # Top 25% correlation per dataset
+      filter(rho >= 0.3) %>%
+      group_by(sig) %>%
+      summarise(n_sigs = n()) %>%
+      mutate(ds_frac = n_sigs/length(ds2use)) %>%
+      filter(ds_frac >= 0.5) %>% # Must be in at least 50% of the datasets %>%
+      pull(sig) %>%
+      unique()
+
+    if (length(top_sigs) == 0) {
+      return(list(best_sigs = NA,
+                  essential_genes = NA))
+    }
+
+    top_genes <- sort(table(unlist(signatures_ctoi[top_sigs])), decreasing = T)/length(top_sigs)
+    top_genes <- names(top_genes[top_genes>=0.5]) # Must be in at least 50% of the signatures
+    top_genes <- intersect(top_genes, rownames(ref))
+
+    if (length(top_genes) > 0) {
+      ds_top_genes_cors <- lapply(ds2use, function(ds){
+
+        true_fracs <- filtering_data$truth[[ds]][ctoi,]
+        true_fracs <- true_fracs[!is.na(true_fracs)]
+        top_genes_ctoi_mat <- filtering_data$mixture[[ds]]
+        ds_top_genes <- intersect(top_genes, rownames(top_genes_ctoi_mat))
+        if (length(ds_top_genes) == 0) {
+          return(NULL)
+
+        }
+
+        samples <- intersect(names(true_fracs) , colnames(top_genes_ctoi_mat))
+        true_fracs <- true_fracs[samples]
+        top_genes_ctoi_mat <- top_genes_ctoi_mat[ds_top_genes, samples]
+
+        if (class(top_genes_ctoi_mat)[1] == "numeric") {
+          cors <- cor(top_genes_ctoi_mat, true_fracs, method = "spearman", use = "pairwise.complete.obs")
+        }else{
+          cors <- apply(top_genes_ctoi_mat, 1, function(x){
+            cor(x, true_fracs, method = "spearman", use = "pairwise.complete.obs")
+          })
+        }
+
+        cors[is.na(cors)] <- -1
+        return(cors)
+
+      })
+      names(ds_top_genes_cors) <- ds2use
+      ds_top_genes_cors <- ds_top_genes_cors[!sapply(ds_top_genes_cors, function(x){is.null(x[1])})]
+
+      essential_genes <- enframe(ds_top_genes_cors, name = "ds", value = "rho") %>%
+        left_join(ds2n_samples, by = "ds") %>%
+        unnest_longer(rho, indices_to = "genes") %>%
+        mutate(rho = ifelse(rho == 1, 0.99999, rho),
+               rho = ifelse(rho == -1, -0.99999, rho)) %>%
+        mutate(z = 0.5 * log((1 + rho) / (1 - rho))) %>%
+        mutate(weights = log(n_samples)) %>%
+        group_by(genes) %>%
+        summarise(weighted_z = weighted.mean(x=z, w=weights)) %>%
+        mutate(rho_weigted = (exp(2 * weighted_z) - 1) / (exp(2 * weighted_z) + 1)) %>%
+        filter(rho_weigted >= 0.3) %>% # Genes must have at least 0.3 weighted correlation with the filtering data
+        top_frac(0.5, wt=rho_weigted) %>%
+        pull(genes)
+
+      if (length(essential_genes) == 0) {
+        essential_genes <- NA
+      }
+
+    }else{
+      essential_genes <- NA
+    }
+
+
+    # Find best signatures
+    rho_weighted_sigs <- ds_sigs_cors[ds_sigs_cors$sig %in% top_sigs,] %>%
+      left_join(ds2n_samples, by = "ds") %>%
+      mutate(rho = ifelse(rho == 1, 0.99999, rho),
+             rho = ifelse(rho == -1, -0.99999, rho)) %>%
+      ungroup() %>%
+      mutate(weights = log(n_samples)) %>%
+      mutate(z = 0.5 * log((1 + rho) / (1 - rho))) %>%
+      group_by(sig) %>%
+      summarise(weighted_z = weighted.mean(x=z, w=weights)) %>%
+      mutate(rho_weigted = (exp(2 * weighted_z) - 1) / (exp(2 * weighted_z) + 1))
+
+    top_sigs_frac_adjusted <- ifelse(nrow(rho_weighted_sigs)*top_sigs_frac > 10, top_sigs_frac, 10/nrow(rho_weighted_sigs)) # Minimum 10 signatures
+
+    best_sigs <- rho_weighted_sigs %>%
+      top_frac(top_sigs_frac_adjusted, wt = rho_weigted) %>%
+      pull(sig)
+
+    if(length(best_sigs) == 0){
+      best_sigs <- NA
+    }
+
+    return(list(best_sigs = best_sigs,
+                essential_genes = essential_genes))
+
+  }, BPPARAM = param)
+  names(filt_sigs) <- shared_cts
+
+
+  # Filter genes
+  for(ctoi in shared_cts){
+    ctoi_best_sigs <- filt_sigs[[ctoi]]$best_sigs
+    if (all(!is.na(ctoi_best_sigs))) {
+      ctoi_sigs <- names(signatures)[startsWith(names(signatures), paste0(ctoi, "#"))]
+      sigs2remove <- ctoi_sigs[!ctoi_sigs %in% ctoi_best_sigs]
+      signatures <- signatures[!names(signatures) %in% sigs2remove]
+    }
+
+    ctoi_essential_genes <- filt_sigs[[ctoi]]$essential_genes
+    if (add_essential_genes & all(!is.na(ctoi_essential_genes))) {
+      # Add essential genes
+      ctoi_sigs <- names(signatures)[startsWith(names(signatures), paste0(ctoi, "#"))]
+      for (sig in ctoi_sigs) {
+        signatures[sig][[1]] <- unique(c(signatures[sig][[1]], ctoi_essential_genes))
+      }
+    }
+  }
+
+  # Remove duplicate signatures
+  sigs_sorted <- lapply(signatures, function(x) sort(x))
+  sigs_sorted_collapsed <- sapply(sigs_sorted, paste, collapse = ",")
+  duplicated_sigs <- duplicated(sigs_sorted_collapsed)
+  signatures <- signatures[!duplicated_sigs]
+
+  # Number of  cell types passed filtering
+  filt_sigs <- filt_sigs[sapply(shared_cts, function(ctoi){
+    all(!is.na(filt_sigs[[ctoi]]$best_sigs))
+  })]
+  filts_ct <- names(filt_sigs)
+
+  message("> Signatures from ", length(filts_ct), " cell types have been filtered.")
+  if (add_essential_genes) {
+    message("> ", length(unique(unlist(lapply(filt_sigs, function(x){x$essential_genes})))), " essential genes have been added to signatures.")
   }
   out <- list(filt_sigs = signatures,
               filt_cts = filts_ct)
