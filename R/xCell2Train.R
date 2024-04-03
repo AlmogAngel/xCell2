@@ -381,7 +381,7 @@ createSignatures <- function(labels, dep_list, quantiles_matrix, probs, cor_mat,
 
   return(all_sigs)
 }
-scoreFiltDS <- function(labels, filtering_data, ds_cor_cutoff, signatures, ncores){
+scoreFiltDS <- function(ref, labels, filtering_data, ds_cor_cutoff, signatures, ncores){
 
   param <- BiocParallel::MulticoreParam(workers = ncores)
 
