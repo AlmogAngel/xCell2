@@ -1634,7 +1634,7 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type, filtering_data = NULL
       message("Filtering signatures by external datasets...")
       filtDS_scored <- scoreFiltDS(ref, labels, filtering_data, ds_cor_cutoff = 0.5, signatures, ncores = nCores)
 
-      if (!is.na(filtDS_scored)) {
+      if (length(filtDS_scored) > 0) {
         out <- filterSignatures(ref, filtDS_scored, signatures, top_sigs_frac, add_essential_genes, ncores = nCores)
         # out <- filterSignatures2(ref, labels, filtering_data, signatures, top_sigs_frac, add_essential_genes, ncores = nCores)
 
