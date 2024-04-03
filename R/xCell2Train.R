@@ -461,7 +461,7 @@ scoreFiltDS <- function(ref, labels, filtering_data, ds_cor_cutoff, signatures, 
   return(ct_ds_scores_list)
 
 }
-filterSignatures <- function(ref, filtDS_scored, signatures, top_sigs_frac, add_essential_genes, ncores){
+filterSignatures <- function(ref, filtering_data, filtDS_scored, signatures, top_sigs_frac, add_essential_genes, ncores){
 
 
   param <- BiocParallel::MulticoreParam(workers = ncores)
@@ -1634,8 +1634,8 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type, filtering_data = NULL
       message("Filtering signatures by external datasets...")
       filtDS_scored <- scoreFiltDS(ref, labels, filtering_data, ds_cor_cutoff = 0.5, signatures, ncores = nCores)
 
-      if (length(filtDS_scored) > 0) {
-        out <- filterSignatures(ref, filtDS_scored, signatures, top_sigs_frac, add_essential_genes, ncores = nCores)
+      if (length(filtDS_scored) > 0){
+        out <- filterSignatures(ref, filtering_data, filtDS_scored, signatures, top_sigs_frac, add_essential_genes, ncores = nCores)
         # out <- filterSignatures2(ref, labels, filtering_data, signatures, top_sigs_frac, add_essential_genes, ncores = nCores)
 
 
@@ -1676,7 +1676,7 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type, filtering_data = NULL
 
   # Train linear models
   message("Training models...")
-  filtDS_scored_filt <- scoreFiltDS(ref, labels, filtering_data, ds_cor_cutoff = 0.5, signatures, ncores = nCores)
+  filtDS_scored_filt <- scoreFiltDS(labels, filtering_data, ds_cor_cutoff = 0.5, signatures, ncores = nCores)
   models <- trainModels(simulations_scored, filtering_data, signatures, L1, L2, ncores = nCores)
 
 
