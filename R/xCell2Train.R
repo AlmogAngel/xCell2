@@ -461,7 +461,7 @@ scoreFiltDS <- function(labels, filtering_data, ds_cor_cutoff, signatures, ncore
   return(ct_ds_scores_list)
 
 }
-filterSignatures <- function(filtDS_scored, signatures, top_sigs_frac, add_essential_genes, ncores){
+filterSignatures <- function(ref, filtDS_scored, signatures, top_sigs_frac, add_essential_genes, ncores){
 
 
   param <- BiocParallel::MulticoreParam(workers = ncores)
@@ -1635,7 +1635,7 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type, filtering_data = NULL
       filtDS_scored <- scoreFiltDS(labels, filtering_data, ds_cor_cutoff = 0.5, signatures, ncores = nCores)
 
       if (!is.na(filtDS_scored)) {
-        out <- filterSignatures(filtDS_scored, signatures, top_sigs_frac, add_essential_genes, ncores = nCores)
+        out <- filterSignatures(ref, filtDS_scored, signatures, top_sigs_frac, add_essential_genes, ncores = nCores)
         # out <- filterSignatures2(ref, labels, filtering_data, signatures, top_sigs_frac, add_essential_genes, ncores = nCores)
 
 
