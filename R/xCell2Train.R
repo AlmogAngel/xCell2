@@ -457,11 +457,12 @@ scoreFiltDS <- function(ref, labels, filtering_data, ds_cor_cutoff, signatures, 
   })
   names(ct_ds_scores_list) <- filt_cts
 
+  ct_ds_scores_list <- ct_ds_scores_list[sapply(ct_ds_scores_list, function(x)!is.na(x)[1])]
 
   return(ct_ds_scores_list)
 
 }
-filterSignatures <- function(ref, filtering_data, filtDS_scored, signatures, top_sigs_frac, add_essential_genes, ncores){
+filterSignatures2 <- function(ref, filtering_data, filtDS_scored, signatures, top_sigs_frac, add_essential_genes, ncores){
 
 
   param <- BiocParallel::MulticoreParam(workers = ncores)
@@ -470,11 +471,6 @@ filterSignatures <- function(ref, filtering_data, filtDS_scored, signatures, top
 
 
   filt_sigs <- BiocParallel::bplapply(filt_cts, function(ctoi){
-
-    if (is.na(filtDS_scored[[ctoi]][1])) {
-      return(list(best_sigs = NA,
-                  essential_genes = NA))
-    }
 
     # Calculate CTOI correlations for each dataset in the filtering data
     ds_cors_list <- lapply(filtDS_scored[[ctoi]], function(ds){
@@ -671,7 +667,7 @@ filterSignatures <- function(ref, filtering_data, filtDS_scored, signatures, top
 
   return(out)
 }
-filterSignatures2 <- function(ref, labels, filtering_data, signatures, top_sigs_frac, add_essential_genes, ncores){
+filterSignatures <- function(ref, labels, filtering_data, signatures, top_sigs_frac, add_essential_genes, ncores){
 
 
   param <- BiocParallel::MulticoreParam(workers = ncores)
@@ -1321,7 +1317,7 @@ trainModels_old <- function(data_transfomed, params, ncores){
     return(.)
 
 }
-trainModels <- function(simulations_scored, filtering_data = NA, signatures, L2, ncores){
+trainModels <- function(simulations_scored, filtering_data_scored = NA, signatures, L2, ncores){
 
   fitModel <- function(data, nCores = ncores, l2 = L2){
 
@@ -1407,13 +1403,13 @@ trainModels <- function(simulations_scored, filtering_data = NA, signatures, L2,
 
 
   celltypes <- names(simulations_scored)
-
+  filt_cts <- names(filtering_data_scored)
 
   models_list <- lapply(celltypes, function(ctoi){
 
 
     if (ctoi %in% filt_cts) {
-      data <- Reduce(rbind, filtDS_scored_filt[[ctoi]][ds2use])
+      data <- Reduce(rbind, filtering_data_scored[[ctoi]])
     }else{
       data <- simulations_scored[[ctoi]]
     }
@@ -1632,11 +1628,11 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type, filtering_data = NULL
 
     if (!is.null(filtering_data)) {
       message("Filtering signatures by external datasets...")
-      filtDS_scored <- scoreFiltDS(ref, labels, filtering_data, ds_cor_cutoff = 0.5, signatures, ncores = nCores)
+      # filtDS_scored <- scoreFiltDS(ref, labels, filtering_data, ds_cor_cutoff = 0.5, signatures, ncores = nCores)
 
       if (length(filtDS_scored) > 0){
-        out <- filterSignatures(ref, filtering_data, filtDS_scored, signatures, top_sigs_frac, add_essential_genes, ncores = nCores)
-        # out <- filterSignatures2(ref, labels, filtering_data, signatures, top_sigs_frac, add_essential_genes, ncores = nCores)
+        # out <- filterSignatures(ref, filtering_data, filtDS_scored, signatures, top_sigs_frac, add_essential_genes, ncores = nCores)
+        out <- filterSignatures(ref, labels, filtering_data, signatures, top_sigs_frac, add_essential_genes, ncores = nCores)
 
 
         if (return_sigs_filt) {
@@ -1669,14 +1665,9 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type, filtering_data = NULL
   simulations <- makeSimulations(ref, mix, signatures, labels, gep_mat, ref_type, dep_list, cor_mat, sim_fracs, n_sims = ct_sims, ncores = nCores, noise_level = 0.1, seed2use = seed)
   simulations_scored <- scoreSimulations(signatures, simulations, n_sims, sim_fracs, nCores)
 
-  # Learn linear transformation parameters
-  # message("Learning linear transformation parameters...")
-  # params <- learnParams(simulations_scored, ncores = nCores)
-  # data_transfomed <- linearTransform(params, simulations_scored, filtering_data, signatures, min_filt_ds, ref, nCores)
-
   # Train linear models
   message("Training models...")
-  filtDS_scored_filt <- scoreFiltDS(labels, filtering_data, ds_cor_cutoff = 0.5, signatures, ncores = nCores)
+  filtDS_scored_filtSigs <- scoreFiltDS(ref, labels, filtering_data, ds_cor_cutoff = 0.5, signatures, ncores = nCores)
   models <- trainModels(simulations_scored, filtering_data, signatures, L1, L2, ncores = nCores)
 
 
