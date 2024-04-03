@@ -1632,7 +1632,7 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type, filtering_data = NULL
 
     if (!is.null(filtering_data)) {
       message("Filtering signatures by external datasets...")
-      filtDS_scored <- scoreFiltDS(labels, filtering_data, ds_cor_cutoff = 0.5, signatures, ncores = nCores)
+      filtDS_scored <- scoreFiltDS(ref, labels, filtering_data, ds_cor_cutoff = 0.5, signatures, ncores = nCores)
 
       if (!is.na(filtDS_scored)) {
         out <- filterSignatures(ref, filtDS_scored, signatures, top_sigs_frac, add_essential_genes, ncores = nCores)
@@ -1676,7 +1676,7 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type, filtering_data = NULL
 
   # Train linear models
   message("Training models...")
-  filtDS_scored_filt <- scoreFiltDS(labels, filtering_data, ds_cor_cutoff = 0.5, signatures, ncores = nCores)
+  filtDS_scored_filt <- scoreFiltDS(ref, labels, filtering_data, ds_cor_cutoff = 0.5, signatures, ncores = nCores)
   models <- trainModels(simulations_scored, filtering_data, signatures, L1, L2, ncores = nCores)
 
 
