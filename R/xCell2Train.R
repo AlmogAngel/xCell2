@@ -1669,7 +1669,7 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type, filtering_data = NULL
   xCell2.S4 <- new("xCell2Object",
                    signatures = signatures,
                    dependencies = dep_list,
-                   params = params,
+                   params = lParams,
                    models = models,
                    spill_mat = spill_mat,
                    genes_used = rownames(ref))
