@@ -1366,7 +1366,7 @@ trainModels2 <- function(simulations_scored, filtering_data_scored, signatures, 
     return(.)
 
 }
-getSpillOverMat <- function(simulations, signatures, dep_list, params, models, frac2use){
+getSpillOverMat <- function(simulations, signatures, dep_list, params, models, frac2use, ncores){
 
   scoreTransform <- function(mat, signatures, models){
 
@@ -1659,7 +1659,7 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type, filtering_data = NULL
   message("Generating spillover matrix...")
   if (use_sillover) {
     frac2use <- sim_fracs[which.min(abs(sim_fracs - 0.25))]
-    spill_mat <- getSpillOverMat(simulations, signatures_filt, dep_list, models, frac2use)
+    spill_mat <- getSpillOverMat(simulations, signatures_filt, dep_list, models, frac2use, nCores)
   }else{
     spill_mat = matrix()
   }
