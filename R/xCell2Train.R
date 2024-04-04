@@ -1282,7 +1282,7 @@ linearTransform <- function(params, simulations_scored, filtering_data, signatur
 }
 trainModels <- function(simulations_scored, params, ncores){
 
-  simulations_scored %>%
+  model_params <- simulations_scored %>%
     bind_rows() %>%
     group_by(celltype, sig, frac) %>%
     summarise(score = mean(score), .groups = "drop") %>%
@@ -1295,6 +1295,13 @@ trainModels <- function(simulations_scored, params, ncores){
     select(-c(a, b)) %>%
     group_by(celltype) %>%
     summarise(model = list(lm(frac~score))) %>%
+    rowwise() %>%
+    mutate(slope = coef(model)[2],
+           intercept = coef(model)[1],) %>%
+    select(-model)
+
+  params %>%
+    left_join(model_params, by = "celltype") %>%
     return(.)
 
 
@@ -1457,14 +1464,14 @@ getSpillOverMat <- function(simulations, signatures, dep_list, params, models, f
       # Transform
       a <- pull(filter(params, celltype == ctoi), a)
       b <- pull(filter(params, celltype == ctoi), b)
-      final_score <- (final_score^(1/b)) / a
+      slope <- pull(filter(params, celltype == ctoi), slope)
+      intercept <- pull(filter(params, celltype == ctoi), intercept)
+      final_score <- round(((final_score^(1/b)) / a)*slope + intercept, 4)
+      final_score[final_score < 0] <- 0
 
-      ctoi_model <- pull(models[models$celltype == ctoi,], model)[[1]]
-      predictions <- round(as.numeric(predict(ctoi_model, newdata = data.frame(score = final_score))), 4)
-      predictions[predictions < 0] <- 0
-
-      return(predictions)
-    })
+      return(final_score)
+    }, simplify = TRUE)
+    names(ctoi_scores) <- celltypes
 
     return(ctoi_scores)
 
@@ -1497,7 +1504,7 @@ getSpillOverMat <- function(simulations, signatures, dep_list, params, models, f
 
 #' @slot signatures list of xCell2 signatures
 #' @slot dependencies list of cell type dependencies
-#' @slot models data frame of cell type transformation models
+#' @slot params data frame of cell type linear transformation parameters
 #' @slot spill_mat matrix of cell types spillover
 #' @slot genes_used character vector of genes names used to train the signatures
 #' @importFrom methods new
@@ -1505,7 +1512,6 @@ getSpillOverMat <- function(simulations, signatures, dep_list, params, models, f
 setClass("xCell2Object", slots = list(
   signatures = "list",
   dependencies = "list",
-  models = "data.frame",
   params = "data.frame",
   spill_mat = "matrix",
   genes_used = "character"
@@ -1652,14 +1658,14 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type, filtering_data = NULL
   # filtering_data_scored <- scoreFiltDS(ref, labels, filtering_data, ds_cor_cutoff = 0.5, signatures, ncores = nCores)
   # models <- trainModels(simulations_scored, filtering_data_scored, signatures, l2 = 0, lr = 0.01, nl = 31, mdil_frac = 0.1, ncores = nCores)
   lParams <- learnParams(simulations_scored, nCores)
-  models <- trainModels(simulations_scored, lParams, nCores)
+  params <- trainModels(simulations_scored, lParams, nCores)
 
 
   # Get spillover matrix
   message("Generating spillover matrix...")
   if (use_sillover) {
     frac2use <- sim_fracs[which.min(abs(sim_fracs - 0.25))]
-    spill_mat <- getSpillOverMat(simulations, signatures, dep_list, lParams, models, frac2use, nCores)
+    spill_mat <- getSpillOverMat(simulations, signatures, dep_list, params, models, frac2use, nCores)
   }else{
     spill_mat = matrix()
   }
@@ -1669,8 +1675,7 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type, filtering_data = NULL
   xCell2.S4 <- new("xCell2Object",
                    signatures = signatures,
                    dependencies = dep_list,
-                   params = lParams,
-                   models = models,
+                   params = params,
                    spill_mat = spill_mat,
                    genes_used = rownames(ref))
 
@@ -1679,7 +1684,7 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type, filtering_data = NULL
 
   if (return_analysis) {
     message("Running xCell2Analysis...")
-    res <-  xCell2::xCell2Analysis(mix, xcell2object = xCell2.S4, predict = predict_res, spillover = use_sillover, ncores = nCores)
+    res <- xCell2::xCell2Analysis(mix, xcell2object = xCell2.S4, predict = predict_res, spillover = use_sillover, ncores = nCores)
     return(res)
   }else{
     return(xCell2.S4)

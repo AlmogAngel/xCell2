@@ -64,13 +64,12 @@ xCell2Analysis <- function(mix, xcell2object, min_intersect = 0.9, predict, spil
       # Transform
       a <- pull(filter(xcell2object@params, celltype == ctoi), a)
       b <- pull(filter(xcell2object@params, celltype == ctoi), b)
-      scores_transformed <- (scores^(1/b)) / a
+      slope <- pull(filter(xcell2object@params, celltype == ctoi), slope)
+      intercept <- pull(filter(xcell2object@params, celltype == ctoi), intercept)
+      scores_transformed <- round(((scores^(1/b)) / a)*slope + intercept, 4)
+      scores_transformed[scores_transformed < 0] <- 0
 
-      model_ctoi <- filter(xcell2object@models, celltype == ctoi)$model[[1]]
-      scores_predicted <- round(as.numeric(predict(model_ctoi, newdata = data.frame(score = scores_transformed))), 4)
-      scores_predicted[scores_predicted < 0] <- 0
-
-      return(scores_predicted)
+      return(scores_transformed)
     }else{
       return(scores)
     }
