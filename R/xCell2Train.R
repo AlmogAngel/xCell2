@@ -1659,7 +1659,7 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type, filtering_data = NULL
   message("Generating spillover matrix...")
   if (use_sillover) {
     frac2use <- sim_fracs[which.min(abs(sim_fracs - 0.25))]
-    spill_mat <- getSpillOverMat(simulations, signatures, dep_list, params, models, frac2use, nCores)
+    spill_mat <- getSpillOverMat(simulations, signatures, dep_list, lParams, models, frac2use, nCores)
   }else{
     spill_mat = matrix()
   }
@@ -1679,7 +1679,7 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type, filtering_data = NULL
 
   if (return_analysis) {
     message("Running xCell2Analysis...")
-    res <-  xCell2::xCell2Analysis(mix, xcell2sigs = xCell2.S4, predict = predict_res, spillover = use_sillover, ncores = nCores)
+    res <-  xCell2::xCell2Analysis(mix, xcell2object = xCell2.S4, predict = predict_res, spillover = use_sillover, ncores = nCores)
     return(res)
   }else{
     return(xCell2.S4)
