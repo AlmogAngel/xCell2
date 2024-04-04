@@ -1050,7 +1050,7 @@ makeSimulations <- function(ref, mix, signatures, labels, gep_mat, ref_type, dep
   return(sim_list)
 
 }
-scoreSimulations_old <- function(signatures, simulations, n_sims, sim_fracs, ncores){
+scoreSimulations <- function(signatures, simulations, n_sims, sim_fracs, ncores){
 
   param <- BiocParallel::MulticoreParam(workers = ncores)
   celltypes <- names(simulations)
@@ -1082,11 +1082,10 @@ scoreSimulations_old <- function(signatures, simulations, n_sims, sim_fracs, nco
   }, BPPARAM = param)
   names(sims_scored) <- celltypes
 
-
   return(sims_scored)
 
 }
-scoreSimulations <- function(signatures, simulations, n_sims, sim_fracs, ncores){
+scoreSimulations2 <- function(signatures, simulations, n_sims, sim_fracs, ncores){
 
   param <- BiocParallel::MulticoreParam(workers = ncores)
   celltypes <- names(simulations)
@@ -1151,7 +1150,6 @@ learnParams <- function(simulations_scored, ncores){
 linearTransform <- function(params, simulations_scored, filtering_data, signatures, min_filt_ds, ref, ncores){
 
 
-  # Those will be use for fitting linear model and spillover correction
   simulations_transformed <- simulations_scored %>%
     bind_rows() %>%
     group_by(celltype, sig, frac) %>%
@@ -1162,7 +1160,10 @@ linearTransform <- function(params, simulations_scored, filtering_data, signatur
     left_join(params, by = "celltype") %>%
     group_by(celltype) %>%
     mutate(score = (score^(1/b)) / a) %>%
-    select(-c(a, b)) %>%
+    select(-c(a, b))
+
+
+  simulations_transformed %>%
     pivot_wider(names_from = celltype, values_from = score) %>%
     as.data.frame()
 
@@ -1279,47 +1280,28 @@ linearTransform <- function(params, simulations_scored, filtering_data, signatur
               filt = filtering_transformed_list))
 
 }
-trainModels_old <- function(data_transfomed, params, ncores){
+trainModels <- function(simulations_scored, params, ncores){
 
-
-  fitModel <- function(data){
-
-    if (ncol(data) == 2) {
-      # Linear model from simulations
-      names(data)[2] <- "score"
-      model <- lm(frac~., data)
-      return(model)
-    }else{
-      # Ridge model from filtering data
-      model <- glmnet::cv.glmnet(x = as.matrix(data[,-1]), y = data[,1], alpha=0)
-      return(model)
-    }
-
-  }
-
-
-  param <- BiocParallel::MulticoreParam(workers = ncores)
-  celltypes <- colnames(data_transfomed$sims)[-1]
-
-  models_list <- BiocParallel::bplapply(celltypes, function(ctoi){
-
-    if (ctoi %in%  names(data_transfomed$filt)) {
-      data <- data_transfomed$filt[[ctoi]]
-    }else{
-      data <- data_transfomed$sims[,c("frac", ctoi)]
-    }
-
-    fitModel(data)
-  }, BPPARAM = param)
-  names(models_list) <- celltypes
-
-  enframe(models_list, name = "celltype", value = "model") %>%
+  simulations_scored %>%
+    bind_rows() %>%
+    group_by(celltype, sig, frac) %>%
+    summarise(score = mean(score), .groups = "drop") %>%
+    group_by(celltype, frac) %>%
+    summarise(score = mean(score), .groups = "drop_last") %>%
+    mutate(score = score - min(score)) %>%
+    left_join(params, by = "celltype") %>%
+    group_by(celltype) %>%
+    mutate(score = (score^(1/b)) / a) %>%
+    select(-c(a, b)) %>%
+    group_by(celltype) %>%
+    summarise(model = list(lm(frac~score))) %>%
     return(.)
 
-}
-trainModels <- function(simulations_scored, filtering_data_scored = NA, signatures, L2, ncores){
 
-  fitModel <- function(data, nCores = ncores, l2 = L2){
+}
+trainModels2 <- function(simulations_scored, filtering_data_scored, signatures, l2, lr, nl, mdil_frac, ncores){
+
+  fitModel <- function(data, l2, lr, nl, mdil_frac, nCores = ncores){
 
 
     # Fix for special JSON characters
@@ -1329,69 +1311,28 @@ trainModels <- function(simulations_scored, filtering_data_scored = NA, signatur
       colnames(data) <- gsub(pattern = ",", "", colnames(data))
     }
 
-    predictors <- data[, -ncol(data)]
-    response <- data[, ncol(data)]
-    predictors <- apply(predictors, 2, function(x){x-min(x)})
-    predictors <- apply(predictors, 2, scale)
+    training_data <- data[, -ncol(data)]
+    training_data <- apply(training_data, 2, function(x){x-min(x)})
+    training_data <- apply(training_data, 2, scale)
+    labels <- data[, ncol(data)]
 
 
-    # Tune
-    # Determine dynamic hyperparameter ranges based on data size
-    num_samples <- nrow(data)
-    max_leaves <- max(15, min(255, round(sqrt(num_samples) * 2)))
-    min_data_range <- round(seq(from = max(1, num_samples / 1000), to = max(5, num_samples / 50), length.out = 3))
-
-    # Define the dynamic range of hyperparameters to tune
-    tuning_grid <- expand.grid(
-      num_leaves = round(seq(from = max(15, max_leaves / 2), to = max_leaves, length.out = 3)),
-      min_data_in_leaf = min_data_range,
-      learning_rate = c(0.005, 0.01, 0.05, 0.1),
-      lambdasL2 = c(0, 0.1, 0.5, 1, 10, 100),
-      stringsAsFactors = FALSE
+    params <- list(
+      objective = "regression",
+      metric = "rmse",
+      num_threads = nCores,
+      learning_rate = lr,
+      lambda_l2 = l2,
+      num_leaves = nl,
+      min_data_in_leaf = round(length(labels)*mdil_frac),
+      feature_pre_filter = FALSE
     )
 
-    nfold <- min(max(5, round(num_samples / 100)), 10)
 
-    best_score <- Inf
-    best_params <- NULL
-
-    # Tune hyperparameters
-    for (i in 1:nrow(tuning_grid)) {
-      params <- list(
-        objective = "regression",
-        metric = "rmse",
-        num_threads = nCores,
-        learning_rate = tuning_grid$learning_rate[i],
-        num_leaves = tuning_grid$num_leaves[i],
-        min_data_in_leaf = tuning_grid$min_data_in_leaf[i],
-        lambda_l2 = tuning_grid$lambdasL2[i],
-        feature_pre_filter = FALSE
-      )
-
-      dtrain <- lightgbm::lgb.Dataset(data = predictors, label = response, params = params)
-
-
-      cv_result <- lightgbm::lgb.cv(
-        params = params,
-        data = dtrain,
-        nfold = nfold,
-        nrounds = 500,
-        early_stopping_rounds = 10,
-        verbose = -1
-      )
-
-      # Update best score and parameters if improvement is found
-      if (cv_result$best_score < best_score) {
-        best_score <- cv_result$best_score
-        best_params <- params
-      }
-    }
-
-
-    dtrain <- lightgbm::lgb.Dataset(data = predictors, label = response, params = best_params)
+    dtrain <- lightgbm::lgb.Dataset(data = training_data, label = labels, params = params)
 
     model <- lightgbm::lgb.train(
-      params = best_params,
+      params = params,
       data = dtrain,
       nrounds = 1000
     )
@@ -1414,7 +1355,7 @@ trainModels <- function(simulations_scored, filtering_data_scored = NA, signatur
       data <- simulations_scored[[ctoi]]
     }
 
-    ctoi_model <- fitModel(data)
+    ctoi_model <- fitModel(data, l2, lr, nl, mdil_frac)
 
     return(tibble(celltype = ctoi, model = list(ctoi_model)))
 
@@ -1425,7 +1366,7 @@ trainModels <- function(simulations_scored, filtering_data_scored = NA, signatur
     return(.)
 
 }
-getSpillOverMat <- function(simulations, signatures, dep_list, models, frac2use){
+getSpillOverMat <- function(simulations, signatures, dep_list, params, models, frac2use){
 
   scoreTransform <- function(mat, signatures, models){
 
@@ -1456,46 +1397,92 @@ getSpillOverMat <- function(simulations, signatures, dep_list, models, frac2use)
 
   }
 
+  param <- BiocParallel::MulticoreParam(workers = ncores)
 
-  # Get CTOIs matrix with frac2use fraction
-  frac_col <- which(endsWith(colnames(simulations[[1]]), paste0("%%", frac2use)))
-  ctoi_mat <- sapply(simulations, function(sim){
-    if (length(frac_col) > 1) {
-      apply(sim[,frac_col], 1, median)
-    }else{
-      sim[,frac_col]
-    }
-  })
 
-  # Get control matrix with CTOI fraction = 0
-  frac_col <- which(endsWith(colnames(simulations[[1]]), paste0("%%", 0)))
-  controls_mat <- sapply(simulations, function(sim){
-    if (length(frac_col) > 1) {
-      apply(sim[,frac_col], 1, median)
-    }else{
-      sim[,frac_col]
-    }
-  })
+  celltypes <- names(simulations)
 
-  # Score and transform simulations
-  sim_transformed <- scoreTransform(mat = ctoi_mat, signatures, models)
-  controls_mat_transformed <- scoreTransform(mat = controls_mat, signatures, models)
+  res <- BiocParallel::bplapply(celltypes, function(ctoi){
 
-  # Remove control signal from the transformed mixture
-  spill_mat <- sim_transformed - controls_mat_transformed
+    signatures_ctoi <- signatures[gsub("#.*", "", names(signatures)) %in% ctoi]
+
+    ctoi_scores <- sapply(celltypes, function(sim_ct){
+
+
+      dep_cts <- unlist(dep_list[[ctoi]])
+      if (sim_ct %in% dep_cts) {
+        return(0)
+      }
+
+      if (length(simulations[[sim_ct]]) == 1) {
+        s <- simulations[[sim_ct]][,endsWith(colnames(x), paste0("%%", frac2use))]
+        frac2use_mat <- cbind(s, s)
+      }else{
+        frac2use_mat <- sapply(simulations[[sim_ct]], function(x){
+          x[,endsWith(colnames(x), paste0("%%", frac2use))]
+        })
+      }
+
+      frac2use_mat <- singscore::rankGenes(frac2use_mat)
+      frac2use_scores <- sapply(signatures_ctoi, simplify = TRUE, function(sig){
+        singscore::simpleScore(frac2use_mat, upSet = sig, centerScore = FALSE)$TotalScore
+      })
+
+      frac2use_scores <- colMeans(frac2use_scores) # By simulation
+      frac2use_scores <- mean(frac2use_scores) # By signature
+
+
+
+      if (length(simulations[[sim_ct]]) == 1) {
+        s <- simulations[[sim_ct]][,endsWith(colnames(x), "%%0")]
+        control_mat <- cbind(s, s)
+      }else{
+        control_mat <- sapply(simulations[[sim_ct]], function(x){
+          x[,endsWith(colnames(x), "%%0")]
+        })
+      }
+
+      control_mat <- singscore::rankGenes(control_mat)
+      control_scores <- sapply(signatures_ctoi, simplify = TRUE, function(sig){
+        singscore::simpleScore(control_mat, upSet = sig, centerScore = FALSE)$TotalScore
+      })
+
+      control_scores <- colMeans(control_scores) # By simulation
+      control_scores <- mean(control_scores) # By signature
+
+
+      final_score <- frac2use_scores - control_scores
+      final_score[final_score < 0] <- 0
+
+      # Transform
+      a <- pull(filter(params, celltype == ctoi), a)
+      b <- pull(filter(params, celltype == ctoi), b)
+      final_score <- (final_score^(1/b)) / a
+
+      ctoi_model <- pull(models[models$celltype == ctoi,], model)[[1]]
+      predictions <- round(as.numeric(predict(ctoi_model, newdata = data.frame(score = final_score))), 4)
+      predictions[predictions < 0] <- 0
+
+      return(predictions)
+    })
+
+    return(ctoi_scores)
+
+  }, BPPARAM = param)
+  names(res) <- celltypes
+
+  # Rows are cell type signatures
+  # Columns are cell type simulation
+  spill_mat <- Reduce(rbind, res)
+  rownames(spill_mat) <- celltypes
+
 
   # Clean and normalize spill matrix
   spill_mat[spill_mat < 0] <- 0
   spill_mat <- spill_mat / diag(spill_mat)
   spill_mat[is.nan(spill_mat)] <- 0
+  spill_mat[spill_mat > 1] <- 1
 
-
-  # Insert zero to dependent cell types
-  for(ctoi in rownames(spill_mat)){
-    dep_cts <- unname(unlist(dep_list[[ctoi]]))
-    dep_cts <- dep_cts[dep_cts != ctoi]
-    spill_mat[ctoi, dep_cts] <- 0
-  }
 
   # TODO: Check this parameter
   spill_mat[spill_mat > 0.5] <- 0.5
@@ -1515,7 +1502,7 @@ getSpillOverMat <- function(simulations, signatures, dep_list, models, frac2use)
 #' @slot genes_used character vector of genes names used to train the signatures
 #' @importFrom methods new
 # Create S4 object for the new reference
-setClass("xCell2Signatures", slots = list(
+setClass("xCell2Object", slots = list(
   signatures = "list",
   dependencies = "list",
   models = "data.frame",
@@ -1570,13 +1557,14 @@ setClass("xCell2Signatures", slots = list(
 #' @param add_essential_genes description
 #' @param return_analysis description
 #' @param min_filt_ds description
+#' @param use_sillover description
 #' @param predict_res description
 #' @return An S4 object containing the signatures, cell type labels, and cell type dependencies.
 #' @export
 xCell2Train <- function(ref, labels, mix = NULL, ref_type, filtering_data = NULL, lineage_file = NULL, top_genes_frac = 1, medianGEP = TRUE, seed = 123, probs = c(0.01, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.4),
                         sim_fracs = c(seq(0, 0.05, 0.001), seq(0.06, 0.1, 0.005), seq(0.11, 0.25, 0.01)), diff_vals = round(c(log2(1), log2(1.5), log2(2), log2(2.5), log2(3), log2(4), log2(5), log2(10), log2(20)), 3),
                         min_genes = 3, max_genes = 150, return_sigs = FALSE, return_sigs_filt = FALSE, sigsFile = NULL, minPBcells = 30, minPBsamples = 10, min_filt_ds = 2, predict_res = TRUE,
-                        ct_sims = 10,  nCores = 1, top_sigs_frac = 0.05, external_essential_genes = NULL, return_analysis = FALSE, add_essential_genes = TRUE){
+                        ct_sims = 10,  nCores = 1, top_sigs_frac = 0.05, external_essential_genes = NULL, return_analysis = FALSE, add_essential_genes = TRUE, use_sillover = TRUE){
 
 
   # Validate inputs
@@ -1628,24 +1616,18 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type, filtering_data = NULL
 
     if (!is.null(filtering_data)) {
       message("Filtering signatures by external datasets...")
-      # filtDS_scored <- scoreFiltDS(ref, labels, filtering_data, ds_cor_cutoff = 0.5, signatures, ncores = nCores)
-
-      #if (length(filtDS_scored) > 0){
-      if (TRUE){
-        # out <- filterSignatures(ref, filtering_data, filtDS_scored, signatures, top_sigs_frac, add_essential_genes, ncores = nCores)
-        out <- filterSignatures(ref, labels, filtering_data, signatures, top_sigs_frac, add_essential_genes, ncores = nCores)
+      out <- filterSignatures(ref, labels, filtering_data, signatures, top_sigs_frac, add_essential_genes, ncores = nCores)
 
 
-        if (return_sigs_filt) {
-          return(list(all_sigs = signatures,
-                      filt_sigs = out$filt_sigs,
-                      filt_cts = out$filt_cts,
-                      genes_used = rownames(ref)))
-        }
-
-        signatures <- out$filt_sigs
-
+      if (return_sigs_filt) {
+        return(list(all_sigs = signatures,
+                    filt_sigs = out$filt_sigs,
+                    filt_cts = out$filt_cts,
+                    genes_used = rownames(ref)))
       }
+
+      signatures <- out$filt_sigs
+
     }
 
 
@@ -1660,7 +1642,6 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type, filtering_data = NULL
     signatures <- sigsFile
   }
 
-
   # Make simulations
   message("Generating simulations...")
   simulations <- makeSimulations(ref, mix, signatures, labels, gep_mat, ref_type, dep_list, cor_mat, sim_fracs, n_sims = ct_sims, ncores = nCores, noise_level = 0.1, seed2use = seed)
@@ -1668,33 +1649,40 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type, filtering_data = NULL
 
   # Train linear models
   message("Training models...")
-  filtDS_scored_filtSigs <- scoreFiltDS(ref, labels, filtering_data, ds_cor_cutoff = 0.5, signatures, ncores = nCores)
-  models <- trainModels(simulations_scored, filtering_data, signatures, L1, L2, ncores = nCores)
+  # filtering_data_scored <- scoreFiltDS(ref, labels, filtering_data, ds_cor_cutoff = 0.5, signatures, ncores = nCores)
+  # models <- trainModels(simulations_scored, filtering_data_scored, signatures, l2 = 0, lr = 0.01, nl = 31, mdil_frac = 0.1, ncores = nCores)
+  lParams <- learnParams(simulations_scored, nCores)
+  models <- trainModels(simulations_scored, lParams, nCores)
 
 
   # Get spillover matrix
-  # message("Generating spillover matrix...")
-  # frac2use <- sim_fracs[which.min(abs(sim_fracs - 0.25))]
-  # spill_mat <- getSpillOverMat(simulations, signatures_filt, dep_list, models, frac2use)
+  message("Generating spillover matrix...")
+  if (use_sillover) {
+    frac2use <- sim_fracs[which.min(abs(sim_fracs - 0.25))]
+    spill_mat <- getSpillOverMat(simulations, signatures_filt, dep_list, models, frac2use)
+  }else{
+    spill_mat = matrix()
+  }
 
 
   # Save results in S4 object
-  xCell2Sigs.S4 <- new("xCell2Signatures",
-                       signatures = signatures,
-                       dependencies = dep_list,
-                       params = params,
-                       models = models,
-                       spill_mat = matrix(),
-                       genes_used = rownames(ref))
-  message("Custom xCell2.0 reference ready!")
+  xCell2.S4 <- new("xCell2Object",
+                   signatures = signatures,
+                   dependencies = dep_list,
+                   params = params,
+                   models = models,
+                   spill_mat = spill_mat,
+                   genes_used = rownames(ref))
+
+  message("Your custom xCell2 object is ready!")
 
 
   if (return_analysis) {
     message("Running xCell2Analysis...")
-    res <-  xCell2::xCell2Analysis(mix, xcell2sigs = xCell2Sigs.S4, predict = predict_res, spillover = FALSE, ncores = nCores)
+    res <-  xCell2::xCell2Analysis(mix, xcell2sigs = xCell2.S4, predict = predict_res, spillover = use_sillover, ncores = nCores)
     return(res)
   }else{
-    return(xCell2Sigs.S4)
+    return(xCell2.S4)
   }
 
 

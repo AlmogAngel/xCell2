@@ -10,14 +10,14 @@
 #' @importFrom  pracma lsqlincon
 #' @importFrom xgboost xgb.DMatrix
 #' @param mix a matrix containing gene expression data
-#' @param xcell2sigs S4 object of `xCell2Signatures`
+#' @param xcell2object S4 object of `xCell2Object`
 #' @param predict Boolean - should we use model for to predict final scores?
 #' @param spillover Boolean - should we use spillover corretion on the transformed scores?
 #' @param ncores
 
 #' @return A data frame containing the cell type enrichment for each sample in the input matrix, as estimated by xCell2.
 #' @export
-xCell2Analysis <- function(mix, xcell2sigs, min_intersect = 0.9, predict, spillover, spillover_alpha = 0.2, ncores = 1){
+xCell2Analysis <- function(mix, xcell2object, min_intersect = 0.9, predict, spillover, spillover_alpha = 0.2, ncores = 1){
 
   scoreMix <- function(ctoi, mix_ranked, signatures_ctoi){
 
@@ -34,28 +34,13 @@ xCell2Analysis <- function(mix, xcell2sigs, min_intersect = 0.9, predict, spillo
 
     return(scores)
   }
-  predictFracs <- function(ctoi, scores, model_ctoi){
 
-
-    if (class(model_ctoi) == "cv.glmnet") {
-      scores <- scores[,model_ctoi$glmnet.fit$beta@Dimnames[[1]]]
-      predictions <- round(as.numeric(predict(model_ctoi, newx = scores, s = "lambda.min")), 5)
-    }else{
-      predictions <- round(as.numeric(predict(model_ctoi, newdata = data.frame(score = rowMeans(scores)))), 5)
-    }
-
-    predictions[predictions<0] <- 0
-    names(predictions) <- rownames(scores)
-
-    return(predictions)
-
-  }
 
   param <- BiocParallel::MulticoreParam(workers = ncores)
 
 
   # Check reference/mixture genes intersection
-  genes_intersect_frac <- length(intersect(rownames(mix), xcell2sigs@genes_used)) / length(xcell2sigs@genes_used)
+  genes_intersect_frac <- length(intersect(rownames(mix), xcell2object@genes_used)) / length(xcell2object@genes_used)
   if (genes_intersect_frac < min_intersect) {
     stop("Intersect between reference and mixture's genes is: ", genes_intersect_frac, " and min_intersect = ", min_intersect, ".",
          "\n", "Please use xCell2CleanGenes before using xCell2 signatures with that mixture.")
@@ -63,43 +48,47 @@ xCell2Analysis <- function(mix, xcell2sigs, min_intersect = 0.9, predict, spillo
 
 
   # Rank mix gene expression matrix
-  mix_ranked <- singscore::rankGenes(mix[xcell2sigs@genes_used,])
+  mix_ranked <- singscore::rankGenes(mix[xcell2object@genes_used,])
 
   # Score and predict
-  sigs_celltypes <- unique(unlist(lapply(names(xcell2sigs@signatures), function(x){strsplit(x, "#")[[1]][1]})))
+  sigs_celltypes <- unique(unlist(lapply(names(xcell2object@signatures), function(x){strsplit(x, "#")[[1]][1]})))
 
   res <- BiocParallel::bplapply(sigs_celltypes, function(ctoi){
 
-    signatures_ctoi <- xcell2sigs@signatures[startsWith(names(xcell2sigs@signatures), paste0(ctoi, "#"))]
-    model_ctoi <- filter(xcell2sigs@models, celltype == ctoi)$model[[1]]
-
+    signatures_ctoi <- xcell2object@signatures[startsWith(names(xcell2object@signatures), paste0(ctoi, "#"))]
     scores <- scoreMix(ctoi, mix_ranked, signatures_ctoi)
+    scores <- rowMeans(scores)
+
     if (predict) {
+
       # Transform
-      a <- pull(filter(xcell2sigs@params, celltype == ctoi), a)
-      b <- pull(filter(xcell2sigs@params, celltype == ctoi), b)
-      scores <- apply(scores, 2, function(x){
-        (x^(1/b)) / a
-      })
-      return(predictFracs(ctoi, scores, model_ctoi))
+      a <- pull(filter(xcell2object@params, celltype == ctoi), a)
+      b <- pull(filter(xcell2object@params, celltype == ctoi), b)
+      scores_transformed <- (scores^(1/b)) / a
+
+      model_ctoi <- filter(xcell2object@models, celltype == ctoi)$model[[1]]
+      scores_predicted <- round(as.numeric(predict(model_ctoi, newdata = data.frame(score = scores_transformed))), 4)
+      scores_predicted[scores_predicted < 0] <- 0
+
+      return(scores_predicted)
     }else{
-      return(rowMeans(scores))
+      return(scores)
     }
 
   }, BPPARAM = param)
-  names(res) <- sigs_celltypes
 
-  res <- t(sapply(res, cbind))
+  res <- Reduce(rbind, res)
   colnames(res) <-  colnames(mix_ranked)
+  rownames(res) <- sigs_celltypes
 
 
-  if (!spillover) {
+  if (!spillover | !predict) {
     return(res)
   }
 
 
   # Spillover correction
-  spill_mat <- xcell2sigs@spill_mat * spillover_alpha
+  spill_mat <- xcell2object@spill_mat * spillover_alpha
   diag(spill_mat) <- 1
 
   rows <- intersect(rownames(res), rownames(spill_mat))
@@ -108,6 +97,7 @@ xCell2Analysis <- function(mix, xcell2sigs, min_intersect = 0.9, predict, spillo
   scores_corrected[scores_corrected < 0] <- 0
   scores_corrected <- round(scores_corrected, 4)
   rownames(scores_corrected) <- rows
+
   return(scores_corrected)
 
 
