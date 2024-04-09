@@ -25,11 +25,6 @@ xCell2Analysis <- function(mix, xcell2object, min_intersect = 0.9, predict, spil
       suppressWarnings(singscore::simpleScore(mix_ranked, upSet = sig, centerScore = FALSE)$TotalScore)
     })
 
-    # Shift values
-    scores <- apply(scores, 2, function(s){
-      s - min(s)
-    })
-
     rownames(scores) <- colnames(mix_ranked)
 
     return(scores)
@@ -57,20 +52,27 @@ xCell2Analysis <- function(mix, xcell2object, min_intersect = 0.9, predict, spil
 
     signatures_ctoi <- xcell2object@signatures[startsWith(names(xcell2object@signatures), paste0(ctoi, "#"))]
     scores <- scoreMix(ctoi, mix_ranked, signatures_ctoi)
-    scores <- rowMeans(scores)
 
     if (predict) {
 
-      # Transform
       a <- pull(filter(xcell2object@params, celltype == ctoi), a)
       b <- pull(filter(xcell2object@params, celltype == ctoi), b)
-      slope <- pull(filter(xcell2object@params, celltype == ctoi), slope)
       intercept <- pull(filter(xcell2object@params, celltype == ctoi), intercept)
-      scores_transformed <- round(((scores^(1/b)) / a)*slope + intercept, 4)
-      scores_transformed[scores_transformed < 0] <- 0
+      coefs <- pull(filter(xcell2object@params, celltype == ctoi), reg_coef)[[1]]
 
-      return(scores_transformed)
+      # Linear transformation
+      scores <- (scores^(1/b)) / a
+
+      # Scale
+      scores <- scale(scores)
+
+      # Predict
+      p <- as.vector((scores %*% coefs) + intercept)
+
+
+      return(p)
     }else{
+      scores <- rowMeans(scores)
       return(scores)
     }
 
@@ -81,24 +83,22 @@ xCell2Analysis <- function(mix, xcell2object, min_intersect = 0.9, predict, spil
   rownames(res) <- sigs_celltypes
 
 
-  if (!spillover | !predict) {
+  if (spillover & predict) {
+    # Spillover correction
+    spill_mat <- xcell2object@spill_mat * spillover_alpha
+    diag(spill_mat) <- 1
+
+    rows <- intersect(rownames(res), rownames(spill_mat))
+
+    scores_corrected <- apply(res[rows, ], 2, function(x) pracma::lsqlincon(spill_mat[rows, rows], x, lb = 0))
+    scores_corrected[scores_corrected < 0] <- 0
+    scores_corrected <- round(scores_corrected, 4)
+    rownames(scores_corrected) <- rows
+
+    return(scores_corrected)
+  }else{
     return(res)
   }
-
-
-  # Spillover correction
-  spill_mat <- xcell2object@spill_mat * spillover_alpha
-  diag(spill_mat) <- 1
-
-  rows <- intersect(rownames(res), rownames(spill_mat))
-
-  scores_corrected <- apply(res[rows, ], 2, function(x) pracma::lsqlincon(spill_mat[rows, rows], x, lb = 0))
-  scores_corrected[scores_corrected < 0] <- 0
-  scores_corrected <- round(scores_corrected, 4)
-  rownames(scores_corrected) <- rows
-
-  return(scores_corrected)
-
 
 }
 

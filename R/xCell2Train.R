@@ -393,13 +393,13 @@ scoreFiltDS <- function(ref, labels, filtering_data, ds_cor_cutoff, signatures, 
   }
 
   ct_ds_scores_list <- BiocParallel::bplapply(filt_cts, function(ctoi){
+
     # Get CTOI signatures
     signatures_ctoi <- signatures[startsWith(names(signatures), paste0(ctoi, "#"))]
 
     # Score
     ds_names <- names(filtering_data$mixture)
     ds_scores_list <- lapply(ds_names, function(ds){
-
 
       if(!ctoi %in% rownames(filtering_data$truth[[ds]])){
         return(NA)
@@ -419,11 +419,15 @@ scoreFiltDS <- function(ref, labels, filtering_data, ds_cor_cutoff, signatures, 
         suppressWarnings(singscore::simpleScore(ctoi_filt_ds_ranked, upSet = sig, centerScore = FALSE)$TotalScore)
       })
 
+
       # Remove signatures that failed to score
       if (class(scores)[1] == "list") {
         scores <- scores[lengths(scores) != 0]
         scores <- sapply(scores, cbind)
       }
+
+      scores[scores < 0] <- 0 # Scores might be negative if all signature's genes are zero
+
 
       fracs <- filtering_data$truth[[ds]][ctoi, ctoi_samples]
 
@@ -454,7 +458,7 @@ scoreFiltDS <- function(ref, labels, filtering_data, ds_cor_cutoff, signatures, 
     return(ds_scores_list)
     #final_training_ds <- Reduce(rbind, ds_scores_list)
 
-  })
+  }, BPPARAM = param)
   names(ct_ds_scores_list) <- filt_cts
 
   ct_ds_scores_list <- ct_ds_scores_list[sapply(ct_ds_scores_list, function(x)!is.na(x)[1])]
@@ -462,7 +466,7 @@ scoreFiltDS <- function(ref, labels, filtering_data, ds_cor_cutoff, signatures, 
   return(ct_ds_scores_list)
 
 }
-filterSignatures2 <- function(ref, filtering_data, filtDS_scored, signatures, top_sigs_frac, add_essential_genes, ncores){
+addEssentialGenes <- function(ref, filtering_data, filtDS_scored, signatures, top_sigs_frac, ncores){
 
 
   param <- BiocParallel::MulticoreParam(workers = ncores)
@@ -470,7 +474,7 @@ filterSignatures2 <- function(ref, filtering_data, filtDS_scored, signatures, to
   filt_cts <- names(filtDS_scored)
 
 
-  filt_sigs <- BiocParallel::bplapply(filt_cts, function(ctoi){
+  essen_genes_list <- BiocParallel::bplapply(filt_cts, function(ctoi){
 
     # Calculate CTOI correlations for each dataset in the filtering data
     ds_cors_list <- lapply(filtDS_scored[[ctoi]], function(ds){
@@ -498,27 +502,23 @@ filterSignatures2 <- function(ref, filtering_data, filtDS_scored, signatures, to
       left_join(ds2n_samples, by = "ds") %>%
       unnest(value)
 
-
     # Remove non-significant signatures
     ds_sigs_cors <- ds_sigs_cors %>%
       group_by(ds) %>%
-      mutate(padj = p.adjust(pval, method = "BH")) %>%
-      ungroup() %>%
-      filter(padj <= 0.05)
+      filter(pval <= 0.05)
 
     ds2use <- unique(ds_sigs_cors$ds)
 
 
     if (nrow(ds_sigs_cors) == 0) {
-      return(list(best_sigs = NA,
-                  essential_genes = NA))
+      return(NA)
     }
 
 
     # Find essential genes
     top_sigs <- ds_sigs_cors %>%
-      #group_by(ds) %>%
-      #top_frac(0.25, wt=rho) %>% # Top 25% correlation per dataset
+      group_by(ds) %>%
+      top_frac(0.5, wt=rho) %>% # Top 50% correlation per dataset
       group_by(sig) %>%
       summarise(n_sigs = n()) %>%
       mutate(ds_frac = n_sigs/length(ds2use)) %>%
@@ -528,8 +528,7 @@ filterSignatures2 <- function(ref, filtering_data, filtDS_scored, signatures, to
 
 
     if (length(top_sigs) == 0) {
-      return(list(best_sigs = NA,
-                  essential_genes = NA))
+      return(NA)
     }
 
     signatures_ctoi <- signatures[startsWith(names(signatures), paste0(ctoi, "#"))]
@@ -571,73 +570,34 @@ filterSignatures2 <- function(ref, filtering_data, filtDS_scored, signatures, to
       ds_top_genes_cors <- ds_top_genes_cors[!sapply(ds_top_genes_cors, function(x){is.null(x[1])})]
 
       essential_genes <- enframe(ds_top_genes_cors, name = "ds") %>%
-        left_join(ds2n_samples, by = "ds") %>%
         unnest(value) %>%
-        group_by(ds) %>%
-        mutate(padj = p.adjust(pval, method = "BH")) %>%
-        ungroup() %>%
-        filter(padj <= 0.05) %>%
-        mutate(rho = ifelse(rho == 1, 0.99999, rho),
-               rho = ifelse(rho == -1, -0.99999, rho)) %>%
-        mutate(z = 0.5 * log((1 + rho) / (1 - rho))) %>%
-        mutate(weights = log(n_samples)) %>%
+        filter(pval <= 0.05) %>%
         group_by(genes) %>%
-        summarise(weighted_z = weighted.mean(x=z, w=weights)) %>%
-        mutate(rho_weigted = (exp(2 * weighted_z) - 1) / (exp(2 * weighted_z) + 1)) %>%
-        #top_frac(0.5, wt=rho_weigted) %>%
+        summarise(n_genes = n()) %>%
+        mutate(ds_frac = n_genes/length(ds2use)) %>%
+        filter(ds_frac >= 0.5) %>%
         pull(genes)
 
       if (length(essential_genes) == 0) {
-        essential_genes <- NA
+        return(NA)
+      }else{
+        return(essential_genes)
       }
 
     }else{
-      essential_genes <- NA
+      return(NA)
     }
 
-
-    # Find best signatures
-    rho_weighted_sigs <- ds_sigs_cors[ds_sigs_cors$sig %in% top_sigs,] %>%
-      mutate(rho = ifelse(rho == 1, 0.99999, rho),
-             rho = ifelse(rho == -1, -0.99999, rho)) %>%
-      ungroup() %>%
-      mutate(weights = log(n_samples)) %>%
-      mutate(z = 0.5 * log((1 + rho) / (1 - rho))) %>%
-      group_by(sig) %>%
-      summarise(weighted_z = weighted.mean(x=z, w=weights)) %>%
-      mutate(rho_weigted = (exp(2 * weighted_z) - 1) / (exp(2 * weighted_z) + 1))
-
-
-    top_sigs_frac_adjusted <- ifelse(nrow(rho_weighted_sigs)*top_sigs_frac > 10, top_sigs_frac, 10/nrow(rho_weighted_sigs)) # Minimum 10 signatures
-
-    best_sigs <- rho_weighted_sigs %>%
-      top_frac(top_sigs_frac_adjusted, wt = rho_weigted) %>%
-      pull(sig)
-
-    if(length(best_sigs) == 0){
-      best_sigs <- NA
-    }
-
-
-
-    return(list(best_sigs = best_sigs,
-                essential_genes = essential_genes))
 
   }, BPPARAM = param)
-  names(filt_sigs) <- filt_cts
+  names(essen_genes_list) <- filt_cts
 
 
   # Filter genes
   for(ctoi in filt_cts){
-    ctoi_best_sigs <- filt_sigs[[ctoi]]$best_sigs
-    if (all(!is.na(ctoi_best_sigs))) {
-      ctoi_sigs <- names(signatures)[startsWith(names(signatures), paste0(ctoi, "#"))]
-      sigs2remove <- ctoi_sigs[!ctoi_sigs %in% ctoi_best_sigs]
-      signatures <- signatures[!names(signatures) %in% sigs2remove]
-    }
 
-    ctoi_essential_genes <- filt_sigs[[ctoi]]$essential_genes
-    if (add_essential_genes & all(!is.na(ctoi_essential_genes))) {
+    ctoi_essential_genes <- essen_genes_list[[ctoi]]
+    if (all(!is.na(ctoi_essential_genes))) {
       # Add essential genes
       ctoi_sigs <- names(signatures)[startsWith(names(signatures), paste0(ctoi, "#"))]
       for (sig in ctoi_sigs) {
@@ -652,279 +612,9 @@ filterSignatures2 <- function(ref, filtering_data, filtDS_scored, signatures, to
   duplicated_sigs <- duplicated(sigs_sorted_collapsed)
   signatures <- signatures[!duplicated_sigs]
 
-  # Number of  cell types passed filtering
-  filt_sigs <- filt_sigs[sapply(filt_cts, function(ctoi){
-    all(!is.na(filt_sigs[[ctoi]]$best_sigs))
-  })]
-  filts_ct <- names(filt_sigs)
-
-  message("> Signatures from ", length(filts_ct), " cell types have been filtered.")
-  if (add_essential_genes) {
-    message("> ", length(unique(unlist(lapply(filt_sigs, function(x){x$essential_genes})))), " essential genes have been added to signatures.")
-  }
-  out <- list(filt_sigs = signatures,
-              filt_cts = filts_ct)
-
-  return(out)
-}
-filterSignatures <- function(ref, labels, filtering_data, signatures, top_sigs_frac, add_essential_genes, ncores){
-
-
-  param <- BiocParallel::MulticoreParam(workers = ncores)
-
-
-  celltypes <- unique(labels$label)
-  shared_cts <- intersect(celltypes, unlist(sapply(filtering_data$truth, rownames)))
-
-
-  filt_sigs <- BiocParallel::bplapply(shared_cts, function(ctoi){
-
-    # Get CTOI signatures
-    signatures_ctoi <- signatures[startsWith(names(signatures), paste0(ctoi, "#"))]
-
-    # Calculate CTOI correlations for each dataset in the filtering data
-    ds_cors_list <- sapply(names(filtering_data$mixture), function(ds){
-
-
-      if(!ctoi %in% rownames(filtering_data$truth[[ds]])){
-        return(NA)
-      }
-
-      ctoi_mix <- filtering_data$mixture[[ds]]
-      ctoi_samples <- filtering_data$truth[[ds]][ctoi,]
-      ctoi_samples <- names(ctoi_samples[!is.na(ctoi_samples)])
-      ctoi_samples <- ctoi_samples[ctoi_samples %in% colnames(ctoi_mix)]
-      genes2use <- intersect(rownames(ctoi_mix), rownames(ref))
-
-      #  Rank filtering dataset
-      ctoi_filt_ds_ranked <- singscore::rankGenes(ctoi_mix[, ctoi_samples])
-
-      # Score
-      scores <- sapply(signatures_ctoi, simplify = TRUE, function(sig){
-        suppressWarnings(singscore::simpleScore(ctoi_filt_ds_ranked, upSet = sig, centerScore = FALSE)$TotalScore)
-      })
-
-      # Remove signatures that failed to score
-      if (class(scores)[1] == "list") {
-        scores <- scores[lengths(scores) != 0]
-        scores <- sapply(scores, cbind)
-      }
-
-      # Calculate correlations
-      fracs <- filtering_data$truth[[ds]][ctoi, ctoi_samples]
-      cors <- apply(scores, 2, function(x){
-        cor(x, fracs, method = "spearman", use = "pairwise.complete.obs")
-      })
-
-      return(cors)
-
-    })
-    ds_cors_list <- ds_cors_list[lengths(ds_cors_list) > 1] # Remove NAs
-
-    # Get number of samples per dataset
-    ds2n_samples <- enframe(sapply(names(ds_cors_list), function(ds){
-      mix_samples <- colnames(filtering_data$mixture[[ds]])
-      truth_samples <- filtering_data$truth[[ds]][ctoi,]
-      truth_samples <- names(truth_samples[!is.na(truth_samples)])
-      n_samples <- length(intersect(mix_samples, truth_samples))
-      n_samples
-    }), name = "ds", value = "n_samples")
-
-    ds_sigs_cors <- enframe(ds_cors_list, name = "ds") %>%
-      unnest_longer(value, values_to = "rho", indices_to = "sig")
-
-
-    # External dataset must max(rho) >= 0.5 to be used in filtering
-    ds2use <- ds_sigs_cors %>%
-      group_by(ds) %>%
-      summarise(max_rho = max(rho)) %>%
-      filter(max_rho >= 0.5) %>%
-      pull(ds)
-
-    if (length(ds2use) == 0) {
-      return(list(best_sigs = NA,
-                  essential_genes = NA))
-    }
-
-    ds_sigs_cors <- ds_sigs_cors %>%
-      filter(ds %in% ds2use)
-
-    # Find essential genes
-    top_sigs <- ds_sigs_cors %>%
-      group_by(ds) %>%
-      top_frac(0.25, wt=rho) %>% # Top 25% correlation per dataset
-      #filter(rho >= 0.3) %>%
-      group_by(sig) %>%
-      summarise(n_sigs = n()) %>%
-      mutate(ds_frac = n_sigs/length(ds2use)) %>%
-      filter(ds_frac >= 0.5) %>% # Must be in at least 50% of the datasets %>%
-      pull(sig) %>%
-      unique()
-
-    if (length(top_sigs) == 0) {
-      return(list(best_sigs = NA,
-                  essential_genes = NA))
-    }
-
-    top_genes <- sort(table(unlist(signatures_ctoi[top_sigs])), decreasing = T)/length(top_sigs)
-    top_genes <- names(top_genes[top_genes>=0.5]) # Must be in at least 50% of the signatures
-    top_genes <- intersect(top_genes, rownames(ref))
-
-    if (length(top_genes) > 0) {
-      ds_top_genes_cors <- lapply(ds2use, function(ds){
-
-        true_fracs <- filtering_data$truth[[ds]][ctoi,]
-        true_fracs <- true_fracs[!is.na(true_fracs)]
-        top_genes_ctoi_mat <- filtering_data$mixture[[ds]]
-        ds_top_genes <- intersect(top_genes, rownames(top_genes_ctoi_mat))
-        if (length(ds_top_genes) == 0) {
-          return(NULL)
-
-        }
-
-        samples <- intersect(names(true_fracs) , colnames(top_genes_ctoi_mat))
-        true_fracs <- true_fracs[samples]
-        top_genes_ctoi_mat <- top_genes_ctoi_mat[ds_top_genes, samples]
-
-        if (class(top_genes_ctoi_mat)[1] == "numeric") {
-          cors <- cor(top_genes_ctoi_mat, true_fracs, method = "spearman", use = "pairwise.complete.obs")
-        }else{
-          cors <- apply(top_genes_ctoi_mat, 1, function(x){
-            cor(x, true_fracs, method = "spearman", use = "pairwise.complete.obs")
-          })
-        }
-
-        cors[is.na(cors)] <- -1
-        return(cors)
-
-      })
-      names(ds_top_genes_cors) <- ds2use
-      ds_top_genes_cors <- ds_top_genes_cors[!sapply(ds_top_genes_cors, function(x){is.null(x[1])})]
-
-      essential_genes <- enframe(ds_top_genes_cors, name = "ds", value = "rho") %>%
-        left_join(ds2n_samples, by = "ds") %>%
-        unnest_longer(rho, indices_to = "genes") %>%
-        mutate(rho = ifelse(rho == 1, 0.99999, rho),
-               rho = ifelse(rho == -1, -0.99999, rho)) %>%
-        mutate(z = 0.5 * log((1 + rho) / (1 - rho))) %>%
-        mutate(weights = log(n_samples)) %>%
-        group_by(genes) %>%
-        summarise(weighted_z = weighted.mean(x=z, w=weights)) %>%
-        mutate(rho_weigted = (exp(2 * weighted_z) - 1) / (exp(2 * weighted_z) + 1)) %>%
-        filter(rho_weigted >= 0.3) %>% # Genes must have at least 0.3 weighted correlation with the filtering data
-        top_frac(0.5, wt=rho_weigted) %>%
-        pull(genes)
-
-      if (length(essential_genes) == 0) {
-        essential_genes <- NA
-      }
-
-    }else{
-      essential_genes <- NA
-    }
-
-
-    # Find best signatures
-    rho_weighted_sigs <- ds_sigs_cors[ds_sigs_cors$sig %in% top_sigs,] %>%
-      left_join(ds2n_samples, by = "ds") %>%
-      mutate(rho = ifelse(rho == 1, 0.99999, rho),
-             rho = ifelse(rho == -1, -0.99999, rho)) %>%
-      ungroup() %>%
-      mutate(weights = log(n_samples)) %>%
-      mutate(z = 0.5 * log((1 + rho) / (1 - rho))) %>%
-      group_by(sig) %>%
-      summarise(weighted_z = weighted.mean(x=z, w=weights)) %>%
-      mutate(rho_weigted = (exp(2 * weighted_z) - 1) / (exp(2 * weighted_z) + 1))
-
-    top_sigs_frac_adjusted <- ifelse(nrow(rho_weighted_sigs)*top_sigs_frac > 10, top_sigs_frac, 10/nrow(rho_weighted_sigs)) # Minimum 10 signatures
-
-    best_sigs <- rho_weighted_sigs %>%
-      top_frac(top_sigs_frac_adjusted, wt = rho_weigted) %>%
-      pull(sig)
-
-    if(length(best_sigs) == 0){
-      best_sigs <- NA
-    }
-
-    return(list(best_sigs = best_sigs,
-                essential_genes = essential_genes))
-
-  }, BPPARAM = param)
-  names(filt_sigs) <- shared_cts
-
-
-  # Filter genes
-  for(ctoi in shared_cts){
-    ctoi_best_sigs <- filt_sigs[[ctoi]]$best_sigs
-    if (all(!is.na(ctoi_best_sigs))) {
-      ctoi_sigs <- names(signatures)[startsWith(names(signatures), paste0(ctoi, "#"))]
-      sigs2remove <- ctoi_sigs[!ctoi_sigs %in% ctoi_best_sigs]
-      signatures <- signatures[!names(signatures) %in% sigs2remove]
-    }
-
-    ctoi_essential_genes <- filt_sigs[[ctoi]]$essential_genes
-    if (add_essential_genes & all(!is.na(ctoi_essential_genes))) {
-      # Add essential genes
-      ctoi_sigs <- names(signatures)[startsWith(names(signatures), paste0(ctoi, "#"))]
-      for (sig in ctoi_sigs) {
-        signatures[sig][[1]] <- unique(c(signatures[sig][[1]], ctoi_essential_genes))
-      }
-    }
-  }
-
-  # Remove duplicate signatures
-  sigs_sorted <- lapply(signatures, function(x) sort(x))
-  sigs_sorted_collapsed <- sapply(sigs_sorted, paste, collapse = ",")
-  duplicated_sigs <- duplicated(sigs_sorted_collapsed)
-  signatures <- signatures[!duplicated_sigs]
-
-  # Number of  cell types passed filtering
-  filt_sigs <- filt_sigs[sapply(shared_cts, function(ctoi){
-    all(!is.na(filt_sigs[[ctoi]]$best_sigs))
-  })]
-  filts_ct <- names(filt_sigs)
-
-  message("> Signatures from ", length(filts_ct), " cell types have been filtered.")
-  if (add_essential_genes) {
-    message("> ", length(unique(unlist(lapply(filt_sigs, function(x){x$essential_genes})))), " essential genes have been added to signatures.")
-  }
-  out <- list(filt_sigs = signatures,
-              filt_cts = filts_ct)
-
-  return(out)
-}
-addEssentialGenes <- function(ref, signatures){
-
-  data("celltype.data", package = "xCell2")
-  celltypes <- unique(gsub("#.*", "", names(signatures)))
-
-  for (ct in celltypes) {
-
-    # Check if cell type exists in celltype.data
-    if (!ct %in% celltype.data$all_labels) {
-      next
-    }
-
-    # Get essential genes
-    ct_label <- celltype.data[celltype.data$all_labels == ct,]$xCell2_labels
-    essen_genes <- unique(unlist(celltype.data[celltype.data$xCell2_labels == ct_label,]$essential_genes))
-
-    if (all(is.na(essen_genes))) {
-      next
-    }
-
-    essen_genes <- intersect(rownames(ref), essen_genes) # Use only essential genes which are in ref
-
-    # Add to signature
-    ct_sigs <- which(startsWith(names(signatures), paste0(ct, "#")))
-    for (sig in ct_sigs) {
-      signatures[sig][[1]] <- unique(c(signatures[sig][[1]], essen_genes))
-    }
-
-  }
+  message("> ", length(unique(unlist(essen_genes_list))), " essential genes have been added to signatures.")
 
   return(signatures)
-
 }
 makeSimulations <- function(ref, mix, signatures, labels, gep_mat, ref_type, dep_list, cor_mat, sim_fracs, n_sims, ncores, noise_level, seed2use){
 
@@ -1069,41 +759,6 @@ scoreSimulations <- function(signatures, simulations, n_sims, sim_fracs, ncores)
       })
       scores <- cbind(scores, frac = sim_fracs)
 
-      as_tibble(scores) %>%
-        pivot_longer(cols = -frac, names_to = "sig", values_to = "score") %>%
-        mutate(sim = names(ctoi_sim_list)[sim_id])
-
-    })
-    ctoi_sims <- bind_rows(ctoi_sims)
-
-    ctoi_sims %>%
-      mutate(celltype = ctoi)
-
-  }, BPPARAM = param)
-  names(sims_scored) <- celltypes
-
-  return(sims_scored)
-
-}
-scoreSimulations2 <- function(signatures, simulations, n_sims, sim_fracs, ncores){
-
-  param <- BiocParallel::MulticoreParam(workers = ncores)
-  celltypes <- names(simulations)
-
-  sims_scored <- BiocParallel::bplapply(celltypes, function(ctoi){
-
-    signatures_ctoi <- signatures[gsub("#.*", "", names(signatures)) %in% ctoi]
-    ctoi_sim_list <- simulations[[ctoi]]
-
-    ctoi_sims <- lapply(1:length(ctoi_sim_list), function(sim_id){
-
-      sim <- ctoi_sim_list[[sim_id]]
-      sim_ranked <- singscore::rankGenes(sim)
-      scores <- sapply(signatures_ctoi, simplify = TRUE, function(sig){
-        singscore::simpleScore(sim_ranked, upSet = sig, centerScore = FALSE)$TotalScore
-      })
-      scores <- cbind(scores, frac = sim_fracs)
-
       scores
 
     })
@@ -1124,285 +779,105 @@ learnParams <- function(simulations_scored, ncores){
   celltypes <- names(simulations_scored)
 
   linearParams <- BiocParallel::bplapply(celltypes, function(ctoi){
-    tp <- simulations_scored[[ctoi]] %>%
-      group_by(celltype, sig, frac) %>%
-      summarise(score = mean(score), .groups = "drop") %>%
-      group_by(celltype, frac) %>%
-      summarise(score = mean(score), .groups = "drop") %>%
-      mutate(score = score - min(score)) %>%
-      filter(frac > 0) %>%
-      summarise(tp = list(try(minpack.lm::nlsLM(score ~ a * frac^b, start = list(a=1, b=1), control = list(maxiter = 500)), silent = TRUE))) %>%
-      pull(tp)
 
-    return(tp[[1]])
+    scores_ctoi <- simulations_scored[[ctoi]]
+    frac <- scores_ctoi[,ncol(scores_ctoi)]
+    scores_ctoi <- scores_ctoi[,-ncol(scores_ctoi)]
+
+    mean_scores <- sapply(frac, function(f){
+      mean(colMeans(scores_ctoi[frac == f,]))
+    })
+
+    tp <- try(minpack.lm::nlsLM(mean_scores ~ a * frac^b, start = list(a=1, b=1), control = list(maxiter = 500)), silent = TRUE)
+
+    return(tibble(celltype = ctoi, a = coef(tp)[[1]], b = coef(tp)[[2]]))
+
   }, BPPARAM = param)
-  names(linearParams) <- celltypes
 
-  enframe(linearParams, name = "celltype") %>%
-    rowwise() %>%
-    mutate(a = coef(value)[[1]],
-           b = coef(value)[[2]]) %>%
-    select(-value) %>%
-    ungroup() %>%
+
+  bind_rows(linearParams) %>%
     return(.)
 
 }
-linearTransform <- function(params, simulations_scored, filtering_data, signatures, min_filt_ds, ref, ncores){
+trainModels <- function(simulations_scored, filtDS_scored, params, alpha, ncores, seed2use){
 
+  fitModel <- function(data, a, b, alpha, nCores){
 
-  simulations_transformed <- simulations_scored %>%
-    bind_rows() %>%
-    group_by(celltype, sig, frac) %>%
-    summarise(score = mean(score), .groups = "drop") %>%
-    group_by(celltype, frac) %>%
-    summarise(score = mean(score), .groups = "drop_last") %>%
-    mutate(score = score - min(score)) %>%
-    left_join(params, by = "celltype") %>%
-    group_by(celltype) %>%
-    mutate(score = (score^(1/b)) / a) %>%
-    select(-c(a, b))
+    num_samples <- nrow(data)
+    X <- data[, -ncol(data)]
+    Y <- data[, ncol(data)]
 
+    # Linear transformation
+    X_transfomed <- apply(X, 2, function(x){
+      (x^(1/b)) / a
+    })
 
-  simulations_transformed %>%
-    pivot_wider(names_from = celltype, values_from = score) %>%
-    as.data.frame()
+    # Scale
+    X_scaled <- scale(X_transfomed)
 
-  # Those will be use for fitting multiple linear regression model for the filtered cell types
-  if (!is.null(filtering_data)) {
-    param <- BiocParallel::MulticoreParam(workers = ncores)
-
-    filt_cts <- intersect(names(simulations_scored), unlist(sapply(filtering_data$truth, rownames)))
-    filtering_transformed_list <- BiocParallel::bplapply(filt_cts, function(ctoi){
-
-      signatures_ctoi <- signatures[startsWith(names(signatures), paste0(ctoi, "#"))]
-
-      ds2use <- sapply(filtering_data$truth, function(ds){
-        ctoi %in% rownames(ds)
-      })
-
-      if (sum(ds2use) < min_filt_ds) {
-        return(NULL)
-      }
-
-      ds_scores_list <- lapply(names(which(ds2use)), function(ds){
-
-        ctoi_mix <- filtering_data$mixture[[ds]]
-        ctoi_samples <- filtering_data$truth[[ds]][ctoi,]
-        ctoi_samples <- names(ctoi_samples[!is.na(ctoi_samples)])
-        ctoi_samples <- ctoi_samples[ctoi_samples %in% colnames(ctoi_mix)]
-        genes2use <- intersect(rownames(ctoi_mix), rownames(ref))
-
-        #  Rank filtering dataset
-        ctoi_filt_ds_ranked <- singscore::rankGenes(ctoi_mix[genes2use, ctoi_samples])
-
-
-        # Score
-        scores <- sapply(signatures_ctoi, simplify = TRUE, function(sig){
-          suppressWarnings(singscore::simpleScore(ctoi_filt_ds_ranked, upSet = sig, centerScore = FALSE)$TotalScore)
-        })
-
-        # Remove signatures that failed to score
-        if (class(scores)[1] == "list") {
-          scores <- scores[lengths(scores) != 0]
-          scores <- sapply(scores, cbind)
-        }
-
-        fracs <- filtering_data$truth[[ds]][ctoi, ctoi_samples]
-
-        cbind(frac = fracs, scores)
-
-      })
-      names(ds_scores_list) <- names(which(ds2use))
-
-      # Balance the training data
-
-      # Sort datasets by number of samples
-      nsamples <- sapply(ds_scores_list, nrow)
-      ds_scores_list <- ds_scores_list[order(nsamples)]
-      min_size <- min(nsamples)
-
-      # Split true fracs to bins of min_size samples
-      fracs_list <- sapply(ds_scores_list, function(ds){ds[,1]})
-      fracs <- unlist(fracs_list)
-
-      q_bins <- cut(unlist(fracs), breaks = quantile(fracs, probs = seq(0, 1, length.out = min_size + 1)), include.lowest = TRUE)
-      names(q_bins) <- names(unlist(fracs))
-
-      # Balance datasets
-      samples2use <- c()
-      for (q in unique(q_bins)) {
-
-        qbinsampsle2use <- c()
-        for (ds in fracs_list) {
-          qbinsampsle2use <- c(qbinsampsle2use, names(ds)[names(ds) %in% names(q_bins[q_bins == q])])
-          if (length(qbinsampsle2use) >=  min_size) {
-            qbinsampsle2use <- qbinsampsle2use[1:min_size]
-            break
-          }
-        }
-        samples2use <- c(samples2use, qbinsampsle2use)
-
-      }
-
-
-      sigs2use <- Reduce(intersect, lapply(ds_scores_list, colnames))
-      ds_scores_list <- lapply(ds_scores_list, function(x){x[,sigs2use]})
-      ds_scores_mat <- Reduce(rbind, ds_scores_list)
-
-      fracs <- ds_scores_mat[samples2use, 1]
-      # Range of fracs must be at least 3% and at least 10 samples
-      if (max(fracs) - min(fracs) < 0.03 | length(fracs) < 10) {
-        return(NULL)
-      }
-      scores <- ds_scores_mat[samples2use, -1]
-
-      # Transform
-      a <- params[params$celltype == ctoi,]$a
-      b <- params[params$celltype == ctoi,]$b
-
-      scores_transformed <- apply(scores, 2, function(x){
-        x_shifted <- x-min(x)
-        (x_shifted^(1/b)) / a
-      })
-
-      df <- as.data.frame(cbind(fracs = fracs, scores_transformed))
-      return(df)
-
-    }, BPPARAM = param)
-    names(filtering_transformed_list) <- filt_cts
-    filtering_transformed_list <- Filter(Negate(is.null), filtering_transformed_list)
-
-  }else{
-    filtering_transformed_list <- NA
-  }
-
-  return(list(sims = simulations_transformed,
-              filt = filtering_transformed_list))
-
-}
-trainModels <- function(simulations_scored, params, ncores){
-
-  model_params <- simulations_scored %>%
-    bind_rows() %>%
-    group_by(celltype, sig, frac) %>%
-    summarise(score = mean(score), .groups = "drop") %>%
-    group_by(celltype, frac) %>%
-    summarise(score = mean(score), .groups = "drop_last") %>%
-    mutate(score = score - min(score)) %>%
-    left_join(params, by = "celltype") %>%
-    group_by(celltype) %>%
-    mutate(score = (score^(1/b)) / a) %>%
-    select(-c(a, b)) %>%
-    group_by(celltype) %>%
-    summarise(model = list(lm(frac~score))) %>%
-    rowwise() %>%
-    mutate(slope = coef(model)[2],
-           intercept = coef(model)[1],) %>%
-    select(-model)
-
-  params %>%
-    left_join(model_params, by = "celltype") %>%
-    return(.)
-
-
-}
-trainModels2 <- function(simulations_scored, filtering_data_scored, signatures, l2, lr, nl, mdil_frac, ncores){
-
-  fitModel <- function(data, l2, lr, nl, mdil_frac, nCores = ncores){
-
-
-    # Fix for special JSON characters
-    feature_names_filt <- colnames(data)
-    special_json <- grepl(",", feature_names_filt)
-    if (any(special_json)) {
-      colnames(data) <- gsub(pattern = ",", "", colnames(data))
+    # Strategy for determining 'nfold'
+    if (num_samples < 30) {
+      nfold <- num_samples
+      grouped <- FALSE
+    } else if (num_samples >= 30 && num_samples <= 100) {
+      nfold <- min(20, num_samples)
+      grouped <- TRUE
+    } else {
+      nfold <- 10
+      grouped <- TRUE
     }
 
-    training_data <- data[, -ncol(data)]
-    training_data <- apply(training_data, 2, function(x){x-min(x)})
-    training_data <- apply(training_data, 2, scale)
-    labels <- data[, ncol(data)]
+    cv_fit <- glmnet::cv.glmnet(X_scaled, Y, nfolds = nfold, grouped = grouped, alpha = alpha, family = "gaussian")
+    best_coefs <- coef(cv_fit, s = "lambda.min")
+    intercept <- best_coefs[1,]
+    best_coefs <- as.matrix(best_coefs[which(best_coefs[-1, ] != 0) + 1,])
 
+    while(nrow(best_coefs) < 3 & alpha >= 0) {
+      # Relax alpha
+      alpha <- alpha-0.1
+      cv_fit <- glmnet::cv.glmnet(X_scaled, Y, nfolds = nfold, grouped = grouped, alpha = alpha, family = "gaussian")
+      best_coefs <- coef(cv_fit, s = "lambda.min")
+      intercept <- best_coefs[1,]
+      best_coefs <- as.matrix(best_coefs[which(best_coefs[-1, ] != 0) + 1,])
+    }
+    colnames(best_coefs) <- alpha
 
-    params <- list(
-      objective = "regression",
-      metric = "rmse",
-      num_threads = nCores,
-      learning_rate = lr,
-      lambda_l2 = l2,
-      num_leaves = nl,
-      min_data_in_leaf = round(length(labels)*mdil_frac),
-      feature_pre_filter = FALSE
-    )
-
-
-    dtrain <- lightgbm::lgb.Dataset(data = training_data, label = labels, params = params)
-
-    model <- lightgbm::lgb.train(
-      params = params,
-      data = dtrain,
-      nrounds = 1000
-    )
-
-
-    return(model)
+    return(tibble(intercept = intercept, reg_coef = list(best_coefs)))
 
   }
+
+  set.seed(seed2use)
+  param <- BiocParallel::MulticoreParam(workers = ncores)
 
 
   celltypes <- names(simulations_scored)
-  filt_cts <- names(filtering_data_scored)
+  filt_cts <- names(filtDS_scored)
 
-  models_list <- lapply(celltypes, function(ctoi){
+  models_params_list <- BiocParallel::bplapply(celltypes, function(ctoi){
 
+    a <- pull(filter(params, celltype == ctoi), a)
+    b <- pull(filter(params, celltype == ctoi), b)
 
     if (ctoi %in% filt_cts) {
-      data <- Reduce(rbind, filtering_data_scored[[ctoi]])
+      data <- Reduce(rbind, filtDS_scored[[ctoi]])
     }else{
       data <- simulations_scored[[ctoi]]
     }
 
-    ctoi_model <- fitModel(data, l2, lr, nl, mdil_frac)
+    model_params <- fitModel(data, a = a, b = b, alpha = alpha, nCores = ncores)
 
-    return(tibble(celltype = ctoi, model = list(ctoi_model)))
+    return(tibble(celltype = ctoi, model_params))
 
-  })
-  names(models_list) <- celltypes
+  }, BPPARAM = param)
 
-  bind_rows(models_list) %>%
+
+  bind_rows(models_params_list) %>%
+    left_join(params, by = "celltype") %>%
     return(.)
 
 }
 getSpillOverMat <- function(simulations, signatures, dep_list, params, models, frac2use, ncores){
 
-  scoreTransform <- function(mat, signatures, models){
-
-    # Score
-    mat_ranked <- singscore::rankGenes(mat)
-    scores <- sapply(signatures, simplify = TRUE, function(sig){
-      singscore::simpleScore(mat_ranked, upSet = sig, centerScore = FALSE)$TotalScore
-    })
-    rownames(scores) <- colnames(mat)
-
-
-    transfomed_tbl <- models %>%
-      rowwise() %>%
-      #mutate(predictions = list(round(predict(model, scores[,startsWith(colnames(scores), paste0(celltype, "#"))], s = model$lambda, type = "response")[,1], 4))) %>%
-      mutate(predictions = list(round(randomForestSRC::predict.rfsrc(model, newdata = as.data.frame(scores[,startsWith(colnames(scores), paste0(celltype, "#"))]))$predicted, 4))) %>%
-      select(celltype, predictions) %>%
-      unnest_longer(predictions, indices_to = "sim_celltype") %>%
-      pivot_wider(names_from = sim_celltype, values_from = predictions)
-
-
-    # Convert to matrix
-    transfomed_mat <- as.matrix(transfomed_tbl[,-1])
-    rownames(transfomed_mat) <- pull(transfomed_tbl[,1])
-    colnames(transfomed_mat) <- rownames(transfomed_mat)
-
-
-    return(transfomed_mat)
-
-  }
 
   param <- BiocParallel::MulticoreParam(workers = ncores)
 
@@ -1421,6 +896,14 @@ getSpillOverMat <- function(simulations, signatures, dep_list, params, models, f
         return(0)
       }
 
+      # Get CTOI parameters
+      a <- pull(filter(params, celltype == ctoi), a)
+      b <- pull(filter(params, celltype == ctoi), b)
+      intercept <- pull(filter(params, celltype == ctoi), intercept)
+      coefs <- pull(filter(params, celltype == ctoi), reg_coef)[[1]]
+
+
+      # Get frac2use results
       if (length(simulations[[sim_ct]]) == 1) {
         s <- simulations[[sim_ct]][,endsWith(colnames(x), paste0("%%", frac2use))]
         frac2use_mat <- cbind(s, s)
@@ -1435,11 +918,20 @@ getSpillOverMat <- function(simulations, signatures, dep_list, params, models, f
         singscore::simpleScore(frac2use_mat, upSet = sig, centerScore = FALSE)$TotalScore
       })
 
-      frac2use_scores <- colMeans(frac2use_scores) # By simulation
-      frac2use_scores <- mean(frac2use_scores) # By signature
+      # Get mean score by simulations
+      frac2use_scores <- colMeans(frac2use_scores)
+
+      # Linear transformation
+      frac2use_scores <- (frac2use_scores^(1/b)) / a
+
+      # Scale
+      frac2use_scores <- scale(frac2use_scores)
+
+      # Predict
+      frac2use_predictions <- (t(frac2use_scores) %*% coefs) + intercept
 
 
-
+      # Get controls results
       if (length(simulations[[sim_ct]]) == 1) {
         s <- simulations[[sim_ct]][,endsWith(colnames(x), "%%0")]
         control_mat <- cbind(s, s)
@@ -1454,22 +946,25 @@ getSpillOverMat <- function(simulations, signatures, dep_list, params, models, f
         singscore::simpleScore(control_mat, upSet = sig, centerScore = FALSE)$TotalScore
       })
 
-      control_scores <- colMeans(control_scores) # By simulation
-      control_scores <- mean(control_scores) # By signature
+      # Get mean score by simulations
+      control_scores <- colMeans(control_scores)
+
+      # Linear transformation
+      control_scores <- (control_scores^(1/b)) / a
+
+      # Scale
+      control_scores <- scale(control_scores)
+
+      # Predict
+      control_predictions <- (t(control_scores) %*% coefs) + intercept
 
 
-      final_score <- frac2use_scores - control_scores
-      final_score[final_score < 0] <- 0
-
-      # Transform
-      a <- pull(filter(params, celltype == ctoi), a)
-      b <- pull(filter(params, celltype == ctoi), b)
-      slope <- pull(filter(params, celltype == ctoi), slope)
-      intercept <- pull(filter(params, celltype == ctoi), intercept)
-      final_score <- round(((final_score^(1/b)) / a)*slope + intercept, 4)
+      final_score <- frac2use_predictions - control_predictions
       final_score[final_score < 0] <- 0
 
       return(final_score)
+
+
     }, simplify = TRUE)
     names(ctoi_scores) <- celltypes
 
@@ -1527,11 +1022,9 @@ setClass("xCell2Object", slots = list(
 #' @import tidyr
 #' @import readr
 #' @import BiocParallel
-#' @importFrom limma normalizeBetweenArrays
 #' @importFrom minpack.lm nlsLM
-#' @importFrom glmnet glmnet cv.glmnet
+#' @importFrom glmnet cv.glmnet
 #' @importFrom Rfast rowMedians rowmeans rowsums Sort
-#' @importFrom seqgendiff thin_lib thin_diff
 #' @importFrom Matrix rowMeans rowSums colSums
 #' @importFrom singscore rankGenes simpleScore
 #' @param ref A reference gene expression matrix.
@@ -1541,7 +1034,6 @@ setClass("xCell2Object", slots = list(
 #'   "sample": the cell type sample should match the column name in ref.
 #'   "dataset": the cell type sample dataset or subject (for single-cell) as a character.
 #' @param ref_type Gene expression data type: "rnaseq", "array", or "sc".
-#' @param mix_type Gene expression data type: "rnaseq", "array", or "sc".
 #' @param lineage_file Path to the cell type lineage file generated with `xCell2GetLineage` function (optional).
 #' @param top_genes_frac description
 #' @param sim_fracs A vector of mixture fractions to be used in signature filtering (optional).
@@ -1551,6 +1043,7 @@ setClass("xCell2Object", slots = list(
 #' @param max_genes The maximum number of genes to include in the signature (optional).
 #' @param sigsFile description
 #' @param return_sigs description
+#' @param return_sigs_essen description
 #' @param return_sigs_filt description
 #' @param minPBcells description
 #' @param minPBgroups description
@@ -1558,26 +1051,24 @@ setClass("xCell2Object", slots = list(
 #' @param nCores description
 #' @param mix description
 #' @param filtering_data description
-#' @param top_sigs_frac description
 #' @param external_essential_genes description
 #' @param add_essential_genes description
 #' @param return_analysis description
-#' @param min_filt_ds description
+#' @param regAlpha description
 #' @param use_sillover description
 #' @param predict_res description
 #' @return An S4 object containing the signatures, cell type labels, and cell type dependencies.
 #' @export
 xCell2Train <- function(ref, labels, mix = NULL, ref_type, filtering_data = NULL, lineage_file = NULL, top_genes_frac = 1, medianGEP = TRUE, seed = 123, probs = c(0.01, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.4),
                         sim_fracs = c(seq(0, 0.05, 0.001), seq(0.06, 0.1, 0.005), seq(0.11, 0.25, 0.01)), diff_vals = round(c(log2(1), log2(1.5), log2(2), log2(2.5), log2(3), log2(4), log2(5), log2(10), log2(20)), 3),
-                        min_genes = 3, max_genes = 150, return_sigs = FALSE, return_sigs_filt = FALSE, sigsFile = NULL, minPBcells = 30, minPBsamples = 10, min_filt_ds = 2, predict_res = TRUE,
-                        ct_sims = 10,  nCores = 1, top_sigs_frac = 0.05, external_essential_genes = NULL, return_analysis = FALSE, add_essential_genes = TRUE, use_sillover = TRUE){
+                        min_genes = 3, max_genes = 150, return_sigs = FALSE, return_sigs_essen = FALSE, return_sigs_filt = FALSE, sigsFile = NULL, minPBcells = 30, minPBsamples = 10, regAlpha = 0.5, predict_res = TRUE,
+                        ct_sims = 10,  nCores = 1, external_essential_genes = NULL, return_analysis = FALSE, add_essential_genes = TRUE, use_sillover = TRUE){
 
 
   # Validate inputs
   inputs_validated <- validateInputs(ref, labels, ref_type)
   ref <- inputs_validated$ref
   labels <- inputs_validated$labels
-
 
   # Generate pseudo bulk from scRNA-Seq reference
   if (ref_type == "sc") {
@@ -1606,59 +1097,44 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type, filtering_data = NULL
     dep_list <- getDependencies(lineage_file)
   }
 
-
-  # Generate/Load signatures
-  if (is.null(sigsFile)) {
-
-    # Generate signatures
-    message("Calculating quantiles...")
-    quantiles_matrix <- makeQuantiles(ref, labels, probs, ncores = nCores)
-    message("Generating signatures...")
-    signatures <- createSignatures(labels, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, top_genes_frac, ncores = nCores)
-
-    if (return_sigs) {
-      return(signatures)
-    }
-
-    if (!is.null(filtering_data)) {
-      message("Filtering signatures by external datasets...")
-      out <- filterSignatures(ref, labels, filtering_data, signatures, top_sigs_frac, add_essential_genes, ncores = nCores)
-
-
-      if (return_sigs_filt) {
-        return(list(all_sigs = signatures,
-                    filt_sigs = out$filt_sigs,
-                    filt_cts = out$filt_cts,
-                    genes_used = rownames(ref)))
-      }
-
-      signatures <- out$filt_sigs
-
-    }
-
-
-    if (!is.null(external_essential_genes)) {
-      # TODO: Make a function that add external essential genes
-    }
-
-
-  }else{
-    # Load signatures
-    message("Loading signatures...")
-    signatures <- sigsFile
+  # Generate signatures
+  message("Calculating quantiles...")
+  quantiles_matrix <- makeQuantiles(ref, labels, probs, ncores = nCores)
+  message("Generating signatures...")
+  signatures <- createSignatures(labels, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, top_genes_frac, ncores = nCores)
+  if (return_sigs) {
+    return(signatures)
   }
+
+
+  # Add essential genes
+  if (add_essential_genes) {
+    filtDS_scored <- scoreFiltDS(ref, labels, filtering_data, ds_cor_cutoff = 0.5, signatures, ncores = nCores)
+    signatures <- addEssentialGenes(ref, filtering_data, filtDS_scored, signatures, top_sigs_frac, ncores = nCores)
+    # TODO: Make a function that add external essential genes
+    filtDS_scored <- scoreFiltDS(ref, labels, filtering_data, ds_cor_cutoff = 0.5, signatures, ncores = nCores)
+  }
+  if (return_sigs_essen) {
+    return(signatures)
+  }
+
 
   # Make simulations
   message("Generating simulations...")
   simulations <- makeSimulations(ref, mix, signatures, labels, gep_mat, ref_type, dep_list, cor_mat, sim_fracs, n_sims = ct_sims, ncores = nCores, noise_level = 0.1, seed2use = seed)
   simulations_scored <- scoreSimulations(signatures, simulations, n_sims, sim_fracs, nCores)
 
+  # Learn linear transformation parameters
+  message("Learning linear transformation parameters...")
+  params <- learnParams(simulations_scored, nCores)
+
   # Train linear models
   message("Training models...")
-  # filtering_data_scored <- scoreFiltDS(ref, labels, filtering_data, ds_cor_cutoff = 0.5, signatures, ncores = nCores)
-  # models <- trainModels(simulations_scored, filtering_data_scored, signatures, l2 = 0, lr = 0.01, nl = 31, mdil_frac = 0.1, ncores = nCores)
-  lParams <- learnParams(simulations_scored, nCores)
-  params <- trainModels(simulations_scored, lParams, nCores)
+  params <- trainModels(simulations_scored, filtDS_scored, params, alpha = regAlpha, ncores = nCores, seed2use = seed)
+  signatures <- signatures[unlist(lapply(params$reg_coef, rownames))]
+  if (return_sigs_filt) {
+    return(signatures)
+  }
 
 
   # Get spillover matrix
@@ -1689,6 +1165,5 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type, filtering_data = NULL
   }else{
     return(xCell2.S4)
   }
-
 
 }
