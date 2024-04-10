@@ -666,9 +666,6 @@ filterSignatures <- function(ref, labels, filtering_data, signatures, top_sigs_f
 }
 addEssentialGenes <- function(filt.sigs.out, signatures){
 
-
-
-  # Filter genes
   for(ctoi in names(filt.sigs.out)){
 
     ctoi_essential_genes <- filt.sigs.out[[ctoi]]$essential_genes
@@ -1191,19 +1188,28 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type, filtering_data = NULL
 
   if (!is.null(filtering_data)) {
     filt.sigs.out <- filterSignatures(ref, labels, filtering_data, signatures, top_sigs_frac = 0.5, add_essential_genes, ncores = nCores)
+
+    sigs_cts <- gsub(x = names(signatures), pattern = "#.*", replacement = "")
+    best_sigs <- unname(unlist(sapply(filt.sigs.out, function(x){x$best_sigs})))
+    best_sigs_cts <- gsub(x = best_sigs, pattern = "#.*", replacement = "")
+    signatures1 <- signatures[!sigs_cts %in% best_sigs_cts]
+    signatures2 <- signatures[best_sigs]
+
+    signatures_filt <- c(signatures1, signatures2)
+
     if (add_essential_genes) {
-      signatures_essen <- addEssentialGenes(filt.sigs.out, signatures)
+      signatures_essen <- addEssentialGenes(filt.sigs.out, signatures_filt)
       # TODO: Make a function that add external essential genes
     }
-    signatures_best <- signatures_essen[unname(unlist(sapply(filt.sigs.out, function(x){x$best_sigs})))]
 
     if (return_sigs) {
       return(list(sigs = signatures,
+                  sigs_filt = signatures_filt,
                   sigs_essen = signatures_essen,
-                  sigs_filt = signatures_best
+
       ))
     }else{
-      signatures <- signatures_best
+      signatures <- signatures_filt
       rm(signatures_essen)
     }
 
