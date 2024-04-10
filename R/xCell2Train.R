@@ -840,7 +840,8 @@ scoreSimulations <- function(signatures, simulations, n_sims, sim_fracs, ncores)
       scores
 
     })
-    ctoi_sims <- Reduce(rbind, ctoi_sims)
+    # ctoi_sims <- Reduce(rbind, ctoi_sims)
+    names(ctoi_sims) <- paste0("sim-", 1:length(ctoi_sim_list))
 
     ctoi_sims
   }, BPPARAM = param)
@@ -858,17 +859,20 @@ learnParams <- function(simulations_scored, ncores){
 
   linearParams <- BiocParallel::bplapply(celltypes, function(ctoi){
 
-    scores_ctoi <- simulations_scored[[ctoi]]
-    frac <- scores_ctoi[,ncol(scores_ctoi)]
-    scores_ctoi <- scores_ctoi[,-ncol(scores_ctoi)]
 
-    mean_scores <- sapply(frac, function(f){
-      mean(colMeans(scores_ctoi[frac == f,]))
-    })
+    tps <- rowMeans(sapply(simulations_scored[[ctoi]], function(sim){
 
-    tp <- try(minpack.lm::nlsLM(mean_scores ~ a * frac^b, start = list(a=1, b=1), control = list(maxiter = 500)), silent = TRUE)
+      frac <- sim[,ncol(sim)]
+      mean_scores <- rowMeans(sim[,-ncol(sim)])
 
-    return(tibble(celltype = ctoi, a = coef(tp)[[1]], b = coef(tp)[[2]]))
+      tp <- try(minpack.lm::nlsLM(mean_scores ~ a * frac^b, start = list(a=1, b=1), control = list(maxiter = 500)), silent = TRUE)
+
+      return(c(a = coef(tp)[[1]], b = coef(tp)[[2]]))
+
+    }))
+
+
+    return(tibble(celltype = ctoi, a = tps[[1]], b = tps[[2]]))
 
   }, BPPARAM = param)
 
@@ -881,17 +885,16 @@ trainModels <- function(simulations_scored, filtDS_scored, params, alpha, ncores
 
   fitModel <- function(data, a, b, alpha, nCores){
 
-    num_samples <- nrow(data)
-    X <- data[, -ncol(data)]
-    Y <- data[, ncol(data)]
+    Y <- unlist(lapply(data, function(ds){ds[,ncol(ds)]}))
+    data_sub <- lapply(data, function(ds){ds[,-ncol(ds)]})
 
-    # Linear transformation
-    X_transfomed <- apply(X, 2, function(x){
-      (x^(1/b)) / a
-    })
+    X_scaled <- Reduce(rbind, lapply(data_sub, function(ds){
+      ds_transformed <- (ds^(1/b)) / a
+      scale(ds)
+    }))
 
-    # Scale
-    X_scaled <- scale(X_transfomed)
+    num_samples <- nrow(X_scaled)
+
 
     # Strategy for determining 'nfold'
     if (num_samples < 30) {
@@ -937,7 +940,7 @@ trainModels <- function(simulations_scored, filtDS_scored, params, alpha, ncores
     b <- pull(filter(params, celltype == ctoi), b)
 
     if (ctoi %in% filt_cts) {
-      data <- Reduce(rbind, filtDS_scored[[ctoi]])
+      data <- filtDS_scored[[ctoi]]
     }else{
       data <- simulations_scored[[ctoi]]
     }
