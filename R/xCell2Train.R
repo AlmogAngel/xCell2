@@ -381,7 +381,7 @@ createSignatures <- function(labels, dep_list, quantiles_matrix, probs, cor_mat,
 
   return(all_sigs)
 }
-scoreFiltDS <- function(ref, labels, filtering_data, ds_cor_cutoff, signatures, ncores){
+scoreFiltDS <- function(ref, labels, filtering_data, ds_cor_cutoff, min_ds2use, signatures, ncores){
 
   param <- BiocParallel::MulticoreParam(workers = ncores)
 
@@ -450,9 +450,11 @@ scoreFiltDS <- function(ref, labels, filtering_data, ds_cor_cutoff, signatures, 
 
     # Remove ds that max(cor) < ds_cor_cutoff
     ds2use <- names(which(unlist(ds2maxCor) >= ds_cor_cutoff))
-    if (length(ds2use) == 0) {
+
+    if (length(ds2use) < min_ds2use) {
       return(NA)
     }
+
     ds_scores_list <- ds_scores_list[ds2use]
 
     return(ds_scores_list)
@@ -1185,7 +1187,6 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type, filtering_data = NULL
     filt.sig.out <- filterSignatures(ref, labels, filtering_data, signatures, top_sigs_frac = 0.5, add_essential_genes, ncores = nCores)
     signatures <- filt.sig.out$filt_sigs
     # TODO: Make a function that add external essential genes
-    filtDS_scored <- scoreFiltDS(ref, labels, filtering_data, ds_cor_cutoff = 0.5, signatures, ncores = nCores)
   }
 
   # Make simulations
@@ -1198,7 +1199,8 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type, filtering_data = NULL
   params <- learnParams(simulations_scored, nCores)
 
   # Train linear models
-  message("Training models...")
+  message("Fitting models...")
+  filtDS_scored <- scoreFiltDS(ref, labels, filtering_data, ds_cor_cutoff = 0.5, min_ds2use = 2, signatures, ncores = nCores)
   params <- trainModels(simulations_scored, filtDS_scored, params, alpha = regAlpha, ncores = nCores, seed2use = seed)
   signatures <- signatures[unlist(lapply(params$reg_coef, rownames))]
   if (return_sigs_filt) {
