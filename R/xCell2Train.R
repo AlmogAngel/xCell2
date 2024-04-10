@@ -1194,7 +1194,6 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type, filtering_data = NULL
     best_sigs_cts <- gsub(x = best_sigs, pattern = "#.*", replacement = "")
     signatures1 <- signatures[!sigs_cts %in% best_sigs_cts]
     signatures2 <- signatures[best_sigs]
-
     signatures_filt <- c(signatures1, signatures2)
 
     if (add_essential_genes) {
@@ -1205,8 +1204,7 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type, filtering_data = NULL
     if (return_sigs) {
       return(list(sigs = signatures,
                   sigs_filt = signatures_filt,
-                  sigs_essen = signatures_essen,
-
+                  sigs_essen = signatures_essen
       ))
     }else{
       signatures <- signatures_filt
