@@ -654,22 +654,36 @@ filterSignatures <- function(ref, labels, filtering_data, signatures, top_sigs_f
   names(filt_sigs) <- shared_cts
 
 
-  # Filter genes
-  for(ctoi in shared_cts){
-    ctoi_best_sigs <- filt_sigs[[ctoi]]$best_sigs
-    if (all(!is.na(ctoi_best_sigs))) {
-      ctoi_sigs <- names(signatures)[startsWith(names(signatures), paste0(ctoi, "#"))]
-      sigs2remove <- ctoi_sigs[!ctoi_sigs %in% ctoi_best_sigs]
-      signatures <- signatures[!names(signatures) %in% sigs2remove]
-    }
+  # Number of  cell types passed filtering
+  filt_sigs <- filt_sigs[sapply(shared_cts, function(ctoi){
+    all(!is.na(filt_sigs[[ctoi]]$best_sigs))
+  })]
 
-    ctoi_essential_genes <- filt_sigs[[ctoi]]$essential_genes
-    if (add_essential_genes & all(!is.na(ctoi_essential_genes))) {
-      # Add essential genes
-      ctoi_sigs <- names(signatures)[startsWith(names(signatures), paste0(ctoi, "#"))]
-      for (sig in ctoi_sigs) {
-        signatures[sig][[1]] <- unique(c(signatures[sig][[1]], ctoi_essential_genes))
-      }
+  message("> Signatures from ", length(filt_sigs), " cell types have been filtered.")
+
+
+  return(filt_sigs)
+}
+addEssentialGenes <- function(filt.sigs.out, signatures){
+
+
+
+  # Filter genes
+  for(ctoi in names(filt.sigs.out)){
+
+    ctoi_essential_genes <- filt.sigs.out[[ctoi]]$essential_genes
+
+    if (all(!is.na(ctoi_essential_genes))) {
+
+      ctoi_index <- which(startsWith(names(signatures), paste0(ctoi, "#")))
+      ctoi_sigs <- signatures[ctoi_index]
+
+      ctoi_sigs_essen <- sapply(ctoi_sigs, function(sig){
+        unique(c(sig, ctoi_essential_genes))
+      })
+
+      signatures[ctoi_index] <- ctoi_sigs_essen
+
     }
   }
 
@@ -679,20 +693,11 @@ filterSignatures <- function(ref, labels, filtering_data, signatures, top_sigs_f
   duplicated_sigs <- duplicated(sigs_sorted_collapsed)
   signatures <- signatures[!duplicated_sigs]
 
-  # Number of  cell types passed filtering
-  filt_sigs <- filt_sigs[sapply(shared_cts, function(ctoi){
-    all(!is.na(filt_sigs[[ctoi]]$best_sigs))
-  })]
-  filts_ct <- names(filt_sigs)
+  message("> ", length(unique(unlist(lapply(filt.sigs.out, function(x){x$essential_genes})))), " essential genes have been added to signatures.")
 
-  message("> Signatures from ", length(filts_ct), " cell types have been filtered.")
-  if (add_essential_genes) {
-    message("> ", length(unique(unlist(lapply(filt_sigs, function(x){x$essential_genes})))), " essential genes have been added to signatures.")
-  }
-  out <- list(filt_sigs = signatures,
-              filt_cts = filts_ct)
 
-  return(out)
+
+  return(signatures)
 }
 makeSimulations <- function(ref, mix, signatures, labels, gep_mat, ref_type, dep_list, cor_mat, sim_fracs, n_sims, ncores, noise_level, seed2use){
 
@@ -1182,15 +1187,28 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type, filtering_data = NULL
   quantiles_matrix <- makeQuantiles(ref, labels, probs, ncores = nCores)
   message("Generating signatures...")
   signatures <- createSignatures(labels, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, top_genes_frac, ncores = nCores)
-  if (return_sigs) {
-    return(signatures)
-  }
+
 
   if (!is.null(filtering_data)) {
-    filt.sig.out <- filterSignatures(ref, labels, filtering_data, signatures, top_sigs_frac = 0.5, add_essential_genes, ncores = nCores)
-    signatures <- filt.sig.out$filt_sigs
-    # TODO: Make a function that add external essential genes
+    filt.sigs.out <- filterSignatures(ref, labels, filtering_data, signatures, top_sigs_frac = 0.5, add_essential_genes, ncores = nCores)
+    if (add_essential_genes) {
+      signatures_essen <- addEssentialGenes(filt.sigs.out, signatures)
+      # TODO: Make a function that add external essential genes
+    }
+    signatures_best <- signatures_essen[unname(unlist(sapply(filt.sigs.out, function(x){x$best_sigs})))]
+
+    if (return_sigs) {
+      return(list(sigs = signatures,
+                  sigs_essen = signatures_essen,
+                  sigs_filt = signatures_best
+      ))
+    }else{
+      signatures <- signatures_best
+      rm(signatures_essen)
+    }
+
   }
+
 
   # Make simulations
   message("Generating simulations...")
