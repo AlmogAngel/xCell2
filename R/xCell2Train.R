@@ -1221,6 +1221,10 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type, filtering_data = NULL
   message("Generating signatures...")
   signatures <- createSignatures(labels, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, top_genes_frac, ncores = nCores)
 
+  # TODO: remove this
+  if (return_sigs) {
+    return(signatures)
+  }
 
   if (!is.null(filtering_data)) {
     out <- filterSignatures(ref, labels, filtering_data, signatures, top_sigs_frac, add_essential_genes, ncores = nCores)
