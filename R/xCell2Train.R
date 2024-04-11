@@ -654,15 +654,45 @@ filterSignatures <- function(ref, labels, filtering_data, signatures, top_sigs_f
   names(filt_sigs) <- shared_cts
 
 
+  # Filter genes
+  for(ctoi in shared_cts){
+    ctoi_best_sigs <- filt_sigs[[ctoi]]$best_sigs
+    if (all(!is.na(ctoi_best_sigs))) {
+      ctoi_sigs <- names(signatures)[startsWith(names(signatures), paste0(ctoi, "#"))]
+      sigs2remove <- ctoi_sigs[!ctoi_sigs %in% ctoi_best_sigs]
+      signatures <- signatures[!names(signatures) %in% sigs2remove]
+    }
+
+    ctoi_essential_genes <- filt_sigs[[ctoi]]$essential_genes
+    if (add_essential_genes & all(!is.na(ctoi_essential_genes))) {
+      # Add essential genes
+      ctoi_sigs <- names(signatures)[startsWith(names(signatures), paste0(ctoi, "#"))]
+      for (sig in ctoi_sigs) {
+        signatures[sig][[1]] <- unique(c(signatures[sig][[1]], ctoi_essential_genes))
+      }
+    }
+  }
+
+  # Remove duplicate signatures
+  sigs_sorted <- lapply(signatures, function(x) sort(x))
+  sigs_sorted_collapsed <- sapply(sigs_sorted, paste, collapse = ",")
+  duplicated_sigs <- duplicated(sigs_sorted_collapsed)
+  signatures <- signatures[!duplicated_sigs]
+
   # Number of  cell types passed filtering
   filt_sigs <- filt_sigs[sapply(shared_cts, function(ctoi){
     all(!is.na(filt_sigs[[ctoi]]$best_sigs))
   })]
+  filts_ct <- names(filt_sigs)
 
-  message("> Signatures from ", length(filt_sigs), " cell types have been filtered.")
+  message("> Signatures from ", length(filts_ct), " cell types have been filtered.")
+  if (add_essential_genes) {
+    message("> ", length(unique(unlist(lapply(filt_sigs, function(x){x$essential_genes})))), " essential genes have been added to signatures.")
+  }
+  out <- list(filt_sigs = signatures,
+              filt_cts = filts_ct)
 
-
-  return(filt_sigs)
+  return(out)
 }
 addEssentialGenes <- function(filt.sigs.out, signatures){
 
@@ -1187,31 +1217,18 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type, filtering_data = NULL
 
 
   if (!is.null(filtering_data)) {
-    filt.sigs.out <- filterSignatures(ref, labels, filtering_data, signatures, top_sigs_frac = 0.5, add_essential_genes, ncores = nCores)
-    filt_ct <- names(filt.sigs.out)
-    sigs_cts <- gsub(x = names(signatures), pattern = "#.*", replacement = "")
-    best_sigs <- unname(unlist(sapply(filt.sigs.out, function(x){x$best_sigs})))
-    best_sigs_cts <- gsub(x = best_sigs, pattern = "#.*", replacement = "")
-    signatures1 <- signatures[!sigs_cts %in% best_sigs_cts]
-    signatures2 <- signatures[best_sigs]
-    signatures_filt <- c(signatures1, signatures2)
+    out <- filterSignatures(ref, labels, filtering_data, signatures, top_sigs_frac, add_essential_genes, ncores = nCores)
 
-    if (add_essential_genes) {
-      signatures_essen <- addEssentialGenes(filt.sigs.out, signatures_filt)
-      # TODO: Make a function that add external essential genes
-    }
 
     if (return_sigs) {
       return(list(sigs = signatures,
-                  sigs_filt = signatures_filt,
-                  sigs_essen = signatures_essen,
-                  filt_ct = filt_ct
+                  sigs_filt = out$filt_sigs,
+                  filt_ct = out$filt_cts,
+                  genes_used = rownames(ref)
       ))
     }else{
-      signatures <- signatures_filt
-      rm(signatures_essen)
+      signatures <- out$filt_sigs
     }
-
   }
 
 
