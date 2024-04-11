@@ -922,7 +922,7 @@ trainModels <- function(simulations_scored, filtDS_scored, params, alpha, ncores
 
     X_scaled <- Reduce(rbind, lapply(data_sub, function(ds){
       ds_transformed <- (ds^(1/b)) / a
-      scale(ds)
+      scale(ds_transformed)
     }))
 
     num_samples <- nrow(X_scaled)
@@ -941,18 +941,18 @@ trainModels <- function(simulations_scored, filtDS_scored, params, alpha, ncores
     }
 
     cv_fit <- glmnet::cv.glmnet(X_scaled, Y, nfolds = nfold, grouped = grouped, alpha = alpha, family = "gaussian")
-    best_coefs <- coef(cv_fit, s = "lambda.min")
+    best_coefs <- coef(cv_fit, s = "lambda.1se")
     intercept <- best_coefs[1,]
     best_coefs <- as.matrix(best_coefs[which(best_coefs[-1, ] != 0) + 1,])
 
-    while(nrow(best_coefs) < 3 & alpha >= 0) {
-      # Relax alpha
-      alpha <- alpha-0.1
-      cv_fit <- glmnet::cv.glmnet(X_scaled, Y, nfolds = nfold, grouped = grouped, alpha = alpha, family = "gaussian")
-      best_coefs <- coef(cv_fit, s = "lambda.min")
-      intercept <- best_coefs[1,]
-      best_coefs <- as.matrix(best_coefs[which(best_coefs[-1, ] != 0) + 1,])
-    }
+    # while(nrow(best_coefs) < 3 & alpha >= 0) {
+    #   # Relax alpha
+    #   alpha <- alpha-0.1
+    #   cv_fit <- glmnet::cv.glmnet(X_scaled, Y, nfolds = nfold, grouped = grouped, alpha = alpha, family = "gaussian")
+    #   best_coefs <- coef(cv_fit, s = "lambda.min")
+    #   intercept <- best_coefs[1,]
+    #   best_coefs <- as.matrix(best_coefs[which(best_coefs[-1, ] != 0) + 1,])
+    # }
     colnames(best_coefs) <- alpha
 
     return(tibble(intercept = intercept, reg_coef = list(best_coefs)))
@@ -1221,10 +1221,6 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type, filtering_data = NULL
   message("Generating signatures...")
   signatures <- createSignatures(labels, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, top_genes_frac, ncores = nCores)
 
-  # TODO: remove this
-  if (return_sigs) {
-    return(signatures)
-  }
 
   if (!is.null(filtering_data)) {
     out <- filterSignatures(ref, labels, filtering_data, signatures, top_sigs_frac, add_essential_genes, ncores = nCores)
@@ -1253,8 +1249,8 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type, filtering_data = NULL
 
   # Train linear models
   message("Fitting models...")
-  filtDS_scored <- scoreFiltDS(ref, labels, filtering_data, ds_cor_cutoff = 0.5, min_ds2use = 2, signatures, ncores = nCores)
-  params <- trainModels(simulations_scored, filtDS_scored, params, alpha = regAlpha, ncores = nCores, seed2use = seed)
+  filtDS_scored <- scoreFiltDS(ref, labels, filtering_data, ds_cor_cutoff = 0.5, min_ds2use = 1, signatures, ncores = nCores)
+  params <- trainModels(simulations_scored, filtDS_scored, params, alpha = 0, ncores = nCores, seed2use = seed)
   signatures <- signatures[unlist(lapply(params$reg_coef, rownames))]
   if (return_sigs_filt) {
     return(signatures)
