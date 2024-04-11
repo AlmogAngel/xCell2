@@ -1170,12 +1170,13 @@ setClass("xCell2Object", slots = list(
 #' @param regAlpha description
 #' @param use_sillover description
 #' @param predict_res description
+#' @param use_ontology description
 #' @return An S4 object containing the signatures, cell type labels, and cell type dependencies.
 #' @export
 xCell2Train <- function(ref, labels, mix = NULL, ref_type, filtering_data = NULL, lineage_file = NULL, top_genes_frac = 1, medianGEP = TRUE, seed = 123, probs = c(0.01, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.4),
                         sim_fracs = c(seq(0, 0.05, 0.001), seq(0.06, 0.1, 0.005), seq(0.11, 0.25, 0.01)), diff_vals = round(c(log2(1), log2(1.5), log2(2), log2(2.5), log2(3), log2(4), log2(5), log2(10), log2(20)), 3),
                         min_genes = 3, max_genes = 150, return_sigs = FALSE, return_sigs_essen = FALSE, return_sigs_filt = FALSE, sigsFile = NULL, minPBcells = 30, minPBsamples = 10, regAlpha = 0.5, predict_res = TRUE,
-                        ct_sims = 10,  nCores = 1, external_essential_genes = NULL, return_analysis = FALSE, add_essential_genes = TRUE, use_sillover = TRUE, top_sigs_frac = 0.05){
+                        ct_sims = 10,  nCores = 1, external_essential_genes = NULL, return_analysis = FALSE, add_essential_genes = TRUE, use_sillover = TRUE, top_sigs_frac = 0.05, use_ontology = TRUE){
 
 
   # Validate inputs
@@ -1208,6 +1209,10 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type, filtering_data = NULL
     dep_list <- xCell2::xCell2GetLineage(labels, out_file = NULL)
   }else{
     dep_list <- getDependencies(lineage_file)
+  }
+
+  if (!use_ontology) {
+    dep_list <- NULL
   }
 
   # Generate signatures
