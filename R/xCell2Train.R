@@ -1188,7 +1188,7 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type, filtering_data = NULL
 
   if (!is.null(filtering_data)) {
     filt.sigs.out <- filterSignatures(ref, labels, filtering_data, signatures, top_sigs_frac = 0.5, add_essential_genes, ncores = nCores)
-
+    filt_ct <- names(filt.sigs.out)
     sigs_cts <- gsub(x = names(signatures), pattern = "#.*", replacement = "")
     best_sigs <- unname(unlist(sapply(filt.sigs.out, function(x){x$best_sigs})))
     best_sigs_cts <- gsub(x = best_sigs, pattern = "#.*", replacement = "")
@@ -1204,7 +1204,8 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type, filtering_data = NULL
     if (return_sigs) {
       return(list(sigs = signatures,
                   sigs_filt = signatures_filt,
-                  sigs_essen = signatures_essen
+                  sigs_essen = signatures_essen,
+                  filt_ct = filt_ct
       ))
     }else{
       signatures <- signatures_filt
