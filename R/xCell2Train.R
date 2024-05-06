@@ -76,7 +76,7 @@ sc2pseudoBulk <- function(ref, labels, min_n_cells, min_ps_samples, seed2use){
   return(list(ref = pseudo_ref, labels = pseudo_label))
 
 }
-normRefMix <- function(ref, mix, ref_type){
+prepRefMix <- function(ref, mix, ref_type){
 
 
   if (ref_type == "sc") {
@@ -87,10 +87,19 @@ normRefMix <- function(ref, mix, ref_type){
     ref_norm <- ref %*% Matrix::Diagonal(x = norm_factor)
     colnames(ref_norm) <- colnames(ref)
     ref <- as.matrix(ref_norm) # TODO: Find a way to reduce memory usage by keeping matrix sparse
-    message("Scaling reference to log2-space.")
-    ref <- log2(ref+1)
   }
 
+  # Adding 3 to restrict inclusion of small changes
+  if(max(ref) < 50){
+    # Unlog
+    ref <- 2^ref
+    if (min(ref) == 1) {
+      ref <- ref-1
+    }
+    ref <- ref + 3
+  }else{
+    ref <- ref + 3
+  }
 
   # Select shared genes
   shared_genes <- intersect(rownames(ref), rownames(mix))
@@ -98,12 +107,9 @@ normRefMix <- function(ref, mix, ref_type){
   ref <- ref[shared_genes,]
   mix <- mix[shared_genes,]
 
-
-  # Data log-transformation
-  if(max(ref) >= 50){
-    message("Scaling reference to log2-space.")
-    ref <- log2(ref+1)
-  }
+  # log2-transformation
+  message("Scaling reference to log2-space.")
+  ref <- log2(ref)
 
   if(max(mix) >= 50){
     message("Scaling mixture to log2-space.")
@@ -113,7 +119,7 @@ normRefMix <- function(ref, mix, ref_type){
 
   return(list(ref.out = ref, mix.out = mix))
 }
-makeGEPMat <- function(ref, labels, use_median){
+makeGEPMat <- function(ref, labels){
 
   celltypes <- unique(labels$label)
 
@@ -122,11 +128,7 @@ makeGEPMat <- function(ref, labels, use_median){
     if (sum(type_samples) == 1) {
       type_vec <- as.vector(ref[,type_samples])
     }else{
-      if(use_median){
-        type_vec <- Rfast::rowMedians(as.matrix(ref[,type_samples]))
-      }else{
-        type_vec <- Rfast::rowmeans(as.matrix(ref[,type_samples]))
-      }
+      type_vec <- Rfast::rowMedians(as.matrix(ref[,type_samples]))
     }
   })
   rownames(gep_mat) <- rownames(ref)
@@ -224,8 +226,8 @@ createSignatures <- function(labels, dep_list, quantiles_matrix, probs, cor_mat,
 
     # Set signature thresholds grid
     param.df <- expand.grid("diff_vals" = diff_vals, "probs" = probs)
-    param.df <- param.df[param.df$diff_vals != 0 | param.df$probs <= 0.05,]
-    ntop <- round(length(not_dep_celltypes)*top_genes_frac) # Number of top values given top top_genes_frac of the not dependent cell types
+    param.df <- param.df[param.df$diff_vals != 0 | param.df$probs <= 0.05,] # Remove diff-prob combination that is too permissive...
+    ntop <- round(length(not_dep_celltypes)*top_genes_frac) # Number of top values given top_genes_frac of the not dependent cell types
     # Adjusted ntop given the diff value
     param.ranks <- rank((param.df$diff_vals^2)*(1/param.df$probs))
     ntop_adj <- round(1 + ((param.ranks - min(param.ranks)) / (max(param.ranks) - min(param.ranks))) * (ntop - 1)) # Scale param.ranks given ntop
@@ -238,7 +240,6 @@ createSignatures <- function(labels, dep_list, quantiles_matrix, probs, cor_mat,
       # Get a Boolean matrices with genes that pass the quantiles criteria
       diff <- param.df[i, ]$diff_vals # difference threshold
       lower_prob <- which(probs == param.df[i, ]$probs) # lower quantile cutoff
-
 
       # Sort upper prob gene value for each not_dep_celltypes
       upper_prob <- nrow(quantiles_matrix[[1]])-lower_prob+1 # upper quantile cutoff
@@ -380,93 +381,6 @@ createSignatures <- function(labels, dep_list, quantiles_matrix, probs, cor_mat,
 
 
   return(all_sigs)
-}
-scoreFiltDS <- function(ref, labels, filtering_data, ds_cor_cutoff, min_ds2use, signatures, ncores){
-
-  param <- BiocParallel::MulticoreParam(workers = ncores)
-
-  filt_cts <- intersect(unique(labels$label), unlist(sapply(filtering_data$truth, rownames)))
-
-  if (length(filt_cts) == 0) {
-    warningCondition("Not cell types found for filtering signatures.")
-    return(NA)
-  }
-
-  ct_ds_scores_list <- BiocParallel::bplapply(filt_cts, function(ctoi){
-
-    # Get CTOI signatures
-    signatures_ctoi <- signatures[startsWith(names(signatures), paste0(ctoi, "#"))]
-
-    # Score
-    ds_names <- names(filtering_data$mixture)
-    ds_scores_list <- lapply(ds_names, function(ds){
-
-      if(!ctoi %in% rownames(filtering_data$truth[[ds]])){
-        return(NA)
-      }
-
-      ctoi_mix <- filtering_data$mixture[[ds]]
-      ctoi_samples <- filtering_data$truth[[ds]][ctoi,]
-      ctoi_samples <- names(ctoi_samples[!is.na(ctoi_samples)])
-      ctoi_samples <- ctoi_samples[ctoi_samples %in% colnames(ctoi_mix)]
-      genes2use <- intersect(rownames(ctoi_mix), rownames(ref))
-
-      #  Rank filtering dataset
-      ctoi_filt_ds_ranked <- singscore::rankGenes(ctoi_mix[, ctoi_samples])
-
-      # Score
-      scores <- sapply(signatures_ctoi, simplify = TRUE, function(sig){
-        suppressWarnings(singscore::simpleScore(ctoi_filt_ds_ranked, upSet = sig, centerScore = FALSE)$TotalScore)
-      })
-
-
-      # Remove signatures that failed to score
-      if (class(scores)[1] == "list") {
-        scores <- scores[lengths(scores) != 0]
-        scores <- sapply(scores, cbind)
-      }
-
-      scores[scores < 0] <- 0 # Scores might be negative if all signature's genes are zero
-
-
-      fracs <- filtering_data$truth[[ds]][ctoi, ctoi_samples]
-
-      return(cbind(scores, "frac" = fracs))
-
-    })
-    names(ds_scores_list) <- ds_names
-    ds_scores_list <- ds_scores_list[lengths(ds_scores_list) > 1]
-
-    # Get shared signatures
-    sigs2use <- Reduce(intersect, lapply(ds_scores_list, colnames))
-    ds_scores_list <- lapply(ds_scores_list, function(x){x[,sigs2use]})
-
-    # Calculate max correlations per ds
-    ds2maxCor <- lapply(ds_scores_list, function(x){
-      max(apply(x[,-ncol(x)], 2, function(y){
-        cor(y, x[,ncol(x)], method = "spearman")
-      }))
-    })
-
-    # Remove ds that max(cor) < ds_cor_cutoff
-    ds2use <- names(which(unlist(ds2maxCor) >= ds_cor_cutoff))
-
-    if (length(ds2use) < min_ds2use) {
-      return(NA)
-    }
-
-    ds_scores_list <- ds_scores_list[ds2use]
-
-    return(ds_scores_list)
-    #final_training_ds <- Reduce(rbind, ds_scores_list)
-
-  }, BPPARAM = param)
-  names(ct_ds_scores_list) <- filt_cts
-
-  ct_ds_scores_list <- ct_ds_scores_list[sapply(ct_ds_scores_list, function(x)!is.na(x)[1])]
-
-  return(ct_ds_scores_list)
-
 }
 filterSignatures <- function(ref, labels, filtering_data, signatures, top_sigs_frac, add_essential_genes, ncores){
 
@@ -693,6 +607,93 @@ filterSignatures <- function(ref, labels, filtering_data, signatures, top_sigs_f
               filt_cts = filts_ct)
 
   return(out)
+}
+scoreFiltDS <- function(ref, labels, filtering_data, ds_cor_cutoff, min_ds2use, signatures, ncores){
+
+  param <- BiocParallel::MulticoreParam(workers = ncores)
+
+  filt_cts <- intersect(unique(labels$label), unlist(sapply(filtering_data$truth, rownames)))
+
+  if (length(filt_cts) == 0) {
+    warningCondition("Not cell types found for filtering signatures.")
+    return(NA)
+  }
+
+  ct_ds_scores_list <- BiocParallel::bplapply(filt_cts, function(ctoi){
+
+    # Get CTOI signatures
+    signatures_ctoi <- signatures[startsWith(names(signatures), paste0(ctoi, "#"))]
+
+    # Score
+    ds_names <- names(filtering_data$mixture)
+    ds_scores_list <- lapply(ds_names, function(ds){
+
+      if(!ctoi %in% rownames(filtering_data$truth[[ds]])){
+        return(NA)
+      }
+
+      ctoi_mix <- filtering_data$mixture[[ds]]
+      ctoi_samples <- filtering_data$truth[[ds]][ctoi,]
+      ctoi_samples <- names(ctoi_samples[!is.na(ctoi_samples)])
+      ctoi_samples <- ctoi_samples[ctoi_samples %in% colnames(ctoi_mix)]
+      genes2use <- intersect(rownames(ctoi_mix), rownames(ref))
+
+      #  Rank filtering dataset
+      ctoi_filt_ds_ranked <- singscore::rankGenes(ctoi_mix[, ctoi_samples])
+
+      # Score
+      scores <- sapply(signatures_ctoi, simplify = TRUE, function(sig){
+        suppressWarnings(singscore::simpleScore(ctoi_filt_ds_ranked, upSet = sig, centerScore = FALSE)$TotalScore)
+      })
+
+
+      # Remove signatures that failed to score
+      if (class(scores)[1] == "list") {
+        scores <- scores[lengths(scores) != 0]
+        scores <- sapply(scores, cbind)
+      }
+
+      scores[scores < 0] <- 0 # Scores might be negative if all signature's genes are zero
+
+
+      fracs <- filtering_data$truth[[ds]][ctoi, ctoi_samples]
+
+      return(cbind(scores, "frac" = fracs))
+
+    })
+    names(ds_scores_list) <- ds_names
+    ds_scores_list <- ds_scores_list[lengths(ds_scores_list) > 1]
+
+    # Get shared signatures
+    sigs2use <- Reduce(intersect, lapply(ds_scores_list, colnames))
+    ds_scores_list <- lapply(ds_scores_list, function(x){x[,sigs2use]})
+
+    # Calculate max correlations per ds
+    ds2maxCor <- lapply(ds_scores_list, function(x){
+      max(apply(x[,-ncol(x)], 2, function(y){
+        cor(y, x[,ncol(x)], method = "spearman")
+      }))
+    })
+
+    # Remove ds that max(cor) < ds_cor_cutoff
+    ds2use <- names(which(unlist(ds2maxCor) >= ds_cor_cutoff))
+
+    if (length(ds2use) < min_ds2use) {
+      return(NA)
+    }
+
+    ds_scores_list <- ds_scores_list[ds2use]
+
+    return(ds_scores_list)
+    #final_training_ds <- Reduce(rbind, ds_scores_list)
+
+  }, BPPARAM = param)
+  names(ct_ds_scores_list) <- filt_cts
+
+  ct_ds_scores_list <- ct_ds_scores_list[sapply(ct_ds_scores_list, function(x)!is.na(x)[1])]
+
+  return(ct_ds_scores_list)
+
 }
 addEssentialGenes <- function(filt.sigs.out, signatures){
 
@@ -1140,43 +1141,49 @@ setClass("xCell2Object", slots = list(
 #' @importFrom Rfast rowMedians rowmeans rowsums Sort
 #' @importFrom Matrix rowMeans rowSums colSums
 #' @importFrom singscore rankGenes simpleScore
-#' @param ref A reference gene expression matrix.
+#' @param ref A reference gene expression matrix (genes in rows samples/cells in columns).
 #' @param labels A data frame in which the rows correspond to samples in the ref. The data frame must have four columns:
 #'   "ont": the cell type ontology as a character (i.e., "CL:0000545" or NA if there is no ontology).
 #'   "label": the cell type name as a character (i.e., "T-helper 1 cell").
-#'   "sample": the cell type sample should match the column name in ref.
-#'   "dataset": the cell type sample dataset or subject (for single-cell) as a character.
-#' @param ref_type Gene expression data type: "rnaseq", "array", or "sc".
+#'   "sample": the cell type sample that match the column name in ref.
+#'   "dataset": sample's source dataset or subject (for single-cell).
+#' @param ref_type Gene expression data type: "rnaseq" for bulk RNA-Seq, "array" for micro-array, or "sc" for scRNA-Seq.
+#' @param seed Set seed for reproducible results (optional).
+#' @param minPBcells For scRNA-Seq reference only - minimum number of cells in the pseudo-bulk (optional).
+#' @param minPBgroups For scRNA-Seq reference only - minimum number of pseudo-bulk samples (optional).
+#' @param use_ontology A Boolean for using ontological integration (TRUE)
 #' @param lineage_file Path to the cell type lineage file generated with `xCell2GetLineage` function (optional).
-#' @param top_genes_frac description
+#' @param probs A numeric vector of probability thresholds to be used for generating signatures (optional).
+#' @param diff_vals A numeric vector of delta values to be used for generating signatures (optional).
+#' @param top_genes_frac Use for calibration of signatures generation (remove!)
 #' @param sim_fracs A vector of mixture fractions to be used in signature filtering (optional).
-#' @param probs A vector of probability thresholds to be used for generating signatures (optional).
-#' @param diff_vals A vector of delta values to be used for generating signatures (optional).
 #' @param min_genes The minimum number of genes to include in the signature (optional).
 #' @param max_genes The maximum number of genes to include in the signature (optional).
 #' @param sigsFile description
 #' @param top_sigs_frac description
 #' @param return_sigs description
 #' @param return_sigs_filt description
-#' @param minPBcells description
-#' @param minPBgroups description
 #' @param ct_sims description
 #' @param nCores description
 #' @param mix description
 #' @param filtering_data description
 #' @param external_essential_genes description
-#' @param add_essential_genes description
 #' @param return_analysis description
 #' @param regAlpha description
 #' @param use_sillover description
 #' @param predict_res description
-#' @param use_ontology description
 #' @return An S4 object containing the signatures, cell type labels, and cell type dependencies.
 #' @export
-xCell2Train <- function(ref, labels, mix = NULL, ref_type, filtering_data = NULL, lineage_file = NULL, top_genes_frac = 1, medianGEP = TRUE, seed = 123, probs = c(0.01, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.4),
-                        sim_fracs = c(seq(0, 0.05, 0.001), seq(0.06, 0.1, 0.005), seq(0.11, 0.25, 0.01)), diff_vals = round(c(log2(1), log2(1.5), log2(2), log2(2.5), log2(3), log2(4), log2(5), log2(10), log2(20)), 3),
-                        min_genes = 3, max_genes = 150, return_sigs = FALSE, return_sigs_essen = FALSE, return_sigs_filt = FALSE, sigsFile = NULL, minPBcells = 30, minPBsamples = 10, regAlpha = 0.5, predict_res = TRUE,
-                        ct_sims = 10,  nCores = 1, external_essential_genes = NULL, return_analysis = FALSE, add_essential_genes = TRUE, use_sillover = TRUE, top_sigs_frac = 0.05, use_ontology = TRUE){
+xCell2Train <- function(ref, labels, mix = NULL, ref_type, seed = 123, nCores = 1,
+                        use_ontology = TRUE, lineage_file = NULL, top_genes_frac = 1,
+                        probs = c(0.01, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.4),
+                        diff_vals = round(c(log2(1), log2(1.5), log2(2), log2(2.5), log2(3), log2(4), log2(5), log2(10), log2(20)), 3),
+                        min_genes = 3,
+                        max_genes = 150,
+                        filtering_data = NULL,
+                        sim_fracs = c(seq(0, 0.05, 0.001), seq(0.06, 0.1, 0.005), seq(0.11, 0.25, 0.01)),
+                        return_sigs = FALSE, return_sigs_essen = FALSE, return_sigs_filt = FALSE, sigsFile = NULL, minPBcells = 30, minPBsamples = 10, regAlpha = 0.5, predict_res = TRUE,
+                        ct_sims = 10, external_essential_genes = NULL, return_analysis = FALSE, use_sillover = TRUE, top_sigs_frac = 0.05){
 
 
   # Validate inputs
@@ -1194,24 +1201,25 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type, filtering_data = NULL
 
   # Normalize reference/mixture
   # *Also use shared genes
-  out <- normRefMix(ref, mix, ref_type)
+  out <- prepRefMix(ref, mix, ref_type)
   ref <- out$ref.out
   mix <- out$mix.out
 
   # Build cell types correlation matrix
   message("Calculating cell-type correlation matrix...")
-  gep_mat <- makeGEPMat(ref, labels, use_median = medianGEP)
+  gep_mat <- makeGEPMat(ref, labels)
   cor_mat <- getCellTypeCorrelation(gep_mat, ref_type)
 
   # Get cell type dependencies list
-  message("Loading dependencies...")
-  if (is.null(lineage_file)) {
-    dep_list <- xCell2::xCell2GetLineage(labels, out_file = NULL)
+  if (use_ontology) {
+    message("Loading dependencies...")
+    if (is.null(lineage_file)) {
+      dep_list <- xCell2::xCell2GetLineage(labels, out_file = NULL)
+    }else{
+      dep_list <- getDependencies(lineage_file)
+    }
   }else{
-    dep_list <- getDependencies(lineage_file)
-  }
-
-  if (!use_ontology) {
+    message("Skipping ontological integration")
     dep_list <- NULL
   }
 
@@ -1224,7 +1232,6 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type, filtering_data = NULL
 
   if (!is.null(filtering_data)) {
     out <- filterSignatures(ref, labels, filtering_data, signatures, top_sigs_frac, add_essential_genes, ncores = nCores)
-
 
     if (return_sigs) {
       return(list(sigs = signatures,
