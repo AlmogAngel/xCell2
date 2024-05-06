@@ -89,9 +89,9 @@ prepRefMix <- function(ref, mix, ref_type){
     ref <- as.matrix(ref_norm) # TODO: Find a way to reduce memory usage by keeping matrix sparse
   }
 
-  # Adding 3 to restrict inclusion of small changes
+  # Adding 3 to reference restrict inclusion of small changes
   if(max(ref) < 50){
-    # Unlog
+    # Unlog2
     ref <- 2^ref
     if (min(ref) == 1) {
       ref <- ref-1
@@ -101,21 +101,20 @@ prepRefMix <- function(ref, mix, ref_type){
     ref <- ref + 3
   }
 
+  # log2-transformation
+  ref <- log2(ref)
+
+
+  if(max(mix) >= 50){
+    mix <- log2(mix+1)
+  }
+
+
   # Select shared genes
   shared_genes <- intersect(rownames(ref), rownames(mix))
   message(paste0(length(shared_genes), " genes are shared between reference and mixture."))
   ref <- ref[shared_genes,]
   mix <- mix[shared_genes,]
-
-  # log2-transformation
-  message("Scaling reference to log2-space.")
-  ref <- log2(ref)
-
-  if(max(mix) >= 50){
-    message("Scaling mixture to log2-space.")
-    mix <- log2(mix+1)
-  }
-
 
   return(list(ref.out = ref, mix.out = mix))
 }
