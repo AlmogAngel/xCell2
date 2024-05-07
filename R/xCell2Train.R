@@ -87,18 +87,19 @@ prepRefMix <- function(ref, mix, ref_type){
     ref_norm <- ref %*% Matrix::Diagonal(x = norm_factor)
     colnames(ref_norm) <- colnames(ref)
     ref <- as.matrix(ref_norm) # TODO: Find a way to reduce memory usage by keeping matrix sparse
-  }
-
-  # Adding 3 to reference restrict inclusion of small changes
-  if(max(ref) < 50){
-    # Unlog2
-    ref <- 2^ref
-    if (min(ref) == 1) {
-      ref <- ref-1
-    }
-    ref <- ref + 3
+    ref <- ref + 1
   }else{
-    ref <- ref + 3
+    # Adding 3 to reference restrict inclusion of small changes
+    if(max(ref) < 50){
+      # Unlog2
+      ref <- 2^ref
+      if (min(ref) == 1) {
+        ref <- ref-1
+      }
+      ref <- ref + 3
+    }else{
+      ref <- ref + 3
+    }
   }
 
   # log2-transformation
