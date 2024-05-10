@@ -422,7 +422,7 @@ filterSignatures <- function(shared_genes, labels, filtering_data, signatures, t
       ctoi_samples <- filtering_data$truth[[ds]][ctoi,]
       ctoi_samples <- names(ctoi_samples[!is.na(ctoi_samples)])
       ctoi_samples <- ctoi_samples[ctoi_samples %in% colnames(ctoi_mix)]
-      genes2use <- intersect(rownames(ctoi_mix), rownames(ref))
+      genes2use <- intersect(rownames(ctoi_mix), shared_genes)
 
       #  Rank filtering dataset
       ctoi_filt_ds_ranked <- singscore::rankGenes(ctoi_mix[, ctoi_samples])
@@ -1247,6 +1247,7 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type, seed = 123, nCores = 
 
 
   if (!is.null(filtering_data)) {
+    message("Filtering signatures...")
     out <- filterSignatures(shared_genes, labels, filtering_data, signatures, top_sigs_frac, add_essential_genes, human2mouse, ncores = nCores)
 
     if (return_sigs) {
