@@ -1247,7 +1247,7 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type, seed = 123, nCores = 
 
 
   if (!is.null(filtering_data)) {
-    out <- filterSignatures(ref, labels, filtering_data, signatures, top_sigs_frac, add_essential_genes, human2mouse, ncores = nCores)
+    out <- filterSignatures(shared_genes, labels, filtering_data, signatures, top_sigs_frac, add_essential_genes, human2mouse, ncores = nCores)
 
     if (return_sigs) {
       return(list(sigs = signatures,
