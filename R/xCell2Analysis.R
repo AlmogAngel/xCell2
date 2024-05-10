@@ -57,8 +57,8 @@ xCell2Analysis <- function(mix, xcell2object, min_intersect = 0.9, predict, spil
 
       a <- pull(filter(xcell2object@params, celltype == ctoi), a)
       b <- pull(filter(xcell2object@params, celltype == ctoi), b)
-      intercept <- pull(filter(xcell2object@params, celltype == ctoi), intercept)
-      coefs <- pull(filter(xcell2object@params, celltype == ctoi), reg_coef)[[1]]
+      intercepts <- pull(filter(xcell2object@params, celltype == ctoi), intercepts)[[1]]
+      betas <- pull(filter(xcell2object@params, celltype == ctoi), betas)[[1]]
 
       # Linear transformation
       scores <- (scores^(1/b)) / a
@@ -67,7 +67,8 @@ xCell2Analysis <- function(mix, xcell2object, min_intersect = 0.9, predict, spil
       scores <- scale(scores)
 
       # Predict
-      p <- as.vector((scores %*% coefs) + intercept)
+      p <- (scores %*% betas) + intercepts
+      p <- apply(p, 1, mean)
 
 
       return(p)
