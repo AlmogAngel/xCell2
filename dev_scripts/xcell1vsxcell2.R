@@ -1,14 +1,46 @@
 #####################################################
-# xCell2 present improved signatures generation
+# xCell2 vs. xCell1 signatures comparison
 #####################################################
 
-# Goal: to generate boxplot that show that xCell2's signatures are better than xCell given the same reference
 
 library(tidyverse)
 library(xCell2)
 
 refval.tbl <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/ref_val_pairs/cyto_ref_val.rds")
 cyto.vals <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/ref_val_pairs/cyto.vals.rds")
+
+combineRhos2 <- function(rhos, sample_sizes = NULL){
+
+  if (length(rhos) == 1) {
+    return(rhos)
+  }
+
+  if (is.null(sample_sizes)) {
+    sample_sizes <- rep(1, length(rhos))
+  }
+
+
+  if (length(sample_sizes) != length(rhos)) {
+    # sample_sizes <- rep(sample_sizes, length(rhos))
+    stop("values and weights must have the same length")
+  }
+
+
+  rhos[rhos == 1] <- 0.999999999
+  rhos[rhos == -1] <- -0.999999999
+
+  # Fisher's Z Transformation
+  z_values <- 0.5 * log((1 + rhos) / (1 - rhos))
+
+
+  weights <- sample_sizes
+  z_mean <- sum(weights * z_values) / sum(weights)
+
+  # Back Transformation
+  rho_weighted_mean <- (exp(2 * z_mean) - 1) / (exp(2 * z_mean) + 1)
+  return(rho_weighted_mean)
+
+}
 
 
 # Load xCell's signatures --------
@@ -42,252 +74,359 @@ names(xcell.sigs) <- plyr::mapvalues(names(xcell.sigs), from = celltype_conversi
 xcell.cts <- names(xcell.sigs)
 
 
-# Get xCell2's signatures from various validations ---------------
+# Get xCell2's signatures data (before/after filtering) ---------------
+
+xcell2.sigs <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/results/correlations/xcell2.filteredSigsCors.newEssentialv2.13mar.rds")
+
+xcell2.sigs <- xcell2.sigs %>%
+  bind_rows() %>%
+  filter(ref == "bp") %>%
+  mutate(label = ifelse(is_filtered == "yes", "xCell2 (filtered)", "xCell2")) %>%
+  select(-c(ref, is_filtered))
 
 
 
-refList <- list(rna_seq = c(mixed = "bp"))
+# Get correlations for first xCell version signatures ----------------------------------------
 
-# Load references matrices
-refs_dir <- "/bigdata/almogangel/xCell2_data/dev_data/"
-refsRDSList <- lapply(refList, function(ref_type){
-  refs <- lapply(ref_type, function(ref){
-    # Load reference
-    ref.in <- readRDS(paste0("references/", ref, "_ref.rds"))
-    ref.in
-  })
-  names(refs) <- ref_type
-  refs
-})
-
-vals.refs.res <- refval.tbl %>%
-  # Get number of samples in the validation dataset
-  mutate(n_val_samples = ncol(cyto.vals$truth[[val_type]][[val_dataset]])) %>%
-  filter(n_shared_celltypes > 2) %>%
-  mutate(method = "xCell2", .before = everything()) %>%
-  filter(ref_name == "bp")
-
-
-# xCell 2.0 settings
-set.seed(123)
-thisseed <- 123
-cores2use <- 10
-# gene settings
-useTopVar <- TRUE
-nTopVar <- 5000
-ProteinCoding <- FALSE
-ProteinCodingSC <- TRUE
-genesGroups <- c("Rb", "Mrp", "other_Rb", "chrM", "MALAT1", "chrX", "chrY")
-genesGroupsSC <- c("Rb", "Mrp", "other_Rb", "chrM", "MALAT1", "chrX", "chrY")
-# signature settings
-load_sigs <- FALSE
-sigs_suffix <- "xcell1v2"
-scores_results <- FALSE
-minpbcells <- 30
-minpbgroups <- 10
-weight_genes <- TRUE
-# simulations settings
-simNoise <- NULL
-fLvel <- "high"
-# sim_method <- c("ref_multi", "ref_thin", "ref_mix_thin")
-sim_method <- "ref_mix_thin"
-simFracs <- c(0, seq(0.01, 0.25, 0.002), seq(0.3, 1, 0.05))
-# xCell2Analysis
-tranform <- TRUE
-spillover <- TRUE
-nSims <- 20
-
-
-xcell2.sigs <- lapply(1:nrow(vals.refs.res), function(i){
-
-  # Load data
-  val_ref <- paste0(vals.refs.res[i,]$val_dataset, "_", vals.refs.res[i,]$ref_name[[1]])
-  print(val_ref)
-  mix.in <- cyto.vals$mixtures[[vals.refs.res[i,]$val_type]][[vals.refs.res[i,]$val_dataset]]
-  ref.in <- refsRDSList[[vals.refs.res[i,]$ref_type]][[vals.refs.res[i,]$ref_name[[1]]]]$ref
-  labels <- refsRDSList[[vals.refs.res[i,]$ref_type]][[vals.refs.res[i,]$ref_name[[1]]]]$labels
-  lineage_file <- refsRDSList[[vals.refs.res[i,]$ref_type]][[vals.refs.res[i,]$ref_name[[1]]]]$lineage_file
-  refType <- ifelse(vals.refs.res[i,]$ref_type == "rna_seq", "rnaseq", vals.refs.res[i,]$ref_type)
-  valType <- vals.refs.res[i,]$val_type
-  valDataset <- vals.refs.res[i,]$val_dataset
-  refName <- vals.refs.res[i,]$ref_name
-
-
-  shared_cleaned_genes <-  xCell2::xCell2CleanGenes(ref = ref.in, mix = mix.in, top_var_genes = FALSE, use_protein_coding = ProteinCoding, gene_groups = genesGroups)
-  ref <- shared_cleaned_genes$ref
-  mix <- shared_cleaned_genes$mix
-
-  # Load signatures?
-  if (load_sigs) {
-    sigsFile <- paste0("/bigdata/almogangel/xCell2_data/dev_data/sigs/", val_ref, "_sigs_", sigs_suffix, ".rds")
-  }else{
-    sigsFile <- NULL
-  }
-
-  # xCell2Train
-  if (sim_method == "ref_mix_thin") {
-    mix2use <- mix
-  }else{
-    mix2use <- NULL
-  }
-  sigs <-  xCell2::xCell2Train(ref = ref, labels = labels, data_type = refType, lineage_file = lineage_file, return_sigs = TRUE,
-                               sigsFile = sigsFile, minPBcells = minpbcells, minPBsamples = minpbgroups, weightGenes = weight_genes, seed = thisseed,
-                               nCores = cores2use, simMethod = sim_method, mix = mix2use, sim_fracs = simFracs, filtLevel = fLvel, ct_sims = nSims)
-
-  saveRDS(sigs, file = paste0("/bigdata/almogangel/xCell2_data/dev_data/sigs/", val_ref, "_sigs_", sigs_suffix, ".rds"))
-  sigs
-})
-
-xcell2.sigs.filt <- lapply(1:nrow(vals.refs.res), function(i){
-
-  # Load data
-  val_ref <- paste0(vals.refs.res[i,]$val_dataset, "_", vals.refs.res[i,]$ref_name[[1]])
-  print(val_ref)
-  mix.in <- cyto.vals$mixtures[[vals.refs.res[i,]$val_type]][[vals.refs.res[i,]$val_dataset]]
-  ref.in <- refsRDSList[[vals.refs.res[i,]$ref_type]][[vals.refs.res[i,]$ref_name[[1]]]]$ref
-  labels <- refsRDSList[[vals.refs.res[i,]$ref_type]][[vals.refs.res[i,]$ref_name[[1]]]]$labels
-  lineage_file <- refsRDSList[[vals.refs.res[i,]$ref_type]][[vals.refs.res[i,]$ref_name[[1]]]]$lineage_file
-  refType <- ifelse(vals.refs.res[i,]$ref_type == "rna_seq", "rnaseq", vals.refs.res[i,]$ref_type)
-  valType <- vals.refs.res[i,]$val_type
-  valDataset <- vals.refs.res[i,]$val_dataset
-  refName <- vals.refs.res[i,]$ref_name
-
-
-  shared_cleaned_genes <-  xCell2::xCell2CleanGenes(ref = ref.in, mix = mix.in, top_var_genes = FALSE, use_protein_coding = ProteinCoding, gene_groups = genesGroups)
-  ref <- shared_cleaned_genes$ref
-  mix <- shared_cleaned_genes$mix
-
-  # Load signatures?
-  if (TRUE) {
-    sigsFile <- paste0("/bigdata/almogangel/xCell2_data/dev_data/sigs/", val_ref, "_sigs_", sigs_suffix, ".rds")
-  }else{
-    sigsFile <- NULL
-  }
-
-  # xCell2Train
-  if (sim_method == "ref_mix_thin") {
-    mix2use <- mix
-  }else{
-    mix2use <- NULL
-  }
-  sigs <-  xCell2::xCell2Train(ref = ref, labels = labels, data_type = refType, lineage_file = lineage_file, return_sigs = FALSE,
-                               sigsFile = sigsFile, minPBcells = minpbcells, minPBsamples = minpbgroups, weightGenes = weight_genes, seed = thisseed,
-                               nCores = cores2use, simMethod = sim_method, mix = mix2use, sim_fracs = simFracs, filtLevel = fLvel, ct_sims = nSims)
-
-  saveRDS(sigs@signatures, file = paste0("/bigdata/almogangel/xCell2_data/dev_data/sigs/", val_ref, "_sigsFiltered_", sigs_suffix, ".rds"))
-  sigs
-})
-
-
-
-
-
-# TODO ----------------------------------------
-
-xcell2.sigs.files <- list.files("/bigdata/almogangel/xCell2_data/dev_data/sigs", pattern = "*_sigs_xcell1v2", full.names = TRUE)
-
-cor.res <- lapply(xcell2.sigs.files, function(val.file){
-
-  val <- gsub("_bp_.*", "", basename(val.file))
-  print(val)
+getCors <- function(val_data, ct, sigs, cyto.vals){
 
   # Load truth table
-  truth_mat <- cyto.vals$truth$blood[[val]]
+  truth_mat <- cyto.vals$truth$blood[[val_data]]
   if (is.null(truth_mat)) {
-    truth_mat <- cyto.vals$truth$tumor[[val]]
+    truth_mat <- cyto.vals$truth$tumor[[val_data]]
   }
   if (is.null(truth_mat)) {
-    truth_mat <- cyto.vals$truth$other[[val]]
+    truth_mat <- cyto.vals$truth$other[[val_data]]
   }
   truth_cts <- rownames(truth_mat)
 
-  # Load xCell2 signatures
-  xcell2.sigs <- readRDS(val.file)
-  xcell2.cts <- unique(gsub("#.*", "", names(xcell2.sigs)))
-  all(xcell.cts %in% xcell2.cts & xcell2.cts %in% xcell.cts)
-
-  mix <- cyto.vals$mixtures$blood[[val]]
+  # Load mixture
+  mix <- cyto.vals$mixtures$blood[[val_data]]
   if (is.null(mix)) {
-    mix <- cyto.vals$mixtures$tumor[[val]]
+    mix <- cyto.vals$mixtures$tumor[[val_data]]
   }
   if (is.null(mix)) {
-    mix <- cyto.vals$mixtures$other[[val]]
+    mix <- cyto.vals$mixtures$other[[val_data]]
   }
   mix_ranked <- singscore::rankGenes(mix)
 
-  ct2use <- intersect(intersect(xcell.cts, xcell2.cts), truth_cts)
-  cor.res <- lapply(ct2use, function(ct){
+  # Score sigs
+  xcell.scores <- sapply(sigs[[1]], simplify = TRUE, function(sig){
+    singscore::simpleScore(mix_ranked, upSet = sig, centerScore = FALSE)$TotalScore
+  })
+  rownames(xcell.scores) <- colnames(mix_ranked)
 
-    truth <- truth_mat[ct,]
+  # Get shared samples
+  samples <- intersect(colnames(truth_mat), rownames(xcell.scores))
+  xcell.scores <- xcell.scores[samples,]
+  truth <- truth_mat[ct, samples]
 
-    ct_sigs <- xcell.sigs[[ct]]
-    xcell.scores <- sapply(ct_sigs, simplify = TRUE, function(sig){
-      suppressWarnings(singscore::simpleScore(mix_ranked, upSet = sig, centerScore = FALSE)$TotalScore)
-    })
-    rownames(xcell.scores) <- colnames(mix_ranked)
-    samples <- intersect(colnames(truth_mat), rownames(xcell.scores))
-    xcell.scores <- xcell.scores[samples,]
-    xcell.sigs.cors <- apply(xcell.scores, 2, function(x){
-      cor(truth[samples], x, method = "spearman", use = "pairwise.complete.obs")
-    })
+  # Calculate correlations
+  xcell.sigs.cors <- apply(xcell.scores, 2, function(x){
+    cor(truth, x, method = "spearman", use = "pairwise.complete.obs")
+  })
 
-    ct_sigs <- xcell2.sigs[startsWith(names(xcell2.sigs), ct)]
-    xcell2.scores <- sapply(ct_sigs, simplify = TRUE, function(sig){
-      suppressWarnings(singscore::simpleScore(mix_ranked, upSet = sig, centerScore = FALSE)$TotalScore)
-    })
-    rownames(xcell2.scores) <- colnames(mix_ranked)
-    samples <- intersect(colnames(truth_mat), rownames(xcell2.scores))
-    xcell2.scores <- xcell2.scores[samples,]
-    xcell2.sigs.cors <- apply(xcell2.scores, 2, function(x){
-      cor(truth[samples], x, method = "spearman", use = "pairwise.complete.obs")
-    })
+  return(xcell.sigs.cors)
+}
 
-    tibble(validation = val, celltype = ct, sig = c(names(xcell.sigs.cors), names(xcell2.sigs.cors)), cor = c(xcell.sigs.cors, xcell2.sigs.cors),
-           method = c(rep("xCell", length(xcell.sigs.cors)), rep("xCell2", length(xcell2.sigs.cors))))
 
-  }) %>%
-    bind_rows()
-}) %>%
+xcell.sigs.data <- xcell2.sigs %>%
+  select(val, celltype) %>%
+  unique() %>%
+  rowwise() %>%
+  mutate(xcell_sigs = list(xcell.sigs[[celltype]]))
+
+xcell.sigs.data$cors <- NA
+for (i in 1:nrow(xcell.sigs.data)) {
+
+  val=xcell.sigs.data[i,]$val
+  ct=xcell.sigs.data[i,]$celltype
+  sigs=xcell.sigs.data[i,]$xcell_sigs
+  cors <- getCors(val, ct, sigs, cyto.vals)
+  xcell.sigs.data[i,]$cors <- list(cors)
+}
+
+xcell.sigs.data <- xcell.sigs.data %>%
+  unnest_longer(cors, values_to = "cor", indices_to = "sig_name") %>%
+  mutate(label = "xCell") %>%
+  select(-xcell_sigs) %>%
+  select(val, celltype, sig_name, cor, label)
+
+# Get xCell2's signatures data (model predictions) ---------------
+all_cors # from fig1.R
+
+xcell2.sigs.model <- all_cors %>%
+  filter(method == "xCell2" & ref == "bp" & celltype %in%  unique(xcell.sigs.data$celltype)) %>%
+  mutate(sig_name = "model",
+         label = "xCell2 (model)") %>%
+  select(val, celltype, sig_name, cor, label)
+
+
+# Plot results --------------------
+
+#results <- rbind(xcell.sigs.data, xcell2.sigs, xcell2.sigs.model)
+#results <- rbind(xcell.sigs.data, xcell2.sigs)
+
+# Identify common val and celltype combinations
+# common_combinations <- reduce(list(xcell.sigs.data, xcell2.sigs, xcell2.sigs.model),
+#                               ~inner_join(.x, .y, by = c("val", "celltype"))) %>%
+#   select(val, celltype) %>%
+#   distinct()
+
+common_combinations <- reduce(list(xcell.sigs.data, xcell2.sigs),
+                              ~inner_join(.x, .y, by = c("val", "celltype"))) %>%
+  select(val, celltype) %>%
+  distinct()
+
+# Filter each tibble for common combinations and combine them
+# results <- list(xcell.sigs.data, xcell2.sigs, xcell2.sigs.model) %>%
+#   map(~inner_join(.x, common_combinations, by = c("val", "celltype"))) %>%
+#   bind_rows()
+
+results <- list(xcell.sigs.data, xcell2.sigs) %>%
+  map(~inner_join(.x, common_combinations, by = c("val", "celltype"))) %>%
   bind_rows()
 
-# saveRDS(cor.res, "/bigdata/almogangel/xCell2_data/benchmarking_data/xcell1vs2.sig.cors.rds")
-cor.res <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/xcell1vs2.sig.cors.rds")
+
+color_palette <- c("#00AFBB", "#E7B800", "#FC4E07", "#828282")
 
 
-# Add filtered signatures
-xcell2.sigs.filt.files <- list.files("/bigdata/almogangel/xCell2_data/dev_data/sigs", pattern = "*_sigsFiltered_*", full.names = TRUE)
-
-sigs.filt <- lapply(xcell2.sigs.filt.files, function(file){
-  sig.in <- readRDS(file)
-  names(sig.in)
-})
-sigs.filt <- unique(unlist(sigs.filt))
-
-cor.res <- cor.res %>%
-  filter(sig %in% sigs.filt) %>%
-  mutate(method = "xCell2 - filtered") %>%
-  rbind(., cor.res)
-
-library(ggsignif)
-
-cor.res %>%
-  ggplot(., aes(x=validation, y=cor, fill=method)) +
+results %>%
+  group_by(val, celltype, label) %>%
+  summarise(cor = combineRhos2(cor)) %>%
+  ggplot(., aes(x=label, y=cor, fill=label)) +
   geom_boxplot() +
-  coord_flip() +  # Flips the coordinates
   theme_minimal() +  # A minimal theme for a nicer look
   labs(title = "",x = "", y = "",fill = "") +
+  scale_fill_manual(values = as.character(color_palette)) +
+  scale_y_continuous(limits = c(-1, 1)) +  # Set y-axis limits
   theme(axis.text.x = element_text(angle = 45, hjust = 1),  # Adjust text angle for x-axis labels if needed
-    legend.position = "bottom")
+        legend.position = "bottom")
+
+
+
+results %>%
+  group_by(val, celltype, label) %>%
+  summarise(cor = combineRhos2(cor)) %>%
+  group_by(val, label) %>%
+  summarise(cor = combineRhos2(cor)) %>%
+  ggplot(., aes(x=label, y=cor, fill=label)) +
+  geom_boxplot() +
+  geom_jitter(alpha=0.3) +
+  theme_minimal() +  # A minimal theme for a nicer look
+  labs(title = "", x = "", y = "Mean Spearman Rho", fill = "") +
+  scale_fill_manual(values = as.character(color_palette), guide = FALSE) +  # Remove fill legend
+  scale_y_continuous(limits = c(0.2, 1.001), breaks = seq(0.2, 1, 0.1)) +  # Set y-axis limits
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, face = "bold", size = 10),  # Make x-axis labels bold and bigger, adjust as needed
+        legend.position = "bottom",  # Adjust legend position if needed
+        legend.title = element_blank(),  # Optionally, hide the legend title if it's still showing
+        panel.grid.major = element_blank(),  # Remove major grid lines
+        panel.grid.minor = element_blank(),  # Remove minor grid lines
+        panel.background = element_blank(),  # Remove panel background
+        axis.line = element_line(colour = "black"))
+
+
+# Micro (filtering) -------------------------
+data <- results %>%
+  group_by(val, celltype, label) %>%
+  summarise(cor = combineRhos2(cor)) %>%
+  group_by(val, label)
+
+
+wide_data <- data %>%
+  pivot_wider(names_from = label, values_from = cor)
+
+matching_cases <- wide_data %>%
+  filter(`xCell2 (model)` > `xCell2 (filtered)`,
+         `xCell2 (filtered)` > xCell2,
+         xCell2 > xCell)
+
+# GSE120444 - CD8-positive, alpha-beta T cell
+
+ctoi <- "CD8-positive, alpha-beta T cell"
+signatures_ctoi <- signatures[startsWith(names(signatures), paste0(ctoi, "#"))]
+mix_ranked_tmp <- singscore::rankGenes(mix)
+scores_tmp <- sapply(signatures_ctoi, simplify = TRUE, function(sig){
+  suppressWarnings(singscore::simpleScore(mix_ranked_tmp, upSet = sig, centerScore = FALSE)$TotalScore)
+})
+truth_mat <- cyto.vals$truth$other$GSE120444
+fracs <- truth_mat[ctoi,colnames(mix_ranked_tmp)]
+
+c <- apply(scores_tmp, 2, function(x){
+  cor(x, fracs, method = "spearman", use = "pairwise.complete.obs")
+})
+c <- sort(c, decreasing = TRUE)
+
+
+data <- tibble(sig = names(c), rho = c, filtered = "All")
+filt_sigs <- names(out$filt_sigs[startsWith(names(out$filt_sigs), paste0(ctoi, "#"))])
+data2 <- tibble(sig = filt_sigs, rho = c[filt_sigs], filtered = "Filtered")
+
+data_mix <- rbind(data, data2)
+data_mix$data_type <- "Mixture Dataset"
+data_mix$dataset <- "GSE120444"
+
+data_mix<- data_mix %>%
+  select(dataset, rho, sig, filtered, data_type)
+
+# filtering (from the function)
+
+data <- enframe(ds_cors_list, name = "dataset") %>%
+  unnest_longer(value, values_to = "rho", indices_to = "sig") %>%
+  mutate(filtered = "All")
+
+data2 <- data %>%
+  filter(sig %in% names(out$filt_sigs)) %>%
+  mutate(filtered = "Filtered")
+
+data_val <- rbind(data, data2)
+data_val$data_type <- "Filtering Datasets"
+
+data_final <- rbind(data_mix, data_val)
+
+color_palette <- c("#00AFBB", "#E7B800")
+
+
+data_final %>%
+  ggplot(., aes(x=dataset, y=rho, fill=filtered)) +
+  geom_boxplot(width = 0.8) +
+  facet_grid(~data_type, scales = "free_x", space = "free") +
+  theme_minimal() +  # A minimal theme for a nicer look
+  labs(title = "", x = "", y = "Spearman Rho", fill = "") +
+  scale_fill_manual(values = as.character(color_palette)) +  # Remove fill legend
+  scale_y_continuous(limits = c(-0.5, 1), breaks = seq(-0.5, 1, 0.25)) +  # Set y-axis limits
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, face = "bold", size = 14),  # Make x-axis labels bold and bigger, adjust as needed
+        title = element_text(face = "bold", size = 14),  # Optionally, hide the legend title if it's still showing
+        legend.position = "right",  # Adjust legend position if needed
+        legend.text = element_text(face = "bold", size = 14),
+        panel.grid.major = element_blank(),  # Remove major grid lines
+        panel.grid.minor = element_blank(),  # Remove minor grid lines
+        panel.background = element_rect(fill = '#F0F8FF', color = NA),  # Remove panel background
+        strip.text = element_text(face="bold", size=14),
+        axis.line = element_line(colour = "black"))
+
+library(patchwork)
+
+# Combine the plots side by side
+combined_plot <- p1 + p2
+
+# Display the combined plot
+print(combined_plot)
+
+# Micro (model) -----------------
+
+set.seed(123)
+noise_level <- 0.5
+ctoi_sim_list <- lapply(1:10, function(i){
+
+  # Sample 3-10 control cell types (if possible)
+  if (length(controls) > 3) {
+    controls2use <- sample(controls, sample(3:min(10, length(controls)), 1), replace = FALSE)
+  }else{
+    controls2use <- controls
+  }
+
+  # Generate controls matrix
+  if (length(controls2use) > 1) {
+    controls_mat <- gep_mat_linear[,controls2use]
+    numbers <- runif(ncol(controls_mat)) # Get random numbers for fractions
+    controls_mat_frac <- sapply(1-sim_fracs, function(s){
+      fracs <- numbers / sum(numbers) * s
+      rowSums(controls_mat %*% diag(fracs))
+    })
+  }else{
+    controls_mat <- matrix(rep(gep_mat_linear[,controls2use], length(sim_fracs)), byrow = FALSE, ncol = length(sim_fracs), dimnames = list(rownames(gep_mat_linear), sim_fracs))
+    controls_mat_frac <- controls_mat %*% diag(sim_fracs)
+  }
+
+
+  # Combine fractions
+  simulation <- ctoi_mat_frac + controls_mat_frac
+  colnames(simulation) <- paste0("mix", "%%", sim_fracs)
+
+
+  # Add noise
+  if (!is.null(noise_level)) {
+    eps_sigma <- sd(as.vector(ref)) * noise_level
+    epsilon_gaussian <- array(rnorm(prod(dim(simulation)), 0, eps_sigma), dim(simulation))
+    simulation_noised <- 2^(log2(simulation+1) + epsilon_gaussian)
+    return(simulation_noised)
+  }else{
+    simulation
+  }
+
+})
+
+ctoi <- "CD8-positive, alpha-beta T cell"
+signatures_filtered <- out$filt_sigs
+signatures_ctoi <- signatures_filtered[gsub("#.*", "", names(signatures_filtered)) %in% ctoi]
+
+
+xx <- lapply(ctoi_sim_list, function(sim){
+  sim_ranked <- singscore::rankGenes(sim)
+  colnames(sim_ranked) <- make.unique(colnames(sim_ranked), sep = "%")
+  scores <- sapply(signatures_ctoi, simplify = TRUE, function(sig){
+    singscore::simpleScore(sim_ranked, upSet = sig, centerScore = FALSE)$TotalScore
+  })
+
+  apply(scores, 2, function(x){
+    cor(x, sim_fracs, method = "spearman")
+  })
+
+})
+xx
+
+
+
+
+
+
+
+
+
+
+# Waterfall?
+
+cors_data <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/results/correlations/xcell2.filteredSigsCors.22jan.rds")
+
+data <- bind_rows(cors_data)
+
+
+data2 <- data %>%
+  group_by(ref, val, celltype, is_filtered) %>%
+  summarise(cor = mean(cor)) %>%
+  spread(key = is_filtered, value = cor) %>%
+  mutate(delta_cor = `yes` - `no`) %>%
+  select(ref, val, celltype, delta_cor)
+
+
+data_sorted <- data2 %>%
+  ungroup() %>%
+  arrange(delta_cor) %>%
+  mutate(x_axis = row_number())
+
+# Create a waterfall plot
+ggplot(data_sorted, aes(x = x_axis, y = delta_cor, fill = delta_cor)) +
+  geom_bar(stat = "identity") +
+  scale_fill_gradient2(low = "darkred", high = "darkgreen", mid = "white", midpoint = 0) +
+  geom_hline(yintercept = mean(data_sorted$delta_cor), linetype = "dashed") +
+  theme_minimal() +
+  theme(axis.title.x = element_blank()) +
+  labs(y = "Delta Cor", title = "Waterfall Plot of Delta Cor")
+
+
+data2 %>%
+  filter(delta_cor < 0) %>%
+  group_by(val) %>%
+  summarise(n = n())
+
+
 
 library(RColorBrewer)
 color_palette <- Polychrome::createPalette(22,  c("#ff0000", "#00ff00", "#0000ff"))
 
-cor.res %>%
-  group_by(validation, celltype, method) %>%
-  summarise(cor = mean(cor)) %>%
-  group_by(validation, method) %>%
-  summarise(cor = mean(cor)) %>%
-  ggplot(., aes(x=method, y=cor, fill=method)) +
+results %>%
+  ggplot(., aes(x=label, y=cor, fill=label)) +
   geom_boxplot() +
   geom_jitter(position = position_dodge(width = 0.8), aes(color = validation), size = 3) +  # Adjusted geom_jitter
   scale_fill_brewer(palette = "Set1") +  # Using a color palette from RColorBrewer
@@ -302,13 +441,11 @@ cor.res %>%
 library(ggpubr)
 library(rstatix)
 
-cor.res$method <- factor(cor.res$method, levels= c("xCell", "xCell2", "xCell2 - filtered"))
+results$label <- factor(results$label, levels= c("xCell", "xCell2", "xCell2 (filtered)"))
 
-stat.test <- cor.res %>%
-  group_by(method, validation, celltype) %>%
-  summarise(cor = mean(cor)) %>%
+stat.test <- results %>%
   ungroup() %>%
-  t_test(cor ~ method)
+  t_test(cor ~ label)
 stat.test <- stat.test %>% add_xy_position(x = "method")
 
 ggboxplot(cor.res, x = "method", y = "cor", fill = "method",

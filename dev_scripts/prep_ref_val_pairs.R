@@ -40,6 +40,15 @@ loadVals <- function(valList,
       truth <- suppressWarnings(apply(truth, 2, as.numeric))
       rownames(truth) <- rows
 
+      # Remove (10e9/l) values
+      truth <- truth[!grepl("/l)", rownames(truth)),]
+
+      # Remove values with all NAs
+      truth <- truth[!apply(truth, 1, function(x){all(is.na(x))}),]
+
+      # Remove values > 100
+      truth <- truth[!apply(truth, 1, function(x){max(x, na.rm = TRUE) > 100}),]
+
       # Scale fractions
       if (max(truth, na.rm = TRUE) > 1) {
         truth <- truth/100
@@ -205,19 +214,20 @@ combineRefVal <- function(vals, val2type, refList, splitDependencies){
 # Cytometry validations
 cyto.vals.list <- list(blood = c("BG_blood", "GSE107011", "GSE107572", "GSE127813", "GSE53655",
                                  "SDY311", "SDY420", "SDY67", "GSE64385", "GSE65133", "GSE106898", "GSE64655", "GSE59654",
-                                 "GSE107990", "GSE20300", "GSE65135", "GSE77343", "GSE77344"),
+                                 "GSE107990", "GSE20300", "GSE65135", "GSE77343", "GSE77344", "GSE130824"),
                        tumor = c("ccRCC_cytof_CD45+", "NSCLC_cytof", "GSE121127", "WU_ccRCC_RCCTC"),
                        other = c("GSE120444", "GSE115823", "GSE93722"))
 
 all_vals <- c("BG_blood", "GSE107011", "GSE107572", "GSE127813", "GSE53655", "SDY311",
               "SDY420", "SDY67", "GSE64385", "GSE65133", "GSE106898", "GSE64655",
               "GSE59654", "GSE107990", "GSE20300", "GSE65135", "GSE77343", "GSE77344",
-              "ccRCC_cytof_CD45+", "NSCLC_cytof", "WU_ccRCC_RCCTC", "GSE120444", "GSE115823", "GSE93722", "GSE121127")
+              "ccRCC_cytof_CD45+", "NSCLC_cytof", "WU_ccRCC_RCCTC", "GSE120444", "GSE115823",
+              "GSE93722", "GSE121127", "GSE130824")
 
 vals_type <- c("rnaseq", "rnaseq", "rnaseq", "rnaseq", "rnaseq", "array",
                "array", "rnaseq", "array", "array", "array", "rnaseq",
                "array", "array", "array", "array", "array", "array",
-               "rnaseq", "rnaseq", "rnaseq", "rnaseq", "rnaseq", "rnaseq", "rnaseq")
+               "rnaseq", "rnaseq", "rnaseq", "rnaseq", "rnaseq", "rnaseq", "rnaseq", "rnaseq")
 
 val2type <- setNames(vals_type, all_vals)
 

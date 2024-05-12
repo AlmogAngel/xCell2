@@ -6,6 +6,8 @@ library(dtangle)
 library(DeconRNASeq)
 
 setwd("/bigdata/almogangel/xCell2_data/benchmarking_data")
+# /bigdata/almogangel/xCell2_data/benchmarking_data/references/ - set new ref dir!
+
 
 getDependencies <- function(lineage_file_checked){
   ont <- read_tsv(lineage_file_checked, show_col_types = FALSE) %>%
@@ -35,11 +37,11 @@ getDependencies <- function(lineage_file_checked){
 # Read reference-validation pairs
 refval.tbl <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/ref_val_pairs/cyto_ref_val.rds")
 # refval.tbl.nodeps <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/ref_val_pairs/cyto_ref_val_nodeps.rds")
-sc.refval.tbl <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/ref_val_pairs/sc_ref_val.rds")
+# sc.refval.tbl <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/ref_val_pairs/sc_ref_val.rds")
 # sc.refval.tbl.nodeps <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/ref_val_pairs/sc_ref_val_nodeps.rds")
 # Load validation data
 cyto.vals <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/ref_val_pairs/cyto.vals.rds")
-sc.vals <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/ref_val_pairs/sc.vals.rds")
+# sc.vals <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/ref_val_pairs/sc.vals.rds")
 
 refList <- list(rna_seq = c(blood = "kass_blood", tumor = "kass_tumor", mixed = "bp"),
                 array = c(mixed = "lm22"),
@@ -56,7 +58,7 @@ celltype_conversion <- read_tsv("/bigdata/almogangel/xCell2_data/dev_data/cellty
 getCIBERSORTxRes <- function(ref_val_table, vals, celltype_conversion){
 
 
-  runCIBERSORTx <- function(vals, valType, valName, refName, refType, celltypes2use, dir = "/bigdata/almogangel/CIBERSORTx_docker", suffix = "7jan"){
+  runCIBERSORTx <- function(vals, valType, valName, refName, refType, celltypes2use, dir = "/bigdata/almogangel/CIBERSORTx_docker", suffix = "8jan"){
 
 
     getResults <- function(cell_types, dir, refName, valName, valType, single_cell, useQN){
@@ -217,10 +219,10 @@ getCIBERSORTxRes <- function(ref_val_table, vals, celltype_conversion){
 # Run EPIC
 getEPICRes <- function(ref_val_table, vals, celltype_conversion){
 
-  runEPIC <- function(vals, default_refs, valType, valName, refsRDSList, refName, refType, refTissue, celltypes2use, dir = "references", suffix = "7jan"){
+  runEPIC <- function(vals, default_refs, valType, valName, refsRDSList, refName, refType, refTissue, celltypes2use, dir = "references", suffix = "8jan"){
 
 
-    getResults <- function(cell_types, ref.in, refName, refType, dir){
+    getResults <- function(mix, cell_types, ref.in, refName, refType, dir){
 
       # Subset sigGenes from the signature matrix
       sigmat <- read.csv(paste0(dir, "/sigmats/", refName, "_sigmat.txt"), sep = "\t", header = T, check.names = F, row.names = 1)
@@ -298,7 +300,7 @@ getEPICRes <- function(ref_val_table, vals, celltype_conversion){
     leaf_cell_types <- names(Filter(function(x) length(x$descendants) == 0, dep_list))
 
 
-    epic_out <- getResults(leaf_cell_types, ref.in, refName, refType, dir)
+    epic_out <- getResults(mix, leaf_cell_types, ref.in, refName, refType, dir)
 
 
     if (all(celltypes2use %in% rownames(epic_out))) {
@@ -363,7 +365,7 @@ getEPICRes <- function(ref_val_table, vals, celltype_conversion){
 # Run BayesPrism
 getBayesPrismRes <- function(ref_val_table, vals, celltype_conversion){
 
-  runBayesPrism <- function(vals, valType, valName, refsRDSList, refName, refType, celltypes2use, CPUs = 45, suffix = "7jan"){
+  runBayesPrism <- function(vals, valType, valName, refsRDSList, refName, refType, celltypes2use, CPUs = 45, suffix = "8jan"){
 
     dir.create(tempdir())
 
@@ -581,7 +583,7 @@ getMCPcounterRes <- function(ref_val_table, vals, celltype_conversion){
 # Run dtangle
 getdtangleRes <- function(ref_val_table, vals, celltype_conversion){
 
-  rundtangle <- function(vals, valType, celltypes2use, refsRDSList, valName, valDataType, refName, refType, suffix = "7jan"){
+  rundtangle <- function(vals, valType, celltypes2use, refsRDSList, valName, valDataType, refName, refType, suffix = "8jan"){
 
     getResults <- function(cell_types, ref.in, refName, refType){
 
@@ -732,7 +734,7 @@ getdtangleRes <- function(ref_val_table, vals, celltype_conversion){
 # Run DeconRNASeq
 getDeconRNASeqRes <- function(ref_val_table, vals, celltype_conversion){
 
-  runDeconRNASeq <- function(vals, valType, valName, refName, refType, celltypes2use, dir = "references", suffix = "7jan"){
+  runDeconRNASeq <- function(vals, valType, valName, refName, refType, celltypes2use, dir = "references", suffix = "8jan"){
 
 
     getResults <- function(cell_types, refName){
@@ -856,7 +858,7 @@ getDeconRNASeqRes <- function(ref_val_table, vals, celltype_conversion){
 getquanTIseqRes <- function(ref_val_table, vals, celltype_conversion){
 
   source("/bigdata/almogangel/xCell2/dev_scripts/quantiseq_code.R")
-  runquanTIseq <- function(vals, valType, valName, refName, refType, celltypes2use, dir = "references", suffix = "7jan"){
+  runquanTIseq <- function(vals, valType, valName, refName, refType, celltypes2use, dir = "references", suffix = "8jan"){
 
     getResults <- function(cell_types, refName, refType, dir){
 

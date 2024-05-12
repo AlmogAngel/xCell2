@@ -31,10 +31,14 @@ celltype.data <- read_tsv("/bigdata/almogangel/xCell2_data/celltypes.data.tsv") 
   mutate(essential_genes = str_split(essential_genes, ";")) %>%
   unnest(cols = c(all_labels))
 
+human_mouse_gene_symbols <- read.csv("/bigdata/almogangel/xCell2_data/mouse/human_mouse_gene_symbols.csv")
+rownames(human_mouse_gene_symbols) <- human_mouse_gene_symbols[,1]
+
+
 usethis::use_data(ts_labels_with_ontology)
 usethis::use_data(hs.genelist)
 usethis::use_data(celltype.data, overwrite = T)
-
+usethis::use_data(human_mouse_gene_symbols, overwrite = T)
 usethis::use_data(gencode.v22.broad.category, overwrite = T)
 
 

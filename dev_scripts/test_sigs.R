@@ -4,7 +4,7 @@ res_mat <- xCell2::xCell2Analysis(mix = mix, xcell2sigs = sigs, tranform = TRUE,
 #res_mat
 
 
-truth_mat <- cyto.vals$truth$blood$GSE65133
+truth_mat <- cyto.vals$truth$blood$GSE107572
 
 
 celltypes <- intersect(rownames(res_mat), rownames(truth_mat))
@@ -44,9 +44,6 @@ cor(t, r, method = "spearman", use = "pairwise.complete.obs")
 
 
 # signatures <- sigs@signatures
-normalize <- function(x) {
-  (x - min(x)) / (max(x) - min(x))
-}
 
 #ctoi <- rownames(truth_mat)[9]
 # signatures_ctoi <- type_sigs
@@ -58,16 +55,129 @@ scores_tmp <- sapply(signatures_ctoi, simplify = TRUE, function(sig){
   suppressWarnings(singscore::simpleScore(mix_ranked_tmp, upSet = sig, centerScore = FALSE)$TotalScore)
 })
 
-scores_tmp <- apply(scores_tmp, 2, function(sample){
-  normalize(sample)
-})
-
 fracs <- truth_mat[ctoi,colnames(mix_ranked_tmp)]
 # fracs=as.numeric(gsub(".*mix%%", "", colnames(mix_ranked)))
 c <- apply(scores_tmp, 2, function(x){
   cor(x, fracs, method = "spearman", use = "pairwise.complete.obs")
 })
 sort(c)
+range(c)
+mean(c)
+
+scores_tmp2 <- (scores_tmp^(1/b)) / a
+# scores_tmp2 <- scale(scores_tmp2)
+
+#cor(predict(cv_fit, newx=scores_tmp2, s = "lambda.min")[,1], fracs, method = "spearman", use = "pairwise.complete.obs")
+#cor(predict(cv_fit, newx=scores_tmp2, s = "lambda.1se")[,1], fracs, method = "spearman", use = "pairwise.complete.obs")
+
+p <- (scores_tmp2[,rownames(betas)] %*% betas) + intercepts
+p <- apply(p, 1, mean)
+cor(p, fracs, method = "spearman", use = "pairwise.complete.obs")
+
+n <- rownames(models)[-1]
+
+pp <- apply(models, 2, function(c){
+  intercept <- c[1]
+  cc <- c[-1]
+  round(as.vector((scores_tmp2[,n] %*% cc) + intercept), 4)
+})
+
+apply(pp, 2, function(p){
+  cor(p, fracs, method = "spearman", use = "pairwise.complete.obs")
+})
+# pp <- scale(pp, )
+ppm <- rowMeans(pp)
+ppm <- apply(pp,1,median)
+
+cor(ppm, fracs, method = "spearman", use = "pairwise.complete.obs")
+
+
+signatures_ctoi <- signatures[startsWith(names(signatures), paste0(ctoi, "#"))]
+mix_ranked_tmp <- singscore::rankGenes(mix)
+# mix_ranked <- singscore::rankGenes(samples_sim_mat)
+# rownames(mix_ranked) <- rownames(mix)
+scores_tmp <- sapply(signatures_ctoi, simplify = TRUE, function(sig){
+  suppressWarnings(singscore::simpleScore(mix_ranked_tmp, upSet = sig, centerScore = FALSE)$TotalScore)
+})
+
+a <- pull(filter(params, celltype == ctoi), a)
+b <- pull(filter(params, celltype == ctoi), b)
+intercept <- pull(filter(params, celltype == ctoi), intercept)
+coefs <- pull(filter(params, celltype == ctoi), reg_coef)[[1]]
+# Linear transformation
+scores_tmp <- (scores_tmp^(1/b)) / a
+# Scale
+scores_tmp <- scale(scores_tmp)
+# Predict
+p <- as.vector((scores_tmp %*% coefs) + intercept)
+# p[p<0] <- 0
+cor(p, fracs, method = "spearman", use = "pairwise.complete.obs")
+
+
+
+signatures_ctoi_essn <- out$filt_sigs[startsWith(names(out$filt_sigs), paste0(ctoi, "#"))]
+# signatures_ctoi_essn <- sigs$filt_sigs[startsWith(names(sigs$filt_sigs), paste0(ctoi, "#"))]
+#signatures_ctoi_essn <- lapply(signatures_ctoi, function(x){unique(c(x, essential_genes))})
+scores_tmp2 <- sapply(signatures_ctoi_essn, simplify = TRUE, function(sig){
+  suppressWarnings(singscore::simpleScore(mix_ranked_tmp, upSet = sig, centerScore = FALSE)$TotalScore)
+})
+
+fracs <- truth_mat[ctoi,colnames(mix_ranked_tmp)]
+# fracs=as.numeric(gsub(".*mix%%", "", colnames(mix_ranked)))
+c2 <- apply(scores_tmp2, 2, function(x){
+  cor(x, fracs, method = "spearman", use = "pairwise.complete.obs")
+})
+sort(c2)
+range(c2)
+mean(c2)
+
+enframe(ds_cors_list, name = "dataset") %>%
+  unnest_longer(value, values_to = "rho", indices_to = "sig") %>%
+  group_by(dataset) %>%
+  top_frac(0.05, wt=rho) -> x
+
+sapply(unique(x$dataset), function(d){
+  mean(c[x[x$dataset == d,]$sig])
+}) -> xx
+sort(xx)
+
+# Check transformation parameters
+
+ctoi_scores <- scores_tmp[,names(sort(c, decreasing = T)[1])]
+plot(ctoi_scores, fracs)
+
+ctoi_scores_transformed <- ctoi_scores - min(ctoi_scores)
+a=linearParams[linearParams$celltype == ctoi,]$a
+b=linearParams[linearParams$celltype == ctoi,]$b
+ctoi_scores_transformed <- (ctoi_scores_transformed^(1/b)) / a
+plot(ctoi_scores_transformed, fracs)
+
+
+
+
+# Check model
+mix_ranked <- singscore::rankGenes(mix)
+signatures_ctoi <- signatures[startsWith(names(signatures), paste0(ctoi, "#"))]
+scores_ctoi_mix <- sapply(signatures_ctoi, simplify = TRUE, function(sig){
+  suppressWarnings(singscore::simpleScore(mix_ranked, upSet = sig, centerScore = FALSE)$TotalScore)
+})
+scores_ctoi_mix <- apply(scores_ctoi_mix, 2, function(x) (x- min(x)))
+
+model.res <- round(predict(model, scores_ctoi_mix, type = "response"), 4)
+cor(model.res, fracs, method = "spearman", use = "pairwise.complete.obs")
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 sort(table(unlist(signatures[names(sort(c, decreasing = T)[1:10])])), decreasing = T)

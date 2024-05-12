@@ -831,3 +831,35 @@ rownames(frac.in) <- plyr::mapvalues(rownames(frac.in), celltype_conversion$all_
 
 write.table(frac.in, "/bigdata/almogangel/kassandra_data/24_validation_datasets/cell_values/GSE93722.tsv",
             row.names = TRUE, quote = FALSE, sep = "\t")
+
+# GSE130824 (RNA-Seq) ---------------
+
+exp.in <- read.table("/bigdata/almogangel/xCell2_data/benchmarking_data/validations/GSE130824/GSE130824_dataNormedFiltered.txt", header = T, row.names = 1, sep = "\t")
+range(exp.in)
+
+load("/bigdata/almogangel/xCell2_data/benchmarking_data/validations/GSE130824/majorCellTypes.rda")
+frac.in <- majorCellTypes
+
+frac.in <- t(frac.in)
+names <- colnames(frac.in)
+frac.in <- t(apply(frac.in, 1, as.numeric))
+colnames(frac.in) <- names
+
+
+samples <- intersect(colnames(frac.in), colnames(exp.in))
+
+exp.in <- exp.in[,samples]
+frac.in <- frac.in[,samples]
+all(colnames(frac.in) ==  colnames(exp.in))
+
+
+exp.in <- cbind("Gene" = rownames(exp.in), exp.in)
+write.table(exp.in, "/bigdata/almogangel/kassandra_data/24_validation_datasets/expressions/GSE130824_expressions.tsv",
+            row.names = FALSE, quote = FALSE, sep = "\t")
+
+rownames(frac.in) <- plyr::mapvalues(rownames(frac.in), celltype_conversion$all_labels, celltype_conversion$xCell2_labels, warn_missing = FALSE)
+
+
+write.table(frac.in, "/bigdata/almogangel/kassandra_data/24_validation_datasets/cell_values/GSE130824.tsv",
+            row.names = TRUE, quote = FALSE, sep = "\t")
+
