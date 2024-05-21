@@ -1248,7 +1248,7 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type, seed = 123, nCores = 
   # Get spillover parameters
   if (use_sillover) {
     message("Generating spillover matrix...")
-    spill_mat <- getSpillOverMat(gep_mat, cor_mat, signatures, dep_list, params, frac2use, ncores)
+    spill_mat <- getSpillOverMat(gep_mat, cor_mat, signatures, dep_list, params, frac2use = 0.25, nCores)
   }else{
     spill_mat <- matrix
   }
