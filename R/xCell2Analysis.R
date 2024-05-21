@@ -11,13 +11,13 @@
 #' @importFrom xgboost xgb.DMatrix
 #' @param mix a matrix containing gene expression data
 #' @param xcell2object S4 object of `xCell2Object`
-#' @param predict Boolean - should we use model for to predict final scores?
+#' @param estimate_fracs Boolean
 #' @param spillover Boolean - should we use spillover corretion on the transformed scores?
-#' @param ncores
+#' @param ncores description
 
 #' @return A data frame containing the cell type enrichment for each sample in the input matrix, as estimated by xCell2.
 #' @export
-xCell2Analysis <- function(mix, xcell2object, min_intersect = 0.9, predict, spillover, spillover_alpha = 0.2, ncores = 1){
+xCell2Analysis <- function(mix, xcell2object, min_intersect = 0.9, estimate_fracs = FALSE, spillover = TRUE, spillover_alpha = 0.2, ncores = 1){
 
   scoreMix <- function(ctoi, mix_ranked, signatures_ctoi){
 
@@ -48,43 +48,50 @@ xCell2Analysis <- function(mix, xcell2object, min_intersect = 0.9, predict, spil
   # Score and predict
   sigs_celltypes <- unique(unlist(lapply(names(xcell2object@signatures), function(x){strsplit(x, "#")[[1]][1]})))
 
-  res <- BiocParallel::bplapply(sigs_celltypes, function(ctoi){
+  # Get raw enrichment scores
+  res_raw <- BiocParallel::bplapply(sigs_celltypes, function(ctoi){
 
     signatures_ctoi <- xcell2object@signatures[startsWith(names(xcell2object@signatures), paste0(ctoi, "#"))]
     scores <- scoreMix(ctoi, mix_ranked, signatures_ctoi)
-
-    if (predict) {
-
-      a <- pull(filter(xcell2object@params, celltype == ctoi), a)
-      b <- pull(filter(xcell2object@params, celltype == ctoi), b)
-      intercepts <- pull(filter(xcell2object@params, celltype == ctoi), intercepts)[[1]]
-      betas <- pull(filter(xcell2object@params, celltype == ctoi), betas)[[1]]
-
-      # Linear transformation
-      scores <- (scores^(1/b)) / a
-
-      # Scale
-      scores <- scale(scores)
-
-      # Predict
-      p <- (scores %*% betas) + intercepts
-      p <- apply(p, 1, mean)
-
-
-      return(p)
-    }else{
-      scores <- rowMeans(scores)
-      return(scores)
-    }
+    return(scores)
 
   }, BPPARAM = param)
+  names(res_raw) <- sigs_celltypes
 
-  res <- Reduce(rbind, res)
-  colnames(res) <-  colnames(mix_ranked)
-  rownames(res) <- sigs_celltypes
+  if (estimate_fracs) {
+
+    # a <- pull(filter(xcell2object@params, celltype == ctoi), a)
+    # b <- pull(filter(xcell2object@params, celltype == ctoi), b)
+    # intercepts <- pull(filter(xcell2object@params, celltype == ctoi), intercepts)[[1]]
+    # betas <- pull(filter(xcell2object@params, celltype == ctoi), betas)[[1]]
+    #
+    # # Linear transformation
+    # scores <- (scores^(1/b)) / a
+    #
+    # # Scale
+    # scores <- scale(scores)
+    #
+    # # Predict
+    # p <- (scores %*% betas) + intercepts
+    # p <- apply(p, 1, mean)
+    #
+    #
+    # return(p)
+  }else{
+    res <- t(sapply(res_raw, function(ctoi){
+      rowMeans(ctoi)
+    }))
+  }
 
 
-  if (spillover & predict) {
+
+  if (spillover) {
+
+    # Linear transformation
+    a <- pull(filter(xcell2object@params, celltype == ctoi), a)
+    b <- pull(filter(xcell2object@params, celltype == ctoi), b)
+    res <- (res^(1/b)) / a
+
     # Spillover correction
     spill_mat <- xcell2object@spill_mat * spillover_alpha
     diag(spill_mat) <- 1
@@ -100,6 +107,9 @@ xCell2Analysis <- function(mix, xcell2object, min_intersect = 0.9, predict, spil
   }else{
     return(res)
   }
+
+
+
 
 }
 
