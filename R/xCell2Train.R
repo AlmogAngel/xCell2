@@ -397,35 +397,36 @@ createSignatures <- function(labels, dep_list, quantiles_matrix, probs, cor_mat,
 }
 makeSimulations <- function(ref, mix, labels, gep_mat, ref_type, dep_list, cor_mat, sim_fracs, n_sims, ncores, noise_level, seed2use){
 
-
-  sampleControls <- function(ctoi, controls, dep_cts, cor_mat){
-
-    # Sample 3-9 non dependent control cell types (if possible)
-    if (length(controls) > 3) {
-      controls2use <- sample(controls, sample(3:min(8, length(controls)), 1), replace = FALSE)
-    }else{
-      controls2use <- controls
-    }
-
-    # For half of the simulations add a related cell type(s) to mimic some spillover effect
-    cts_cors <- sort(cor_mat[ctoi, controls], decreasing = TRUE)
-    related_cts <- names(cts_cors[1:round(length(cts_cors)*0.2)]) # Top 20% related cell type
-
-    if (length(related_cts) > 0) {
-      if (runif(1) <= 0.5) {
-        if (length(related_cts) < 4) {
-          controls2use <- unique(c(controls2use, sample(related_cts, 1)))
-
-        }else{
-          controls2use <- unique(c(controls2use, sample(related_cts, 2)))
-        }
-      }
-    }
-    return(controls2use)
-
-  }
   getControls <- function(ctoi, controls, gep_mat_linear, dep_cts, sim_fracs, cor_mat, n_sims){
 
+    sampleControls <- function(ctoi, controls, dep_cts, cor_mat){
+
+      cts_cors <- sort(cor_mat[ctoi, controls], decreasing = TRUE)
+      controls <- controls[!controls %in% names(which(cts_cors > 0.8))]
+
+      # Sample 3-9 non dependent control cell types (if possible)
+      if (length(controls) > 3) {
+        controls2use <- sample(controls, sample(3:min(8, length(controls)), 1), replace = FALSE)
+      }else{
+        controls2use <- controls
+      }
+
+      # # For half of the simulations add a related cell type(s) to mimic some spillover effect
+      # related_cts <- names(cts_cors[1:round(length(cts_cors)*0.2)]) # Top 20% related cell type
+      #
+      # if (length(related_cts) > 0) {
+      #   if (runif(1) <= 0.5) {
+      #     if (length(related_cts) < 4) {
+      #       controls2use <- unique(c(controls2use, sample(related_cts, 1)))
+      #
+      #     }else{
+      #       controls2use <- unique(c(controls2use, sample(related_cts, 2)))
+      #     }
+      #   }
+      # }
+      return(controls2use)
+
+    }
 
     # Generate sets of different controls combinations
     n_sets <- n_sims
@@ -446,12 +447,13 @@ makeSimulations <- function(ref, mix, labels, gep_mat, ref_type, dep_list, cor_m
 
   }
 
+
   param <- BiocParallel::MulticoreParam(workers = ncores, RNGseed = seed2use)
 
   celltypes <- unique(labels$label)
   gep_mat_linear <- 2^gep_mat
-  if (round(min(gep_mat_linear)) == 3) {
-    gep_mat_linear <- gep_mat_linear-3
+  if (round(min(gep_mat_linear)) == 1) {
+    gep_mat_linear <- gep_mat_linear-1
   }
 
   sim_list <- BiocParallel::bplapply(celltypes, function(ctoi){
@@ -837,19 +839,27 @@ learnParams <- function(simulations_scored, ncores){
   linearParams <- BiocParallel::bplapply(celltypes, function(ctoi){
 
 
-    tps <- rowMeans(sapply(simulations_scored[[ctoi]], function(sim){
+    tps <- Rfast::rowMedians(sapply(simulations_scored[[ctoi]], function(sim){
 
       frac <- sim[,ncol(sim)]
       mean_scores <- rowMeans(sim[,-ncol(sim)])
 
       tp <- try(minpack.lm::nlsLM(mean_scores ~ a * frac^b, start = list(a=1, b=1), control = list(maxiter = 500)), silent = TRUE)
+      a = coef(tp)[[1]]
+      b = coef(tp)[[2]]
 
-      return(c(a = coef(tp)[[1]], b = coef(tp)[[2]]))
+      mean_scores_transformed <- (mean_scores^(1/b)) / a
+      lm_fit <- lm(frac ~ mean_scores_transformed)
+      m = coef(lm_fit)[[2]]
+      n = coef(lm_fit)[[1]]
+
+
+      return(c(a = a, b = b, m = m, n = n))
 
     }))
 
 
-    return(tibble(celltype = ctoi, a = tps[[1]], b = tps[[2]]))
+    return(tibble(celltype = ctoi, a = tps[[1]], b = tps[[2]], m = tps[[3]], n = tps[[4]]))
 
   }, BPPARAM = param)
 
@@ -935,12 +945,13 @@ getSpillOverMat <- function(gep_mat, cor_mat, signatures, dep_list, params, frac
   return(spill_mat)
 
 }
-
 scoreFiltDS <- function(shared_genes, labels, filtering_data, ds_cor_cutoff, min_ds2use, signatures, ncores){
 
   param <- BiocParallel::MulticoreParam(workers = ncores)
 
   filt_cts <- intersect(unique(labels$label), unlist(sapply(filtering_data$truth, rownames)))
+  stableG <- singscore::getStableGenes(5, type = 'blood')
+
 
   if (length(filt_cts) == 0) {
     warningCondition("Not cell types found for filtering signatures.")
@@ -967,10 +978,9 @@ scoreFiltDS <- function(shared_genes, labels, filtering_data, ds_cor_cutoff, min
       ctoi_samples <- ctoi_samples[ctoi_samples %in% colnames(ctoi_mix)]
 
       #  Rank filtering dataset
-      ctoi_filt_ds_ranked <- singscore::rankGenes(ctoi_mix[genes2use, ctoi_samples])
+      ctoi_filt_ds_ranked <- singscore::rankGenes(ctoi_mix[genes2use, ctoi_samples], stableGenes = stableG)
 
       # Get stable genes score
-      # stableG <- singscore::getStableGenes(300)
       median(singscore::simpleScore(ctoi_filt_ds_ranked, upSet = stableG, centerScore = FALSE)$TotalScore)
 
       # Score
@@ -1107,6 +1117,147 @@ trainModels <- function(simulations_scored, params, alpha, ncores, seed2use){
 }
 
 
+learnParams <- function(gep_mat, cor_mat, signatures, dep_list, params, sim_fracs, frac2use, ncores){
+
+  param <- BiocParallel::MulticoreParam(workers = ncores)
+
+  celltypes <- colnames(gep_mat)
+  gep_mat_linear <- 2^gep_mat
+  if (round(min(gep_mat_linear)) == 1) {
+    gep_mat_linear <- gep_mat_linear-1
+  }
+
+  # Generate mixtures
+  mix_list <- BiocParallel::bplapply(celltypes, function(ctoi){
+
+    # Generate CTOI mixture
+    ctoi_mat <- matrix(rep(gep_mat_linear[,ctoi], length(sim_fracs)), byrow = FALSE, ncol = length(sim_fracs), dimnames = list(rownames(gep_mat_linear), sim_fracs))
+    ctoi_mat_frac <- ctoi_mat %*% diag(sim_fracs)
+
+    # Generate control mixture
+    dep_cts <- unique(c(ctoi, unname(unlist(dep_list[[ctoi]]))))
+    controls <- celltypes[!celltypes %in% dep_cts]
+    control <- names(sort(cor_mat[controls,ctoi])[1])
+    controls_mat <- matrix(rep(gep_mat_linear[,control], length(sim_fracs)), byrow = FALSE, ncol = length(sim_fracs), dimnames = list(rownames(gep_mat_linear), sim_fracs))
+    controls_mat_frac <- controls_mat %*% diag(1-sim_fracs)
+
+    # Combine
+    mixture <- ctoi_mat_frac + controls_mat_frac
+    colnames(mixture) <- paste0(ctoi, "^^", control, "%%", sim_fracs)
+
+    return(mixture)
+
+  }, BPPARAM = param)
+  names(mix_list) <- celltypes
+
+  # Learn linear parameters
+  linear_params <- BiocParallel::bplapply(celltypes, function(ctoi){
+
+    # Get scores
+    mix_mat_ranked <- singscore::rankGenes(mix_list[[ctoi]])
+    signatures_ctoi <- signatures[gsub("#.*", "", names(signatures)) %in% ctoi]
+    scores <- rowMeans(sapply(signatures_ctoi, simplify = TRUE, function(sig){
+      singscore::simpleScore(mix_mat_ranked, upSet = sig, centerScore = FALSE)$TotalScore
+    }))
+    # plot(scores, sim_fracs)
+
+    # Get transformation parameters
+    tp <- try(minpack.lm::nlsLM(scores ~ a * sim_fracs^b, start = list(a=1, b=1), control = list(maxiter = 500)), silent = TRUE)
+    a = coef(tp)[[1]]
+    b = coef(tp)[[2]]
+    # plot((scores^(1/b)) / a, sim_fracs)
+
+    # Get linear model parameters
+    scores_transformed <- (scores^(1/b)) / a
+    lm_fit <- lm(frac ~ scores_transformed)
+    m = coef(lm_fit)[[2]]
+    n = coef(lm_fit)[[1]]
+
+
+    return(tibble(celltype = ctoi, a = a, b = b, m = m, n = n))
+  }, BPPARAM = param)
+  linear_params <- bind_rows(linear_params)
+
+  # Learn spillover parameters
+  ctoi_spill_scores <- BiocParallel::bplapply(celltypes, function(ctoi){
+
+    signatures_ctoi <- signatures[gsub("#.*", "", names(signatures)) %in% ctoi]
+    a <- pull(filter(linear_params, celltype == ctoi), a)
+    b <- pull(filter(linear_params, celltype == ctoi), b)
+    m <- pull(filter(linear_params, celltype == ctoi), m)
+    n <- pull(filter(linear_params, celltype == ctoi), n)
+
+    # Generate frac2use mixtures
+    cts_mat_frac <- gep_mat_linear * frac2use
+
+    # Generate control mixture
+    dep_cts <- unique(c(ctoi, unname(unlist(dep_list[[ctoi]]))))
+    dep_cts <- dep_cts[dep_cts != ctoi]
+    controls <- celltypes[!celltypes %in% dep_cts]
+    controls <- sapply(colnames(cts_mat_frac), function(ct){
+      names(sort(cor_mat[controls, ct])[1])
+    })
+    controls_mat_frac <- gep_mat_linear[,controls] * (1-frac2use)
+
+    # Combine
+    mixture <- ctoi_mat_frac + controls_mat_frac
+
+
+    # Get results for all cell type mixtures
+    mix_cts_mat_ranked <- singscore::rankGenes(mixture)
+    mix_cts_mat_scores <- sapply(signatures_ctoi, simplify = TRUE, function(sig){
+      singscore::simpleScore(mix_cts_mat_ranked, upSet = sig, centerScore = FALSE)$TotalScore
+    })
+    mix_cts_mat_scores <- Rfast::rowmeans(mix_cts_mat_scores)
+    mix_cts_mat_scores <- (mix_cts_mat_scores^(1/b)) / a
+    mix_cts_mat_scores <- mix_cts_mat_scores*m + n
+    names(mix_cts_mat_scores) <- colnames(mix_cts_mat_ranked)
+
+
+    # Get results for all cell type controls
+    controls_cts_mat_ranked <- singscore::rankGenes(controls_mat_frac)
+    colnames(controls_cts_mat_ranked) <- make.unique(colnames(controls_cts_mat_ranked))
+    controls_cts_mat_scores <- sapply(signatures_ctoi, simplify = TRUE, function(sig){
+      singscore::simpleScore(controls_cts_mat_ranked, upSet = sig, centerScore = FALSE)$TotalScore
+    })
+    controls_cts_mat_scores[controls_cts_mat_scores<0] <- 0
+    controls_cts_mat_scores <- Rfast::rowmeans(controls_cts_mat_scores)
+    controls_cts_mat_scores <- (controls_cts_mat_scores^(1/b)) / a
+    controls_cts_mat_scores <- controls_cts_mat_scores*m + n
+
+
+    final_scores <- round(mix_cts_mat_scores - controls_cts_mat_scores, 4)
+    final_scores[dep_cts] <- 0
+    final_scores[final_scores < 0] <- 0
+
+
+
+    return(final_scores)
+
+  }, BPPARAM = param)
+  names(ctoi_spill_scores) <- celltypes
+
+  # Rows are ctoi signatures scores
+  # Columns are cell type in mixtures
+  spill_mat <- Reduce(rbind, ctoi_spill_scores)
+  rownames(spill_mat) <- celltypes
+
+  # Clean and normalize spill matrix
+  spill_mat[spill_mat < 0] <- 0
+  spill_mat <- spill_mat / diag(spill_mat)
+  spill_mat[is.nan(spill_mat)] <- 0
+  spill_mat[spill_mat > 1] <- 1
+
+  # TODO: Check this parameter
+  spill_mat[spill_mat > 0.5] <- 0.5
+  diag(spill_mat) <- 1
+
+  # pheatmap::pheatmap(spill_mat, cluster_rows = F, cluster_cols = F)
+
+
+  return(list(params = linear_params, spillmat = spill_mat))
+}
+
 #' @slot signatures list of xCell2 signatures
 #' @slot dependencies list of cell type dependencies
 #' @slot params data frame of cell type linear transformation parameters
@@ -1238,20 +1389,22 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type, seed = 123, nCores = 
   signatures <- filterSignatures(shared_genes, labels, filtering_data, simulations, signatures, top_sigs_frac, add_essential_genes, human2mouse, ncores = nCores)
 
   # Score simulations
-  message("Scoring simulations for parameter tuning...")
-  simulations_scored <- scoreSimulations(signatures, simulations, n_sims, sim_fracs, nCores)
+  #message("Scoring simulations for parameter tuning...")
+  #simulations_scored <- scoreSimulations(signatures, simulations, n_sims, sim_fracs, nCores)
 
   # Learn linear transformation parameters
-  message("Learning linear transformation parameters...")
-  params <- learnParams(simulations_scored, nCores)
+  message("Learning linear transformation and spillover parameters...")
+  params <- learnParams(gep_mat, cor_mat, signatures, dep_list, params, sim_fracs, frac2use = 0.25, nCores)
+  spill_mat <- params$spillmat
+  params <- params$params
 
-  # Get spillover parameters
-  if (use_sillover) {
-    message("Generating spillover matrix...")
-    spill_mat <- getSpillOverMat(gep_mat, cor_mat, signatures, dep_list, params, frac2use = 0.25, nCores)
-  }else{
-    spill_mat <- matrix
-  }
+  # # Get spillover parameters
+  # if (use_sillover) {
+  #   message("Generating spillover matrix...")
+  #   spill_mat <- getSpillOverMat(gep_mat, cor_mat, signatures, dep_list, params, frac2use = 0.25, nCores)
+  # }else{
+  #   spill_mat <- matrix
+  # }
 
 
   # Learn scores transformation parameters
@@ -1263,15 +1416,6 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type, seed = 123, nCores = 
   # params <- trainModels(simulations_scored, params, alpha = 0, ncores = nCores, seed2use = seed)
 
 
-  # # Get spillover parameters
-  # message("Learning spillover correction parameters...")
-  # if (use_sillover) {
-  #   frac2use <- sim_fracs[which.min(abs(sim_fracs - 0.25))]
-  #   spill_mat <- getSpillOverMat(simulations, signatures, dep_list, params, models, frac2use, nCores)
-  # }else{
-  #   spill_mat = matrix()
-  # }
-
 
   # Save results in S4 object
   xCell2.S4 <- new("xCell2Object",
@@ -1282,7 +1426,7 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type, seed = 123, nCores = 
                    genes_used = rownames(ref))
 
   message("Your custom xCell2 reference object is ready!")
-  message("You can help others by sharing your reference here: https://dviraran.github.io/xCell2ref")
+  message("> You can help others by sharing your reference here: https://dviraran.github.io/xCell2ref")
 
 
   if (return_analysis) {

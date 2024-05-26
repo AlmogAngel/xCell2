@@ -84,13 +84,24 @@ xCell2Analysis <- function(mix, xcell2object, min_intersect = 0.9, estimate_frac
   }
 
 
-
   if (spillover) {
 
-    # Linear transformation
-    a <- pull(filter(xcell2object@params, celltype == ctoi), a)
-    b <- pull(filter(xcell2object@params, celltype == ctoi), b)
-    res <- (res^(1/b)) / a
+    res <- t(sapply(rownames(res), function(ctoi){
+
+      ctoi_res <- res[ctoi,]
+
+      # Linear transformation
+      a <- pull(filter(xcell2object@params, celltype == ctoi), a)
+      b <- pull(filter(xcell2object@params, celltype == ctoi), b)
+      m <- pull(filter(xcell2object@params, celltype == ctoi), m)
+      ctoi_res <- (ctoi_res^(1/b)) / a
+      ctoi_res <- ctoi_res*m
+
+      # Shift values
+      ctoi_res <- ctoi_res - min(ctoi_res)
+      return(ctoi_res)
+    }))
+
 
     # Spillover correction
     spill_mat <- xcell2object@spill_mat * spillover_alpha
