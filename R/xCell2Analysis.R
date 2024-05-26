@@ -81,10 +81,6 @@ xCell2Analysis <- function(mix, xcell2object, min_intersect = 0.9, estimate_frac
     res <- t(sapply(res_raw, function(ctoi){
       rowMeans(ctoi)
     }))
-  }
-
-
-  if (spillover) {
 
     res <- t(sapply(rownames(res), function(ctoi){
 
@@ -101,6 +97,11 @@ xCell2Analysis <- function(mix, xcell2object, min_intersect = 0.9, estimate_frac
       ctoi_res <- ctoi_res - min(ctoi_res)
       return(ctoi_res)
     }))
+
+  }
+
+
+  if (spillover) {
 
 
     # Spillover correction

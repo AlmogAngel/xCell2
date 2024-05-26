@@ -1169,7 +1169,7 @@ learnParams <- function(gep_mat, cor_mat, signatures, dep_list, params, sim_frac
 
     # Get linear model parameters
     scores_transformed <- (scores^(1/b)) / a
-    lm_fit <- lm(frac ~ scores_transformed)
+    lm_fit <- lm(sim_fracs ~ scores_transformed)
     m = coef(lm_fit)[[2]]
     n = coef(lm_fit)[[1]]
 
