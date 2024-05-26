@@ -1200,7 +1200,7 @@ learnParams <- function(gep_mat, cor_mat, signatures, dep_list, params, sim_frac
     controls_mat_frac <- gep_mat_linear[,controls] * (1-frac2use)
 
     # Combine
-    mixture <- ctoi_mat_frac + controls_mat_frac
+    mixture <- cts_mat_frac + controls_mat_frac
 
 
     # Get results for all cell type mixtures
