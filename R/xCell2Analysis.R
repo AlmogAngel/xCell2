@@ -12,12 +12,12 @@
 #' @param mix a matrix containing gene expression data
 #' @param xcell2object S4 object of `xCell2Object`
 #' @param estimate_fracs Boolean
-#' @param spillover Boolean - should we use spillover corretion on the transformed scores?
-#' @param ncores description
+#' @param spillover Boolean - should we use spillover correction on the transformed scores?
+#' @param num_threads description
 
 #' @return A data frame containing the cell type enrichment for each sample in the input matrix, as estimated by xCell2.
 #' @export
-xCell2Analysis <- function(mix, xcell2object, min_intersect = 0.9, estimate_fracs = FALSE, spillover = TRUE, spillover_alpha = 0.2, ncores = 1){
+xCell2Analysis <- function(mix, xcell2object, min_intersect = 0.9, estimate_fracs = FALSE, spillover = TRUE, spillover_alpha = 0.2, num_threads = 1){
 
   scoreMix <- function(ctoi, mix_ranked, signatures_ctoi){
 
@@ -31,7 +31,7 @@ xCell2Analysis <- function(mix, xcell2object, min_intersect = 0.9, estimate_frac
   }
 
 
-  param <- BiocParallel::MulticoreParam(workers = ncores)
+  param <- BiocParallel::MulticoreParam(workers = num_threads)
 
 
   # Check reference/mixture genes intersection

@@ -474,9 +474,6 @@ makeSimulations <- function(ref, mix, labels, gep_mat, ref_type, dep_list, cor_m
 
   celltypes <- unique(labels$label)
   gep_mat_linear <- 2^gep_mat
-  if (round(min(gep_mat_linear)) == 1) {
-    gep_mat_linear <- gep_mat_linear-1
-  }
 
   sim_list <- BiocParallel::bplapply(celltypes, function(ctoi){
 
@@ -825,9 +822,7 @@ learnParams <- function(gep_mat, cor_mat, signatures, dep_list, ref_type, sim_fr
 
   celltypes <- colnames(gep_mat)
   gep_mat_linear <- 2^gep_mat
-  if (round(min(gep_mat_linear)) == 3) {
-    gep_mat_linear <- gep_mat_linear-3
-  }
+
 
   # Generate mixtures
   mix_list <- BiocParallel::bplapply(celltypes, function(ctoi){
@@ -1029,6 +1024,7 @@ setClass("xCell2Object", slots = list(
 #' @param add_essential_genes description
 #' @param return_analysis description
 #' @param use_sillover description
+#' @param spillover_alpha description
 #' @return An S4 object containing the signatures, cell type labels, and cell type dependencies.
 #' @export
 xCell2Train <- function(ref,
@@ -1040,6 +1036,9 @@ xCell2Train <- function(ref,
                         filtering_data = NULL,
                         seed = 123,
                         num_threads = 1,
+                        return_analysis = FALSE,
+                        use_sillover = TRUE,
+                        spillover_alpha = 0.2,
                         # For tuning
                         min_pb_cells = 30,
                         min_pb_samples = 10,
@@ -1057,8 +1056,7 @@ xCell2Train <- function(ref,
                         noise_level = 0.2,
                         top_sigs_frac = 0.05,
                         add_essential_genes = TRUE,
-                        return_analysis = FALSE,
-                        use_sillover = TRUE
+
 ){
 
   set.seed(seed)
@@ -1137,7 +1135,7 @@ xCell2Train <- function(ref,
 
   if (return_analysis) {
     message("Running xCell2Analysis...")
-    res <- xCell2::xCell2Analysis(mix, xcell2object = xCell2.S4, spillover = use_sillover, ncores = nCores)
+    res <- xCell2::xCell2Analysis(mix, xcell2object = xCell2.S4, spillover = use_sillover, spillover_alpha = spillover_alpha, num_threads)
     return(res)
   }else{
     return(xCell2.S4)
