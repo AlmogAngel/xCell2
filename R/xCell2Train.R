@@ -27,9 +27,8 @@ validateInputs <- function(ref, labels, ref_type){
   return(out)
 
 }
-sc2pseudoBulk <- function(ref, labels, min_n_cells, min_ps_samples, seed2use){
+sc2pseudoBulk <- function(ref, labels, min_pb_cells, min_pb_samples){
 
-  set.seed(seed2use)
 
   celltypes <- unique(labels$label)
 
@@ -37,14 +36,14 @@ sc2pseudoBulk <- function(ref, labels, min_n_cells, min_ps_samples, seed2use){
 
     ctoi_samples <- labels[labels$label == ctoi,]$sample
 
-    # Calculate maximum possible number of groups given min_n_cells
-    num_groups <- ceiling(length(ctoi_samples) / min_n_cells)
-    if (num_groups < min_ps_samples) {
-      num_groups <- min_ps_samples
+    # Calculate maximum possible number of groups given min_pb_cells
+    num_groups <- ceiling(length(ctoi_samples) / min_pb_cells)
+    if (num_groups < min_pb_samples) {
+      num_groups <- min_pb_samples
     }
 
-    # Generate min_ps_samples pseudo samples of CTOI
-    if (length(ctoi_samples) > min_ps_samples) {
+    # Generate min_pb_samples pseudo samples of CTOI
+    if (length(ctoi_samples) > min_pb_samples) {
 
       ctoi_samples_shuffled <- sample(ctoi_samples, length(ctoi_samples))
       list_of_ctoi_samples_shuffled <- split(ctoi_samples_shuffled, ceiling(seq_along(ctoi_samples_shuffled) / (length(ctoi_samples_shuffled) / num_groups)))
@@ -76,28 +75,25 @@ sc2pseudoBulk <- function(ref, labels, min_n_cells, min_ps_samples, seed2use){
   return(list(ref = pseudo_ref, labels = pseudo_label))
 
 }
-prepRefMix <- function(ref, mix, ref_type, human2mouse){
+prepRefMix <- function(ref, mix, ref_type, min_sc_genes, base_count, human2mouse){
 
   if (human2mouse) {
     message("Converting reference genes from human to mouse...")
-
     data(human_mouse_gene_symbols)
-
     human_genes <- intersect(rownames(ref), human_mouse_gene_symbols$human)
     ref <- ref[human_genes,]
     rownames(ref) <- human_mouse_gene_symbols[human_genes,]$mouse
-
   }
 
   if (ref_type == "sc") {
-    message("Normalizing pseudo bulk reference to CPM.")
+    message("> Normalizing pseudo bulk reference to CPM.")
     # TODO: For non 10X also do TPM
     lib_sizes <- Matrix::colSums(ref)
     norm_factor <- 1e6 / lib_sizes
     ref_norm <- ref %*% Matrix::Diagonal(x = norm_factor)
     colnames(ref_norm) <- colnames(ref)
-    ref <- as.matrix(ref_norm) # TODO: Find a way to reduce memory usage by keeping matrix sparse
-
+    ref <- as.matrix(ref_norm)
+    message("> Filtering pseudo bulk genes by variance.")
     genes_var <- sort(apply(ref, 1, var), decreasing = TRUE)
     var_cutoff <- c(1.5, 1, 0.8, 0.5, 0.3, 0.1, 0)
     for (co in var_cutoff) {
@@ -106,7 +102,7 @@ prepRefMix <- function(ref, mix, ref_type, human2mouse){
       }else{
         varGenes2use <- names(genes_var[genes_var >= co])
       }
-      if(length(varGenes2use) > 10000){
+      if(length(varGenes2use) > min_sc_genes){
         break
       }else{
         errorCondition("Not enough variable genes in scRNA-Seq reference!")
@@ -114,18 +110,29 @@ prepRefMix <- function(ref, mix, ref_type, human2mouse){
     }
     ref <- ref[varGenes2use,]
 
-    ref <- ref + 3
+    if (min(ref) < base_count) {
+      # Adding base_count to reference restrict inclusion of small changes
+      ref <- ref + base_count
+    }
+
   }else{
-    # Adding 3 to reference restrict inclusion of small changes
     if(max(ref) < 50){
-      # Unlog2
+
       ref <- 2^ref
       if (min(ref) == 1) {
         ref <- ref-1
       }
-      ref <- ref + 3
+
+      if (min(ref) < base_count) {
+        # Adding base_count to reference restrict inclusion of small changes
+        ref <- ref + base_count
+      }
+
     }else{
-      ref <- ref + 3
+      if (min(ref) < base_count) {
+        # Adding base_count to reference restrict inclusion of small changes
+        ref <- ref + base_count
+      }
     }
   }
 
@@ -144,7 +151,6 @@ prepRefMix <- function(ref, mix, ref_type, human2mouse){
     ref <- ref[shared_genes,]
     mix <- mix[shared_genes,]
   }
-
 
   return(list(ref.out = ref, mix.out = mix))
 }
@@ -221,9 +227,9 @@ getDependencies <- function(lineage_file_checked){
 
   return(dep_list)
 }
-makeQuantiles <- function(ref, labels, probs, ncores){
+makeQuantiles <- function(ref, labels, probs, num_threads){
 
-  param <- BiocParallel::MulticoreParam(workers = ncores)
+  param <- BiocParallel::MulticoreParam(workers = num_threads)
   celltypes <- unique(labels[,2])
 
   quantiles_mat_list <-  BiocParallel::bplapply(celltypes, function(type){
@@ -245,7 +251,7 @@ makeQuantiles <- function(ref, labels, probs, ncores){
 
   return(quantiles_mat_list)
 }
-createSignatures <- function(labels, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, top_genes_frac, ncores){
+createSignatures <- function(labels, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, top_genes_frac, num_threads){
 
 
   getSigs <- function(celltypes, type, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, top_genes_frac){
@@ -375,7 +381,7 @@ createSignatures <- function(labels, dep_list, quantiles_matrix, probs, cor_mat,
     return(type_sigs)
   }
 
-  param <- BiocParallel::MulticoreParam(workers = ncores)
+  param <- BiocParallel::MulticoreParam(workers = num_threads)
   celltypes <- unique(labels[,2])
 
   all_sigs <- BiocParallel::bplapply(celltypes, function(type){
@@ -411,7 +417,7 @@ createSignatures <- function(labels, dep_list, quantiles_matrix, probs, cor_mat,
 
   return(all_sigs)
 }
-makeSimulations <- function(ref, mix, labels, gep_mat, ref_type, dep_list, cor_mat, sim_fracs, n_sims, ncores, noise_level, seed2use){
+makeSimulations <- function(ref, mix, labels, gep_mat, ref_type, dep_list, cor_mat, sim_fracs, n_sims, noise_level, num_threads){
 
   getControls <- function(ctoi, controls, gep_mat_linear, dep_cts, sim_fracs, cor_mat, n_sims){
 
@@ -464,7 +470,7 @@ makeSimulations <- function(ref, mix, labels, gep_mat, ref_type, dep_list, cor_m
   }
 
 
-  param <- BiocParallel::MulticoreParam(workers = ncores, RNGseed = seed2use)
+  param <- BiocParallel::MulticoreParam(workers = num_threads)
 
   celltypes <- unique(labels$label)
   gep_mat_linear <- 2^gep_mat
@@ -544,10 +550,10 @@ makeSimulations <- function(ref, mix, labels, gep_mat, ref_type, dep_list, cor_m
   return(sim_list)
 
 }
-filterSignatures <- function(shared_genes, labels, filtering_data, simulations, signatures, top_sigs_frac, add_essential_genes, human2mouse, ncores){
+filterSignatures <- function(shared_genes, labels, filtering_data, simulations, signatures, top_sigs_frac, add_essential_genes, human2mouse, num_threads){
 
 
-  param <- BiocParallel::MulticoreParam(workers = ncores)
+  param <- BiocParallel::MulticoreParam(workers = num_threads)
 
 
   celltypes <- unique(labels$label)
@@ -813,9 +819,9 @@ filterSignatures <- function(shared_genes, labels, filtering_data, simulations, 
 
   return(signatures)
 }
-learnParams <- function(gep_mat, cor_mat, signatures, dep_list, ref_type, params, sim_fracs, frac2use, ncores){
+learnParams <- function(gep_mat, cor_mat, signatures, dep_list, ref_type, sim_fracs, frac2use, num_threads){
 
-  param <- BiocParallel::MulticoreParam(workers = ncores)
+  param <- BiocParallel::MulticoreParam(workers = num_threads)
 
   celltypes <- colnames(gep_mat)
   gep_mat_linear <- 2^gep_mat
@@ -961,88 +967,6 @@ learnParams <- function(gep_mat, cor_mat, signatures, dep_list, ref_type, params
 }
 
 
-trainModels <- function(simulations_scored, params, alpha, ncores, seed2use){
-
-  fitModel <- function(data, a, b, alpha, nCores){
-
-    # Each filtering data / simulation get a different model
-    models_coef <- lapply(data, function(ds){
-
-      Y <- ds[,ncol(ds)]
-      X <- ds[,-ncol(ds)]
-
-      # Linear transformation
-      X <- (X^(1/b)) / a
-
-      # # Scale
-      # X_means <- apply(X, 2, mean)
-      # X_sds <- apply(X, 2, sd)
-      # X <- scale(X, center = X_means, scale = X_sds)
-
-
-      num_samples <- nrow(X)
-
-      # Strategy for determining 'nfold'
-      if (num_samples < 30) {
-        nfold <- num_samples
-        grouped <- FALSE
-      } else if (num_samples >= 30 && num_samples <= 100) {
-        nfold <- min(20, num_samples)
-        grouped <- TRUE
-      } else {
-        nfold <- 10
-        grouped <- TRUE
-      }
-
-      cv_fit <- glmnet::cv.glmnet(X, Y, nfolds = nfold, grouped = grouped, alpha = alpha, family = "gaussian")
-      models_coef <- as.matrix(coef(cv_fit, s = "lambda.min"))
-
-      intercept <- models_coef[1,]
-      betas <- models_coef[-1,]
-
-      # Scale and predict
-      new_X <- scale((ds[,-ncol(ds)]^(1/b)) / a , center = X_means, scale = X_sds)
-      (new_X %*% betas) + intercept
-      Y
-
-      return(tibble(X_means = list(X_means), X_sds = list(X_sds), betas = list(betas), intercept = list(intercept)))
-    })
-    models_coef <- bind_rows(models_coef)
-
-
-
-
-    return(models_coef)
-
-  }
-
-  set.seed(seed2use)
-  param <- BiocParallel::MulticoreParam(workers = ncores)
-
-
-  celltypes <- names(simulations_scored)
-
-  models_params_list <- BiocParallel::bplapply(celltypes, function(ctoi){
-
-    a <- pull(filter(params, celltype == ctoi), a)
-    b <- pull(filter(params, celltype == ctoi), b)
-    data <- simulations_scored[[ctoi]]
-
-    model_params <- fitModel(data, a = a, b = b, alpha = alpha, nCores = ncores)
-
-    return(tibble(celltype = ctoi, models_params = list(model_params)))
-
-  }, BPPARAM = param)
-
-
-  bind_rows(models_params_list) %>%
-    left_join(params, by = "celltype") %>%
-    return(.)
-
-}
-
-
-
 #' @slot signatures list of xCell2 signatures
 #' @slot dependencies list of cell type dependencies
 #' @slot params data frame of cell type linear transformation parameters
@@ -1081,8 +1005,10 @@ setClass("xCell2Object", slots = list(
 #'   "dataset": sample's source dataset or subject (for single-cell).
 #' @param ref_type Gene expression data type: "rnaseq" for bulk RNA-Seq, "array" for micro-array, or "sc" for scRNA-Seq.
 #' @param seed Set seed for reproducible results (optional).
-#' @param minPBcells For scRNA-Seq reference only - minimum number of cells in the pseudo-bulk (optional).
-#' @param minPBgroups For scRNA-Seq reference only - minimum number of pseudo-bulk samples (optional).
+#' @param min_pb_cells For scRNA-Seq reference only - minimum number of cells in the pseudo-bulk (optional).
+#' @param min_pb_samples For scRNA-Seq reference only - minimum number of pseudo-bulk samples (optional).
+#' @param min_sc_genes description
+#' @param base_count description
 #' @param use_ontology A Boolean for using ontological integration (TRUE)
 #' @param lineage_file Path to the cell type lineage file generated with `xCell2GetLineage` function (optional).
 #' @param probs A numeric vector of probability thresholds to be used for generating signatures (optional).
@@ -1093,33 +1019,49 @@ setClass("xCell2Object", slots = list(
 #' @param max_genes The maximum number of genes to include in the signature (optional).
 #' @param sigsFile description
 #' @param top_sigs_frac description
-#' @param return_sigs description
-#' @param return_sigs_filt description
-#' @param ct_sims description
-#' @param nCores description
+#' @param filter_sigs description
+#' @param n_sims description
+#' @param num_threads description
 #' @param human2mouse description
 #' @param mix description
+#' @param noise_level description
 #' @param filtering_data description
-#' @param external_essential_genes description
 #' @param add_essential_genes description
 #' @param return_analysis description
-#' @param regAlpha description
 #' @param use_sillover description
-#' @param predict_res description
 #' @return An S4 object containing the signatures, cell type labels, and cell type dependencies.
 #' @export
-xCell2Train <- function(ref, labels, mix = NULL, ref_type, seed = 123, nCores = 1, human2mouse = FALSE,
-                        use_ontology = TRUE, lineage_file = NULL, top_genes_frac = 1,
+xCell2Train <- function(ref,
+                        mix = NULL,
+                        labels,
+                        ref_type,
+                        human2mouse = FALSE,
+                        lineage_file = NULL,
+                        filtering_data = NULL,
+                        seed = 123,
+                        num_threads = 1,
+                        # For tuning
+                        min_pb_cells = 30,
+                        min_pb_samples = 10,
+                        min_sc_genes = 1e4,
+                        base_count = 3,
+                        use_ontology = TRUE,
                         probs = c(0.01, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.4),
                         diff_vals = round(c(log2(1), log2(1.5), log2(2), log2(2.5), log2(3), log2(4), log2(5), log2(10), log2(20)), 3),
                         min_genes = 3,
                         max_genes = 150,
+                        top_genes_frac = 1,
+                        filter_sigs = TRUE,
+                        sim_fracs = c(0, seq(0.01, 0.25, 0.01)),
+                        n_sims = 10,
+                        noise_level = 0.2,
+                        top_sigs_frac = 0.05,
                         add_essential_genes = TRUE,
-                        filtering_data = NULL,
-                        sim_fracs = c(seq(0, 0.05, 0.001), seq(0.06, 0.1, 0.005), seq(0.11, 0.25, 0.01)),
-                        return_sigs = FALSE, return_sigs_essen = FALSE, return_sigs_filt = FALSE, sigsFile = NULL, minPBcells = 30, minPBsamples = 10, regAlpha = 0.5, predict_res = TRUE,
-                        ct_sims = 10, external_essential_genes = NULL, return_analysis = FALSE, use_sillover = TRUE, top_sigs_frac = 0.05){
+                        return_analysis = FALSE,
+                        use_sillover = TRUE
+){
 
+  set.seed(seed)
 
   # Validate inputs
   inputs_validated <- validateInputs(ref, labels, ref_type)
@@ -1129,14 +1071,13 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type, seed = 123, nCores = 
   # Generate pseudo bulk from scRNA-Seq reference
   if (ref_type == "sc") {
     message("Converting scRNA-seq reference to pseudo bulk...")
-    pb_data <- sc2pseudoBulk(ref, labels, min_n_cells = minPBcells, min_ps_samples = minPBsamples, seed2use = seed)
+    pb_data <- sc2pseudoBulk(ref, labels, min_pb_cells, min_pb_samples)
     ref <- pb_data$ref
     labels <- pb_data$labels
   }
 
-  # Normalize reference/mixture
-  # *Also use shared genes
-  out <- prepRefMix(ref, mix, ref_type, human2mouse)
+  # Prepare reference and mixture data: human to mouse genes transformation, normalization, base_counts, log2 transformation, shared genes
+  out <- prepRefMix(ref, mix, ref_type, min_sc_genes, base_count, human2mouse)
   ref <- out$ref.out
   mix <- out$mix.out
   shared_genes <- rownames(ref)
@@ -1161,45 +1102,25 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type, seed = 123, nCores = 
 
   # Generate signatures
   message("Calculating quantiles...")
-  quantiles_matrix <- makeQuantiles(ref, labels, probs, ncores = nCores)
+  quantiles_matrix <- makeQuantiles(ref, labels, probs, num_threads)
   message("Generating signatures...")
-  signatures <- createSignatures(labels, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, top_genes_frac, ncores = nCores)
+  signatures <- createSignatures(labels, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, top_genes_frac, num_threads)
 
-  # Generate simulations
-  message("Generating simulations...")
-  simulations <- makeSimulations(ref, mix, labels, gep_mat, ref_type, dep_list, cor_mat, sim_fracs, n_sims = ct_sims, ncores = nCores, noise_level = 0.2, seed2use = seed)
+  if (filter_sigs) {
+    # Generate simulations
+    message("Generating simulations...")
+    simulations <- makeSimulations(ref, mix, labels, gep_mat, ref_type, dep_list, cor_mat, sim_fracs, n_sims, noise_level, num_threads)
 
-  # Filter signatures
-  message("Filtering signatures...")
-  signatures <- filterSignatures(shared_genes, labels, filtering_data, simulations, signatures, top_sigs_frac, add_essential_genes, human2mouse, ncores = nCores)
-
-  # Score simulations
-  #message("Scoring simulations for parameter tuning...")
-  #simulations_scored <- scoreSimulations(signatures, simulations, n_sims, sim_fracs, nCores)
+    # Filter signatures
+    message("Filtering signatures...")
+    signatures <- filterSignatures(shared_genes, labels, filtering_data, simulations, signatures, top_sigs_frac, add_essential_genes, human2mouse, num_threads)
+  }
 
   # Learn linear transformation parameters
   message("Learning linear transformation and spillover parameters...")
-  params <- learnParams(gep_mat, cor_mat, signatures, dep_list, ref_type, params, sim_fracs, frac2use = 0.25, nCores)
+  params <- learnParams(gep_mat, cor_mat, signatures, dep_list, ref_type, sim_fracs, frac2use = 0.25, num_threads)
   spill_mat <- params$spillmat
   params <- params$params
-
-  # # Get spillover parameters
-  # if (use_sillover) {
-  #   message("Generating spillover matrix...")
-  #   spill_mat <- getSpillOverMat(gep_mat, cor_mat, signatures, dep_list, params, frac2use = 0.25, nCores)
-  # }else{
-  #   spill_mat <- matrix
-  # }
-
-
-  # Learn scores transformation parameters
-  # TODO: Parameters that transform signatures scores to estimated cell fractions
-
-  # # Train linear models
-  # message("Learning signatures regularization parameters...")
-  # filtDS_scored <- scoreFiltDS(shared_genes, labels, filtering_data, ds_cor_cutoff = 0.5, min_ds2use = 1, signatures, ncores = nCores)
-  # params <- trainModels(simulations_scored, params, alpha = 0, ncores = nCores, seed2use = seed)
-
 
 
   # Save results in S4 object
@@ -1208,10 +1129,10 @@ xCell2Train <- function(ref, labels, mix = NULL, ref_type, seed = 123, nCores = 
                    dependencies = dep_list,
                    params = params,
                    spill_mat = spill_mat,
-                   genes_used = rownames(ref))
+                   genes_used = shared_genes)
 
   message("Your custom xCell2 reference object is ready!")
-  message("> You can help others by sharing your reference here: https://dviraran.github.io/xCell2ref")
+  message("> Please consider sharing your xCell2 reference with others here: https://dviraran.github.io/xCell2ref")
 
 
   if (return_analysis) {
