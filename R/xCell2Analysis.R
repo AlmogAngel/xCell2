@@ -112,7 +112,7 @@ xCell2Analysis <- function(mix, xcell2object, min_intersect = 0.9, estimate_frac
 
     scores_corrected <- apply(res[rows, ], 2, function(x) pracma::lsqlincon(spill_mat[rows, rows], x, lb = 0))
     scores_corrected[scores_corrected < 0] <- 0
-    scores_corrected <- round(scores_corrected, 4)
+    #scores_corrected <- round(scores_corrected, 4)
     rownames(scores_corrected) <- rows
 
     return(scores_corrected)
