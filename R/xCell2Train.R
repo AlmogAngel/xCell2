@@ -1055,8 +1055,7 @@ xCell2Train <- function(ref,
                         n_sims = 10,
                         noise_level = 0.2,
                         top_sigs_frac = 0.05,
-                        add_essential_genes = TRUE,
-
+                        add_essential_genes = TRUE
 ){
 
   set.seed(seed)
