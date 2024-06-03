@@ -11,13 +11,16 @@
 #' @importFrom xgboost xgb.DMatrix
 #' @param mix a matrix containing gene expression data
 #' @param xcell2object S4 object of `xCell2Object`
+#' @param min_intersect description
+#' @param raw_scores description
 #' @param estimate_fracs Boolean
 #' @param spillover Boolean - should we use spillover correction on the transformed scores?
+#' @param spillover_alpha description
 #' @param num_threads description
 
 #' @return A data frame containing the cell type enrichment for each sample in the input matrix, as estimated by xCell2.
 #' @export
-xCell2Analysis <- function(mix, xcell2object, min_intersect = 0.9, estimate_fracs = FALSE, spillover = TRUE, spillover_alpha = 0.2, num_threads = 1){
+xCell2Analysis <- function(mix, xcell2object, min_intersect = 0.9, raw_scores = FALSE, estimate_fracs = FALSE, spillover = TRUE, spillover_alpha = 0.2, num_threads = 1){
 
   scoreMix <- function(ctoi, mix_ranked, signatures_ctoi){
 
@@ -82,6 +85,11 @@ xCell2Analysis <- function(mix, xcell2object, min_intersect = 0.9, estimate_frac
       rowMeans(ctoi)
     }))
 
+  }
+
+  if (raw_scores) {
+    return(res)
+  }else{
     res <- t(sapply(rownames(res), function(ctoi){
 
       ctoi_res <- res[ctoi,]
@@ -97,9 +105,7 @@ xCell2Analysis <- function(mix, xcell2object, min_intersect = 0.9, estimate_frac
       ctoi_res <- ctoi_res - min(ctoi_res)
       return(ctoi_res)
     }))
-
   }
-
 
   if (spillover) {
 
@@ -119,9 +125,6 @@ xCell2Analysis <- function(mix, xcell2object, min_intersect = 0.9, estimate_frac
   }else{
     return(res)
   }
-
-
-
 
 }
 
