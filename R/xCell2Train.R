@@ -1121,9 +1121,9 @@ xCell2Train <- function(ref,
   if (return_signatures) {
     xCell2.S4 <- new("xCell2Object",
                      signatures = signatures,
-                     dependencies = dep_list,
-                     params = NULL,
-                     spill_mat = NULL,
+                     dependencies = list(),
+                     params = data.frame(),
+                     spill_mat = matrix(),
                      genes_used = shared_genes)
     return(xCell2.S4)
   }
