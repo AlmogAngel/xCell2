@@ -417,6 +417,175 @@ createSignatures <- function(labels, dep_list, quantiles_matrix, probs, cor_mat,
 
   return(all_sigs)
 }
+createSignatures <- function(labels, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, top_genes_frac, num_threads){
+
+
+  getSigs <- function(celltypes, type, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, top_genes_frac){
+
+    # Remove dependent cell types
+    not_dep_celltypes <- celltypes[!celltypes %in% c(type, unname(unlist(dep_list[[type]])))]
+    ntop <- round(length(not_dep_celltypes)*top_genes_frac)
+
+    # Set signature cutoffs grid
+    param.df <- expand.grid("diff_vals" = diff_vals, "probs" = probs)
+    param.df <- param.df[param.df$diff_vals != 0 | param.df$probs <= 0.05,] # Remove diff-prob combination that is too permissive...
+
+
+    # Find top genes
+    type_sigs <- list()
+    for (i in 1:nrow(param.df)){
+
+      # Get a Boolean matrices with genes that pass the quantiles criteria
+      diff <- param.df[i, ]$diff_vals # difference threshold
+      lower_prob <- which(probs == param.df[i, ]$probs) # lower quantile cutoff
+
+      # Sort upper prob gene value for each not_dep_celltypes
+      upper_prob <- nrow(quantiles_matrix[[1]])-lower_prob+1 # upper quantile cutoff
+      upper_prob.mat <- sapply(not_dep_celltypes, function(x){
+        get(x, quantiles_matrix)[upper_prob,]
+      })
+
+      #  Check diff-prob criteria
+      diff_genes.mat <- apply(upper_prob.mat, 2, function(x){
+        get(type, quantiles_matrix)[lower_prob,] > x + diff
+      })
+
+      genes_scores <- apply(diff_genes.mat, 1, function(x){
+        names(which(x))
+      })
+      genes_scores <- genes_scores[lengths(genes_scores) > 0]
+      genes_scores_norm <- round(sort(lengths(genes_scores), decreasing = TRUE) / length(not_dep_celltypes), 2)
+      top_values <- unique(genes_scores_norm)[1:ntop]
+      top_values <- top_values[!is.na(top_values)]
+
+      # Make signatures
+      for (j in top_values) {
+
+        sig_genes <- names(which(genes_scores_norm >= j))
+        n_genes <- length(sig_genes)
+
+        if (n_genes < min_genes) {
+          next
+        }
+
+        if (n_genes > max_genes) {
+          break
+        }
+
+        sig_name <-  paste(paste0(type, "#"), param.df[i, ]$probs, diff, n_genes, sep = "_")
+        type_sigs[[sig_name]] <- sig_genes
+      }
+
+    }
+
+    # Remove duplicate signatures
+    type_sigs_sorted <- lapply(type_sigs, function(x) sort(x))
+    type_sigs_sorted_collapsed <- sapply(type_sigs_sorted, paste, collapse = ",")
+    duplicated_sigs <- duplicated(type_sigs_sorted_collapsed)
+    type_sigs <- type_sigs[!duplicated_sigs]
+
+    nRelax <- 1
+    while (length(type_sigs) < 3 & nRelax <= 5) {
+      warning(paste0("Not enough signatures found for ", type, " (relaxing parameters)..."))
+
+      # Relax diff_vals
+      param.df$diff_vals <- param.df$diff_vals*0.5
+
+      # Generate signatures
+      type_sigs <- list()
+      for (i in 1:nrow(param.df)){
+
+        # Get a Boolean matrices with genes that pass the quantiles criteria
+        diff <- param.df[i, ]$diff_vals # difference threshold
+        lower_prob <- which(probs == param.df[i, ]$probs) # lower quantile cutoff
+
+
+        # Sort upper prob gene value for each not_dep_celltypes
+        upper_prob <- nrow(quantiles_matrix[[1]])-lower_prob+1 # upper quantile cutoff
+        upper_prob.mat <- sapply(not_dep_celltypes, function(x){
+          get(x, quantiles_matrix)[upper_prob,]
+        })
+        upper_prob.mat <- t(apply(upper_prob.mat, 1, function(x){
+          Rfast::Sort(x, descending = TRUE)
+        }))
+
+        #  Check diff-prob creteria
+        diff_genes.mat <- apply(upper_prob.mat, 2, function(x){
+          get(type, quantiles_matrix)[lower_prob,] > x + diff
+        })
+
+        # Make signatures
+        for (j in 1:param.df[i, ]$ntop) {
+
+          sig_genes <- names(which(diff_genes.mat[,j]))
+          n_genes <- length(sig_genes)
+
+          if (n_genes < min_genes) {
+            next
+          }
+
+          if (n_genes > max_genes) {
+            break
+          }
+
+          sig_name <-  paste(paste0(type, "#"), param.df[i, ]$probs, diff, n_genes, sep = "_")
+          type_sigs[[sig_name]] <- sig_genes
+        }
+
+      }
+      type_sigs_sorted <- lapply(type_sigs, function(x) sort(x))
+      type_sigs_sorted_collapsed <- sapply(type_sigs_sorted, paste, collapse = ",")
+      duplicated_sigs <- duplicated(type_sigs_sorted_collapsed)
+      type_sigs <- type_sigs[!duplicated_sigs]
+
+      nRelax <- nRelax + 1
+
+    }
+
+    if (length(type_sigs) < 3) {
+      errorCondition(paste0("Error: Not enough signatures found for ", type, "!"))
+    }
+
+    return(type_sigs)
+  }
+
+  param <- BiocParallel::MulticoreParam(workers = num_threads)
+  celltypes <- unique(labels[,2])
+
+  all_sigs <- BiocParallel::bplapply(celltypes, function(type){
+
+    type.sigs <- getSigs(celltypes, type, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, top_genes_frac)
+
+    # Check for minimum 3 signatures per cell type
+    if (length(type.sigs) < 3) {
+      # Relax parameters
+      top_genes_frac.tmp <- top_genes_frac
+      diff_vals.tmp <- diff_vals
+      for (relax_frac in c(0.9, 0.8, 0.7, 0.6, 0.5)) {
+        top_genes_frac.tmp <- top_genes_frac.tmp+(1-relax_frac)
+        diff_vals.tmp <- diff_vals.tmp*relax_frac
+        type.sigs <- getSigs(celltypes, type, dep_list, quantiles_matrix, probs, cor_mat, diff_vals.tmp, min_genes, max_genes, top_genes_frac)
+        if (length(type.sigs) >= 3) {
+          break
+        }
+      }
+    }
+
+    type.sigs
+  }, BPPARAM = param)
+
+
+  all_sigs <- unlist(all_sigs, recursive = FALSE)
+
+
+  if (length(all_sigs) == 0) {
+    stop("No signatures found for reference!")
+  }
+
+
+  return(all_sigs)
+}
+
 makeSimulations <- function(ref, mix, labels, gep_mat, ref_type, dep_list, cor_mat, sim_fracs, n_sims, noise_level, num_threads){
 
   getControls <- function(ctoi, controls, gep_mat_linear, sim_fracs, cor_mat, n_sims){
