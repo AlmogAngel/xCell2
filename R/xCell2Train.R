@@ -454,7 +454,7 @@ createSignatures <- function(labels, dep_list, quantiles_matrix, probs, cor_mat,
         names(which(x))
       })
       genes_scores <- genes_scores[lengths(genes_scores) > 0]
-      genes_scores_norm <- round(sort(lengths(genes_scores), decreasing = TRUE) / length(not_dep_celltypes), 2)
+      genes_scores_norm <- round(sort(lengths(genes_scores), decreasing = TRUE) / length(not_dep_celltypes), 1)
       top_values <- unique(genes_scores_norm)[1:ntop]
       top_values <- top_values[!is.na(top_values)]
 
@@ -499,25 +499,29 @@ createSignatures <- function(labels, dep_list, quantiles_matrix, probs, cor_mat,
         diff <- param.df[i, ]$diff_vals # difference threshold
         lower_prob <- which(probs == param.df[i, ]$probs) # lower quantile cutoff
 
-
         # Sort upper prob gene value for each not_dep_celltypes
         upper_prob <- nrow(quantiles_matrix[[1]])-lower_prob+1 # upper quantile cutoff
         upper_prob.mat <- sapply(not_dep_celltypes, function(x){
           get(x, quantiles_matrix)[upper_prob,]
         })
-        upper_prob.mat <- t(apply(upper_prob.mat, 1, function(x){
-          Rfast::Sort(x, descending = TRUE)
-        }))
 
-        #  Check diff-prob creteria
+        #  Check diff-prob criteria
         diff_genes.mat <- apply(upper_prob.mat, 2, function(x){
           get(type, quantiles_matrix)[lower_prob,] > x + diff
         })
 
-        # Make signatures
-        for (j in 1:param.df[i, ]$ntop) {
+        genes_scores <- apply(diff_genes.mat, 1, function(x){
+          names(which(x))
+        })
+        genes_scores <- genes_scores[lengths(genes_scores) > 0]
+        genes_scores_norm <- round(sort(lengths(genes_scores), decreasing = TRUE) / length(not_dep_celltypes), 1)
+        top_values <- unique(genes_scores_norm)[1:ntop]
+        top_values <- top_values[!is.na(top_values)]
 
-          sig_genes <- names(which(diff_genes.mat[,j]))
+        # Make signatures
+        for (j in top_values) {
+
+          sig_genes <- names(which(genes_scores_norm >= j))
           n_genes <- length(sig_genes)
 
           if (n_genes < min_genes) {
@@ -585,7 +589,6 @@ createSignatures <- function(labels, dep_list, quantiles_matrix, probs, cor_mat,
 
   return(all_sigs)
 }
-
 makeSimulations <- function(ref, mix, labels, gep_mat, ref_type, dep_list, cor_mat, sim_fracs, n_sims, noise_level, num_threads){
 
   getControls <- function(ctoi, controls, gep_mat_linear, sim_fracs, cor_mat, n_sims){
