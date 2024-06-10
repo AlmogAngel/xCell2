@@ -424,12 +424,11 @@ createSignatures <- function(labels, dep_list, quantiles_matrix, probs, cor_mat,
 
     # Remove dependent cell types
     not_dep_celltypes <- celltypes[!celltypes %in% c(type, unname(unlist(dep_list[[type]])))]
-    ntop <- round(length(not_dep_celltypes)*top_genes_frac)
+    # ntop <- round(length(not_dep_celltypes)*top_genes_frac)
 
     # Set signature cutoffs grid
     param.df <- expand.grid("diff_vals" = diff_vals, "probs" = probs)
-    param.df <- param.df[param.df$diff_vals != 0 | param.df$probs <= 0.05,] # Remove diff-prob combination that is too permissive...
-
+    # param.df <- param.df[param.df$diff_vals != 0 | param.df$probs <= 0.05,] # Remove diff-prob combination that is too permissive...
 
     # Find top genes
     type_sigs <- list()
@@ -454,15 +453,18 @@ createSignatures <- function(labels, dep_list, quantiles_matrix, probs, cor_mat,
         names(which(x))
       })
       genes_scores <- genes_scores[lengths(genes_scores) > 0]
-      genes_scores_norm <- round(sort(lengths(genes_scores), decreasing = TRUE) / length(not_dep_celltypes), 1)
-      top_values <- unique(genes_scores_norm)[1:ntop]
-      top_values <- top_values[!is.na(top_values)]
+      #genes_scores_norm <- round(sort(lengths(genes_scores), decreasing = TRUE) / length(not_dep_celltypes), 1)
+      #top_values <- unique(genes_scores_norm)[1:ntop]
+      #top_values <- top_values[!is.na(top_values)]
+      n_ct_passed <- sort(unique(lengths(genes_scores)), decreasing = TRUE)
+
 
       # Make signatures
-      for (j in top_values) {
+      for (j in n_ct_passed) {
 
-        sig_genes <- names(which(genes_scores_norm >= j))
+        sig_genes <- names(which(lengths(genes_scores) >= j))
         n_genes <- length(sig_genes)
+        frac_ct_passed <- round(j/length(not_dep_celltypes), 2)
 
         if (n_genes < min_genes) {
           next
@@ -472,83 +474,83 @@ createSignatures <- function(labels, dep_list, quantiles_matrix, probs, cor_mat,
           break
         }
 
-        sig_name <-  paste(paste0(type, "#"), param.df[i, ]$probs, diff, n_genes, sep = "_")
+        sig_name <-  paste(paste0(type, "#"), param.df[i, ]$probs, diff, n_genes, j, frac_ct_passed, sep = "_")
         type_sigs[[sig_name]] <- sig_genes
       }
 
     }
 
-    # Remove duplicate signatures
-    type_sigs_sorted <- lapply(type_sigs, function(x) sort(x))
-    type_sigs_sorted_collapsed <- sapply(type_sigs_sorted, paste, collapse = ",")
-    duplicated_sigs <- duplicated(type_sigs_sorted_collapsed)
-    type_sigs <- type_sigs[!duplicated_sigs]
-
-    nRelax <- 1
-    while (length(type_sigs) < 3 & nRelax <= 5) {
-      warning(paste0("Not enough signatures found for ", type, " (relaxing parameters)..."))
-
-      # Relax diff_vals
-      param.df$diff_vals <- param.df$diff_vals*0.5
-
-      # Generate signatures
-      type_sigs <- list()
-      for (i in 1:nrow(param.df)){
-
-        # Get a Boolean matrices with genes that pass the quantiles criteria
-        diff <- param.df[i, ]$diff_vals # difference threshold
-        lower_prob <- which(probs == param.df[i, ]$probs) # lower quantile cutoff
-
-        # Sort upper prob gene value for each not_dep_celltypes
-        upper_prob <- nrow(quantiles_matrix[[1]])-lower_prob+1 # upper quantile cutoff
-        upper_prob.mat <- sapply(not_dep_celltypes, function(x){
-          get(x, quantiles_matrix)[upper_prob,]
-        })
-
-        #  Check diff-prob criteria
-        diff_genes.mat <- apply(upper_prob.mat, 2, function(x){
-          get(type, quantiles_matrix)[lower_prob,] > x + diff
-        })
-
-        genes_scores <- apply(diff_genes.mat, 1, function(x){
-          names(which(x))
-        })
-        genes_scores <- genes_scores[lengths(genes_scores) > 0]
-        genes_scores_norm <- round(sort(lengths(genes_scores), decreasing = TRUE) / length(not_dep_celltypes), 1)
-        top_values <- unique(genes_scores_norm)[1:ntop]
-        top_values <- top_values[!is.na(top_values)]
-
-        # Make signatures
-        for (j in top_values) {
-
-          sig_genes <- names(which(genes_scores_norm >= j))
-          n_genes <- length(sig_genes)
-
-          if (n_genes < min_genes) {
-            next
-          }
-
-          if (n_genes > max_genes) {
-            break
-          }
-
-          sig_name <-  paste(paste0(type, "#"), param.df[i, ]$probs, diff, n_genes, sep = "_")
-          type_sigs[[sig_name]] <- sig_genes
-        }
-
-      }
-      type_sigs_sorted <- lapply(type_sigs, function(x) sort(x))
-      type_sigs_sorted_collapsed <- sapply(type_sigs_sorted, paste, collapse = ",")
-      duplicated_sigs <- duplicated(type_sigs_sorted_collapsed)
-      type_sigs <- type_sigs[!duplicated_sigs]
-
-      nRelax <- nRelax + 1
-
-    }
-
-    if (length(type_sigs) < 3) {
-      errorCondition(paste0("Error: Not enough signatures found for ", type, "!"))
-    }
+    # # Remove duplicate signatures
+    # type_sigs_sorted <- lapply(type_sigs, function(x) sort(x))
+    # type_sigs_sorted_collapsed <- sapply(type_sigs_sorted, paste, collapse = ",")
+    # duplicated_sigs <- duplicated(type_sigs_sorted_collapsed)
+    # type_sigs <- type_sigs[!duplicated_sigs]
+    #
+    # nRelax <- 1
+    # while (length(type_sigs) < 3 & nRelax <= 5) {
+    #   warning(paste0("Not enough signatures found for ", type, " (relaxing parameters)..."))
+    #
+    #   # Relax diff_vals
+    #   param.df$diff_vals <- param.df$diff_vals*0.5
+    #
+    #   # Generate signatures
+    #   type_sigs <- list()
+    #   for (i in 1:nrow(param.df)){
+    #
+    #     # Get a Boolean matrices with genes that pass the quantiles criteria
+    #     diff <- param.df[i, ]$diff_vals # difference threshold
+    #     lower_prob <- which(probs == param.df[i, ]$probs) # lower quantile cutoff
+    #
+    #     # Sort upper prob gene value for each not_dep_celltypes
+    #     upper_prob <- nrow(quantiles_matrix[[1]])-lower_prob+1 # upper quantile cutoff
+    #     upper_prob.mat <- sapply(not_dep_celltypes, function(x){
+    #       get(x, quantiles_matrix)[upper_prob,]
+    #     })
+    #
+    #     #  Check diff-prob criteria
+    #     diff_genes.mat <- apply(upper_prob.mat, 2, function(x){
+    #       get(type, quantiles_matrix)[lower_prob,] > x + diff
+    #     })
+    #
+    #     genes_scores <- apply(diff_genes.mat, 1, function(x){
+    #       names(which(x))
+    #     })
+    #     genes_scores <- genes_scores[lengths(genes_scores) > 0]
+    #     genes_scores_norm <- round(sort(lengths(genes_scores), decreasing = TRUE) / length(not_dep_celltypes), 1)
+    #     top_values <- unique(genes_scores_norm)[1:ntop]
+    #     top_values <- top_values[!is.na(top_values)]
+    #
+    #     # Make signatures
+    #     for (j in top_values) {
+    #
+    #       sig_genes <- names(which(genes_scores_norm >= j))
+    #       n_genes <- length(sig_genes)
+    #
+    #       if (n_genes < min_genes) {
+    #         next
+    #       }
+    #
+    #       if (n_genes > max_genes) {
+    #         break
+    #       }
+    #
+    #       sig_name <-  paste(paste0(type, "#"), param.df[i, ]$probs, diff, n_genes, sep = "_")
+    #       type_sigs[[sig_name]] <- sig_genes
+    #     }
+    #
+    #   }
+    #   type_sigs_sorted <- lapply(type_sigs, function(x) sort(x))
+    #   type_sigs_sorted_collapsed <- sapply(type_sigs_sorted, paste, collapse = ",")
+    #   duplicated_sigs <- duplicated(type_sigs_sorted_collapsed)
+    #   type_sigs <- type_sigs[!duplicated_sigs]
+    #
+    #   nRelax <- nRelax + 1
+    #
+    # }
+    #
+    # if (length(type_sigs) < 3) {
+    #   errorCondition(paste0("Error: Not enough signatures found for ", type, "!"))
+    # }
 
     return(type_sigs)
   }
@@ -824,7 +826,6 @@ filterSignatures <- function(shared_genes, labels, filtering_data, simulations, 
 
     ds_sigs_cors <- enframe(ds_cors_list, name = "ds") %>%
       unnest_longer(value, values_to = "rho", indices_to = "sig")
-
 
     # External dataset must max(rho) >= 0.5 to be used in filtering
     ds2use <- ds_sigs_cors %>%
@@ -1126,7 +1127,10 @@ learnParams <- function(gep_mat, cor_mat, signatures, dep_list, ref_type, sim_fr
 
   # Clean and normalize spill matrix
   spill_mat[spill_mat < 0] <- 0
+  # TODO: Check why the diagonal is not 0.25
   spill_mat <- spill_mat / diag(spill_mat)
+
+
   spill_mat[is.nan(spill_mat)] <- 0
   spill_mat[spill_mat > 1] <- 1
 
