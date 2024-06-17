@@ -393,17 +393,17 @@ createSignatures <- function(labels, dep_list, quantiles_matrix, probs, cor_mat,
 
   all_sigs <- BiocParallel::bplapply(celltypes, function(type){
 
-    type.sigs <- getSigs(celltypes, type, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, top_genes_frac)
+    type.sigs <- getSigs(celltypes, type, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, min_frac_ct_passed)
 
     # Check for minimum 3 signatures per cell type
     if (length(type.sigs) < 3) {
       # Relax parameters
-      top_genes_frac.tmp <- top_genes_frac
+      min_frac_ct_passed.tmp <- min_frac_ct_passed
       diff_vals.tmp <- diff_vals
       for (relax_frac in c(0.9, 0.8, 0.7, 0.6, 0.5)) {
-        top_genes_frac.tmp <- top_genes_frac.tmp+(1-relax_frac)
+        min_frac_ct_passed.tmp <- min_frac_ct_passed.tmp-(1-relax_frac)
         diff_vals.tmp <- diff_vals.tmp*relax_frac
-        type.sigs <- getSigs(celltypes, type, dep_list, quantiles_matrix, probs, cor_mat, diff_vals.tmp, min_genes, max_genes, top_genes_frac)
+        type.sigs <- getSigs(celltypes, type, dep_list, quantiles_matrix, probs, cor_mat, diff_vals.tmp, min_genes, max_genes, min_frac_ct_passed.tmp)
         if (length(type.sigs) >= 3) {
           break
         }
