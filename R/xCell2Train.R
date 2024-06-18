@@ -518,7 +518,7 @@ makeSimulations <- function(ref, mix, labels, gep_mat, ref_type, dep_list, cor_m
   return(sim_list)
 
 }
-filterSignatures <- function(shared_genes, labels, filtering_data, simulations, signatures, top_sigs_frac, add_essential_genes, human2mouse, num_threads){
+filterSignatures <- function(shared_cts, shared_genes, labels, filtering_data, simulations, signatures, top_sigs_frac, add_essential_genes, human2mouse, num_threads){
 
 
   param <- BiocParallel::MulticoreParam(workers = num_threads)
@@ -1107,7 +1107,7 @@ xCell2Train <- function(ref,
 
     # Filter signatures
     message("Filtering signatures...")
-    signatures <- filterSignatures(shared_genes, labels, filtering_data, simulations, signatures, top_sigs_frac, add_essential_genes, human2mouse, num_threads)
+    signatures <- filterSignatures(shared_cts, shared_genes, labels, filtering_data, simulations, signatures, top_sigs_frac, add_essential_genes, human2mouse, num_threads)
   }
 
   # Learn linear transformation parameters
