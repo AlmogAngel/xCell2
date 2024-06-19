@@ -452,9 +452,9 @@ makeSimulations <- function(ref, mix, labels, gep_mat, ref_type, dep_list, cor_m
       dep_cts <- unique(c(ctoi, unname(unlist(dep_list[[ctoi]]))))
       controls <- celltypes[!celltypes %in% c(ctoi, dep_cts)]
     }else{
-      controls <- celltypes[!celltypes != ctoi]
-
+      controls <- celltypes[!celltypes == ctoi]
     }
+
     if (length(controls) == 0) {
       controls <- names(sort(cor_mat[ctoi,])[1])
     }
