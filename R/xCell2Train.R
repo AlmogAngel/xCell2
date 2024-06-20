@@ -271,11 +271,11 @@ createSignatures <- function(shared_cts, labels, dep_list, quantiles_matrix, pro
         # Get a Boolean matrices with genes that pass the quantiles criteria
         diff <- param.df[i, ]$diff_vals # difference threshold
         #lower_prob <- which(probs == param.df[i, ]$probs) # lower quantile cutoff
-        lower_prob <- which(as.numeric(gsub("%", "", rownames(quantiles_matrix[[1]])))/100 == param.df[i, ]$probs)
+        lower_prob <- which(as.character(as.numeric(gsub("%", "", rownames(quantiles_matrix[[1]])))/100) == as.character(param.df[i, ]$probs))
 
         # Sort upper prob gene value for each not_dep_celltypes
         # upper_prob <- nrow(quantiles_matrix[[1]])-lower_prob+1 # upper quantile cutoff
-        upper_prob <- which(as.numeric(gsub("%", "", rownames(quantiles_matrix[[1]])))/100 == 1-param.df[i, ]$probs)
+        upper_prob <- which(as.character(as.numeric(gsub("%", "", rownames(quantiles_matrix[[1]])))/100) == as.character(1-param.df[i, ]$probs))
         upper_prob.mat <- sapply(not_dep_celltypes, function(x){
           get(x, quantiles_matrix)[upper_prob,]
         })
@@ -311,7 +311,7 @@ createSignatures <- function(shared_cts, labels, dep_list, quantiles_matrix, pro
             break
           }
 
-          sig_name <-  paste(paste0(type, "#"), param.df[i, ]$probs, diff, n_genes, j, frac_ct_passed, sep = "_")
+          sig_name <-  paste(paste0(type, "#"), param.df[i, ]$probs, diff, n_genes, frac_ct_passed, sep = "_")
           type_sigs[[sig_name]] <- sig_genes
         }
 
@@ -335,41 +335,24 @@ createSignatures <- function(shared_cts, labels, dep_list, quantiles_matrix, pro
 
   all_sigs <- BiocParallel::bplapply(celltypes, function(type){
 
-    # If type does not exist in the filtering dataset - strict signatures generation parameters
-    if (!type %in% shared_cts & strict_sig_params) {
-      probs2use <- probs
-      probs2use <- probs2use[probs2use > 0.01 & probs2use < 0.3]
-      diff_vals2use <- diff_vals
-      diff_vals2use <- diff_vals2use[diff_vals2use > 0 & diff_vals2use < 3]
-      min_frac_ct_passed2use <- min_frac_ct_passed
-      min_frac_ct_passed2use <- 0.9
-      min_genes2use <- min_genes
-      min_genes2use <- ifelse(min_genes < 10, 10, min_genes)
-    }else{
-      probs2use <- probs
-      diff_vals2use <- diff_vals
-      min_frac_ct_passed2use <- min_frac_ct_passed
-      min_genes2use <- min_genes
-    }
+    type.sigs <- getSigs(celltypes, type, dep_list, quantiles_matrix, probs, cor_mat, diff_vals,
+                         min_genes, max_genes, min_frac_ct_passed)
 
-
-    type.sigs <- getSigs(celltypes, type, dep_list, quantiles_matrix, probs = probs2use, cor_mat, diff_vals = diff_vals2use,
-                         min_genes = min_genes2use, max_genes, min_frac_ct_passed = min_frac_ct_passed2use)
 
     # Check for minimum 3 signatures per cell type
     if (length(type.sigs) < 3) {
       # Relax prob-diff-min_genes parameters
-      probs2use <- probs
-      diff_vals2use <- diff_vals
-      min_frac_ct_passed2use <- min_frac_ct_passed
-      min_genes2use <- min_genes
+      probs2use <- c(probs, max(probs)*1.25, max(probs)*1.5, max(probs)*2)
+      probs2use <- probs2use[probs2use < 0.5]
+      diff_vals2use <- c(min(diff_vals)*0, min(diff_vals)*0.5, min(diff_vals)*0.75, diff_vals)
+      min_genes2use <- round(min_genes*0.5)
+      min_genes2use <- ifelse(min_genes2use < 5, 5, min_genes2use)
 
       type.sigs <- getSigs(celltypes, type, dep_list, quantiles_matrix, probs = probs2use, cor_mat, diff_vals = diff_vals2use,
                            min_genes = min_genes2use, max_genes, min_frac_ct_passed = min_frac_ct_passed2use)
-
     }
 
-    type.sigs
+    return(type.sigs)
   }, BPPARAM = param)
 
 
