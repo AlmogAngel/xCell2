@@ -251,7 +251,7 @@ makeQuantiles <- function(ref, labels, probs, num_threads){
 
   return(quantiles_mat_list)
 }
-createSignatures <- function(shared_cts, labels, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, min_frac_ct_passed, strict_sig_params, num_threads){
+createSignatures <- function(shared_cts, labels, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, min_frac_ct_passed, num_threads){
 
 
   getSigs <- function(celltypes, type, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, min_frac_ct_passed){
@@ -972,7 +972,6 @@ setClass("xCell2Object", slots = list(
 #' @param probs A numeric vector of probability thresholds to be used for generating signatures (optional).
 #' @param diff_vals A numeric vector of delta values to be used for generating signatures (optional).
 #' @param min_frac_ct_passed Use for calibration of signatures generation (remove!)
-#' @param strict_sig_params description
 #' @param sim_fracs A vector of mixture fractions to be used in signature filtering (optional).
 #' @param min_genes The minimum number of genes to include in the signature (optional).
 #' @param max_genes The maximum number of genes to include in the signature (optional).
@@ -1016,7 +1015,6 @@ xCell2Train <- function(ref,
                         min_genes = 3,
                         max_genes = 200,
                         min_frac_ct_passed = 0.5,
-                        strict_sig_params = TRUE,
                         filter_sigs = TRUE,
                         sim_fracs = c(0, seq(0.01, 0.25, 0.01)),
                         n_sims = 10,
@@ -1071,7 +1069,7 @@ xCell2Train <- function(ref,
   message("Calculating quantiles...")
   quantiles_matrix <- makeQuantiles(ref, labels, probs, num_threads)
   message("Generating signatures...")
-  signatures <- createSignatures(shared_cts, labels, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, min_frac_ct_passed, strict_sig_params, num_threads)
+  signatures <- createSignatures(shared_cts, labels, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, min_frac_ct_passed, num_threads)
 
   if (return_signatures) {
     xCell2.S4 <- new("xCell2Object",
