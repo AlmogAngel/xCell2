@@ -501,7 +501,9 @@ makeSimulations <- function(ref, mix, labels, gep_mat, ref_type, dep_list, cor_m
   return(sim_list)
 
 }
-filterSignatures <- function(shared_cts, shared_genes, labels, filtering_data, simulations, signatures, top_sigs_frac, add_essential_genes, human2mouse, num_threads){
+filterSignatures <- function(shared_cts, shared_genes, labels, filtering_data, simulations, signatures,
+                             max_rho_cutoff, top_frac_sigs_ds, min_ds_frac, top_sigs_frac, min_top_genes_frac, essen_gene_cutoff, min_filt_sigs,
+                             add_essential_genes, human2mouse, num_threads){
 
 
   param <- BiocParallel::MulticoreParam(workers = num_threads)
@@ -533,7 +535,12 @@ filterSignatures <- function(shared_cts, shared_genes, labels, filtering_data, s
       ds2use <- names(which(sapply(filtering_data$truth, function(x){ctoi %in% rownames(x)})))
       filtering_data2use <- filtering_data$mixture[ds2use]
     }else{
-      filtering_data2use <- simulations[[ctoi]]
+      if (!is.null(simulations)) {
+        filtering_data2use <- simulations[[ctoi]]
+      }else{
+        return(list(best_sigs = NA,
+                    essential_genes = NA))
+      }
     }
 
     # Calculate CTOI correlations for each dataset in the filtering data
@@ -597,7 +604,6 @@ filterSignatures <- function(shared_cts, shared_genes, labels, filtering_data, s
       }), name = "ds", value = "n_samples")
     }
 
-
     ds_sigs_cors <- enframe(ds_cors_list, name = "ds") %>%
       unnest_longer(value, values_to = "rho", indices_to = "sig")
 
@@ -605,7 +611,7 @@ filterSignatures <- function(shared_cts, shared_genes, labels, filtering_data, s
     ds2use <- ds_sigs_cors %>%
       group_by(ds) %>%
       summarise(max_rho = max(rho)) %>%
-      filter(max_rho >= 0.5) %>%
+      filter(max_rho >= max_rho_cutoff) %>%
       pull(ds)
 
     if (length(ds2use) == 0) {
@@ -619,12 +625,12 @@ filterSignatures <- function(shared_cts, shared_genes, labels, filtering_data, s
     # Find essential genes
     top_sigs <- ds_sigs_cors %>%
       group_by(ds) %>%
-      top_frac(0.25, wt=rho) %>% # Top 25% correlation per dataset
+      top_frac(top_frac_sigs_ds, wt=rho) %>% # Top 25% correlation per dataset
       #filter(rho >= 0.3) %>%
       group_by(sig) %>%
       summarise(n_sigs = n()) %>%
       mutate(ds_frac = n_sigs/length(ds2use)) %>%
-      filter(ds_frac >= 0.5) %>% # Must be in at least 50% of the datasets %>%
+      filter(ds_frac >= min_ds_frac) %>% # Must be in at least 50% of the datasets %>%
       pull(sig) %>%
       unique()
 
@@ -634,7 +640,7 @@ filterSignatures <- function(shared_cts, shared_genes, labels, filtering_data, s
     }
 
     top_genes <- sort(table(unlist(signatures_ctoi[top_sigs])), decreasing = T)/length(top_sigs)
-    top_genes <- names(top_genes[top_genes>=0.5]) # Must be in at least 50% of the signatures
+    top_genes <- names(top_genes[top_genes>=min_top_genes_frac]) # Must be in at least 50% of the signatures
     top_genes <- intersect(top_genes, shared_genes)
 
     if (length(top_genes) > 0) {
@@ -686,7 +692,7 @@ filterSignatures <- function(shared_cts, shared_genes, labels, filtering_data, s
         summarise(weighted_z = weighted.mean(x=z, w=weights)) %>%
         mutate(rho_weigted = (exp(2 * weighted_z) - 1) / (exp(2 * weighted_z) + 1)) %>%
         filter(rho_weigted >= 0.3) %>% # Genes must have at least 0.3 weighted correlation with the filtering data
-        top_frac(0.5, wt=rho_weigted) %>%
+        top_frac(essen_gene_cutoff, wt=rho_weigted) %>%
         pull(genes)
 
       if (length(essential_genes) == 0) {
@@ -710,7 +716,7 @@ filterSignatures <- function(shared_cts, shared_genes, labels, filtering_data, s
       summarise(weighted_z = weighted.mean(x=z, w=weights)) %>%
       mutate(rho_weigted = (exp(2 * weighted_z) - 1) / (exp(2 * weighted_z) + 1))
 
-    top_sigs_frac_adjusted <- ifelse(nrow(rho_weighted_sigs)*top_sigs_frac > 10, top_sigs_frac, 10/nrow(rho_weighted_sigs)) # Minimum 10 signatures
+    top_sigs_frac_adjusted <- ifelse(nrow(rho_weighted_sigs)*top_sigs_frac > min_filt_sigs, top_sigs_frac, min_filt_sigs/nrow(rho_weighted_sigs)) # Minimum 10 signatures
 
     best_sigs <- rho_weighted_sigs %>%
       top_frac(top_sigs_frac_adjusted, wt = rho_weigted) %>%
@@ -984,7 +990,14 @@ setClass("xCell2Object", slots = list(
 #' @param mix description
 #' @param noise_level description
 #' @param filtering_data description
+#' @param max_rho_cutoff description
+#' @param top_frac_sigs_ds description
+#' @param min_ds_frac description
+#' @param min_top_genes_frac description
+#' @param essen_gene_cutoff description
+#' @param min_filt_sigs description
 #' @param add_essential_genes description
+#' @param use_sim2filter description
 #' @param return_analysis description
 #' @param return_signatures description
 #' @param use_sillover description
@@ -1015,12 +1028,19 @@ xCell2Train <- function(ref,
                         min_genes = 3,
                         max_genes = 200,
                         min_frac_ct_passed = 0.5,
+                        top_frac_sigs_ds = 0.25,
+                        min_ds_frac = 0.5,
+                        min_top_genes_frac = 0.5,
+                        essen_gene_cutoff = 0.5,
                         filter_sigs = TRUE,
                         sim_fracs = c(0, seq(0.01, 0.25, 0.01)),
                         n_sims = 10,
                         noise_level = 0.2,
+                        max_rho_cutoff = 0.5,
+                        min_filt_sigs = 10,
                         top_sigs_frac = 0.05,
-                        add_essential_genes = TRUE
+                        add_essential_genes = TRUE,
+                        use_sim2filter = TRUE
 ){
 
   set.seed(seed)
@@ -1084,11 +1104,17 @@ xCell2Train <- function(ref,
   if (filter_sigs) {
     # Generate simulations
     message("Generating simulations...")
-    simulations <- makeSimulations(ref, mix, labels, gep_mat, ref_type, dep_list, cor_mat, sim_fracs, n_sims, noise_level, num_threads)
+    if (use_sim2filter) {
+      simulations <- makeSimulations(ref, mix, labels, gep_mat, ref_type, dep_list, cor_mat, sim_fracs, n_sims, noise_level, num_threads)
+    }else{
+      simulations <- NULL
+    }
 
     # Filter signatures
     message("Filtering signatures...")
-    signatures <- filterSignatures(shared_cts, shared_genes, labels, filtering_data, simulations, signatures, top_sigs_frac, add_essential_genes, human2mouse, num_threads)
+    signatures <- filterSignatures(shared_cts, shared_genes, labels, filtering_data, simulations, signatures,
+                                   max_rho_cutoff, top_frac_sigs_ds, min_ds_frac, top_sigs_frac, min_top_genes_frac, essen_gene_cutoff, min_filt_sigs,
+                                   add_essential_genes, human2mouse, num_threads)
   }
 
   # Learn linear transformation parameters
