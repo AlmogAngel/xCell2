@@ -424,7 +424,7 @@ makeSimulations <- function(ref, mix, labels, gep_mat, ref_type, dep_list, cor_m
   celltypes <- unique(labels$label)
   gep_mat_linear <- 2^gep_mat
 
-  sim_list <- BiocParallel::bplapply(celltypes, function(ctoi){
+  sim_list <- lapply(celltypes, function(ctoi){
 
     # Generate CTOI fractions matrix
     ctoi_mat <- matrix(rep(gep_mat_linear[,ctoi], length(sim_fracs)), byrow = FALSE, ncol = length(sim_fracs), dimnames = list(rownames(gep_mat_linear), sim_fracs))
@@ -480,7 +480,7 @@ makeSimulations <- function(ref, mix, labels, gep_mat, ref_type, dep_list, cor_m
         if (is.null(mix)) {
           eps_sigma <- 2 * noise_level
         }else{
-          eps_sigma <- sd(as.vector(mix)) * noise_level
+          eps_sigma <- mean(apply(mix, 2, sd)) * noise_level
         }
         eps_gaussian <- array(rnorm(prod(dim(simulation)), 0, eps_sigma), dim(simulation))
         simulation_noised <- 2^(log2(simulation+1) + eps_gaussian)
@@ -495,7 +495,7 @@ makeSimulations <- function(ref, mix, labels, gep_mat, ref_type, dep_list, cor_m
     names(ctoi_sim_list) <- paste0("sim-", 1:length(ctoi_sim_list))
     ctoi_sim_list
 
-  }, BPPARAM = param)
+  })
   names(sim_list) <- celltypes
 
   return(sim_list)
@@ -774,7 +774,7 @@ filterSignatures <- function(shared_cts, shared_genes, labels, filtering_data, s
 
   return(signatures)
 }
-learnParams <- function(gep_mat, cor_mat, signatures, dep_list, ref_type, sim_fracs, frac2use, num_threads){
+learnParams <- function(gep_mat, cor_mat, signatures, dep_list, ref_type, sim_fracs, frac2use, top_spill_value, sc_spill_relaxing_factor, num_threads){
 
   param <- BiocParallel::MulticoreParam(workers = num_threads)
 
@@ -832,7 +832,7 @@ learnParams <- function(gep_mat, cor_mat, signatures, dep_list, ref_type, sim_fr
     lm_fit <- lm(sim_fracs ~ scores_transformed)
     m = coef(lm_fit)[[2]]
     n = coef(lm_fit)[[1]]
-
+    # round(scores_transformed*m + n, 2)
 
     return(tibble(celltype = ctoi, a = a, b = b, m = m, n = n))
   }, BPPARAM = param)
@@ -857,6 +857,7 @@ learnParams <- function(gep_mat, cor_mat, signatures, dep_list, ref_type, sim_fr
     }else{
       controls <- celltypes[!celltypes != ctoi]
     }
+
     controls <- sapply(colnames(cts_mat_frac), function(ct){
       names(sort(cor_mat[controls, ct])[1])
     })
@@ -876,7 +877,6 @@ learnParams <- function(gep_mat, cor_mat, signatures, dep_list, ref_type, sim_fr
     mix_cts_mat_scores <- mix_cts_mat_scores*m + n
     names(mix_cts_mat_scores) <- colnames(mix_cts_mat_ranked)
 
-
     # Get results for all cell type controls
     controls_cts_mat_ranked <- singscore::rankGenes(controls_mat_frac)
     colnames(controls_cts_mat_ranked) <- make.unique(colnames(controls_cts_mat_ranked))
@@ -887,9 +887,11 @@ learnParams <- function(gep_mat, cor_mat, signatures, dep_list, ref_type, sim_fr
     controls_cts_mat_scores <- Rfast::rowmeans(controls_cts_mat_scores)
     controls_cts_mat_scores <- (controls_cts_mat_scores^(1/b)) / a
     controls_cts_mat_scores <- controls_cts_mat_scores*m + n
+    controls_cts_mat_scores[controls_cts_mat_scores<0] <- 0
+    names(controls_cts_mat_scores) <- controls
 
-
-    final_scores <- round(mix_cts_mat_scores - controls_cts_mat_scores, 4)
+    final_scores <- round(mix_cts_mat_scores - controls_cts_mat_scores, 2)
+    dep_cts <- dep_cts[dep_cts != ctoi]
     final_scores[dep_cts] <- 0
     final_scores[final_scores < 0] <- 0
 
@@ -916,12 +918,10 @@ learnParams <- function(gep_mat, cor_mat, signatures, dep_list, ref_type, sim_fr
 
   # TODO: Check this parameter
   if (ref_type == "sc") {
-    spill_relaxing_value <- 0.2
-  }else{
-    spill_relaxing_value <- 0.4
+    top_spill_value <- top_spill_value * sc_spill_relaxing_factor
   }
 
-  spill_mat[spill_mat > spill_relaxing_value] <- spill_relaxing_value
+  spill_mat[spill_mat > top_spill_value] <- top_spill_value
   diag(spill_mat) <- 1
 
   # pheatmap::pheatmap(spill_mat, cluster_rows = F, cluster_cols = F)
@@ -998,6 +998,8 @@ setClass("xCell2Object", slots = list(
 #' @param min_filt_sigs description
 #' @param add_essential_genes description
 #' @param use_sim2filter description
+#' @param top_spill_value description
+#' @param sc_spill_relaxing_factor description
 #' @param return_analysis description
 #' @param return_signatures description
 #' @param use_sillover description
@@ -1040,7 +1042,9 @@ xCell2Train <- function(ref,
                         min_filt_sigs = 10,
                         top_sigs_frac = 0.05,
                         add_essential_genes = TRUE,
-                        use_sim2filter = TRUE
+                        use_sim2filter = TRUE,
+                        top_spill_value = 0.5,
+                        sc_spill_relaxing_factor = 0.5
 ){
 
   set.seed(seed)
@@ -1119,7 +1123,7 @@ xCell2Train <- function(ref,
 
   # Learn linear transformation parameters
   message("Learning linear transformation and spillover parameters...")
-  params <- learnParams(gep_mat, cor_mat, signatures, dep_list, ref_type, sim_fracs, frac2use = 0.25, num_threads)
+  params <- learnParams(gep_mat, cor_mat, signatures, dep_list, ref_type, sim_fracs, frac2use = 0.25, top_spill_value, sc_spill_relaxing_factor, num_threads)
   spill_mat <- params$spillmat
   params <- params$params
 
@@ -1138,7 +1142,7 @@ xCell2Train <- function(ref,
 
   if (return_analysis) {
     message("Running xCell2Analysis...")
-    res <- xCell2::xCell2Analysis(mix, xcell2object = xCell2.S4, spillover = use_sillover, spillover_alpha = spillover_alpha, num_threads)
+    res <- xCell2::xCell2Analysis(mix, xcell2object = xCell2.S4, spillover = use_sillover, spillover_alpha = spillover_alpha, num_threads = num_threads)
     return(res)
   }else{
     return(xCell2.S4)

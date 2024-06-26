@@ -88,6 +88,7 @@ xCell2Analysis <- function(mix, xcell2object, min_intersect = 0.9, raw_scores = 
   }
 
   if (raw_scores) {
+    res <- round(res, 3)
     return(res)
   }else{
     res <- t(sapply(rownames(res), function(ctoi){
@@ -103,6 +104,8 @@ xCell2Analysis <- function(mix, xcell2object, min_intersect = 0.9, raw_scores = 
 
       # Shift values
       ctoi_res <- ctoi_res - min(ctoi_res)
+
+      ctoi_res <- round(ctoi_res, 5)
       return(ctoi_res)
     }))
   }
