@@ -382,10 +382,10 @@ createSignatures <- function(labels, dep_list, quantiles_matrix, probs, cor_mat,
 
 
       # Remove duplicate signatures
-      type_sigs_sorted <- lapply(type_sigs, function(x) sort(x))
-      type_sigs_sorted_collapsed <- sapply(type_sigs_sorted, paste, collapse = ",")
-      duplicated_sigs <- duplicated(type_sigs_sorted_collapsed)
-      type_sigs <- type_sigs[!duplicated_sigs]
+      # type_sigs_sorted <- lapply(type_sigs, function(x) sort(x))
+      # type_sigs_sorted_collapsed <- sapply(type_sigs_sorted, paste, collapse = ",")
+      # duplicated_sigs <- duplicated(type_sigs_sorted_collapsed)
+      # type_sigs <- type_sigs[!duplicated_sigs]
 
       # Relax parameter until there are at least 3 signatures
       min_frac_ct_passed <- min_frac_ct_passed - 0.05
