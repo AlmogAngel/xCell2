@@ -379,13 +379,11 @@ createSignatures <- function(labels, dep_list, quantiles_matrix, probs, cor_mat,
 
       }
 
-
-
       # Remove duplicate signatures
-      # type_sigs_sorted <- lapply(type_sigs, function(x) sort(x))
-      # type_sigs_sorted_collapsed <- sapply(type_sigs_sorted, paste, collapse = ",")
-      # duplicated_sigs <- duplicated(type_sigs_sorted_collapsed)
-      # type_sigs <- type_sigs[!duplicated_sigs]
+      type_sigs_sorted <- lapply(type_sigs, function(x) sort(x))
+      type_sigs_sorted_collapsed <- sapply(type_sigs_sorted, paste, collapse = ",")
+      duplicated_sigs <- duplicated(type_sigs_sorted_collapsed)
+      type_sigs <- type_sigs[!duplicated_sigs]
 
       # Relax parameter until there are at least 3 signatures
       min_frac_ct_passed <- min_frac_ct_passed - 0.05
@@ -410,7 +408,7 @@ createSignatures <- function(labels, dep_list, quantiles_matrix, probs, cor_mat,
       probs2use <- probs2use[probs2use < 0.5]
       diff_vals2use <- c(min(diff_vals)*0, min(diff_vals)*0.5, min(diff_vals)*0.75, diff_vals)
       min_genes2use <- round(min_genes*0.5)
-      min_genes2use <- ifelse(min_genes2use < 5, 5, min_genes2use)
+      min_genes2use <- ifelse(min_genes2use < 3, 3, min_genes2use)
 
       type.sigs <- getSigs(celltypes, type, dep_list, quantiles_matrix, probs = probs2use, cor_mat, diff_vals = diff_vals2use,
                            min_genes = min_genes2use, max_genes, min_frac_ct_passed = min_frac_ct_passed2use)
@@ -657,10 +655,10 @@ xCell2Train <- function(ref,
                         num_threads = 1,
                         use_ontology = TRUE,
                         probs = c(0.01, 0.05, 0.1, 0.15, 0.2, 0.333),
-                        diff_vals = round(c(log(1), log2(1.5), log2(2), log2(2.5), log2(3), log2(4), log2(5), log2(10), log2(20)), 3),
-                        min_genes = 3,
-                        max_genes = 200,
-                        min_frac_ct_passed = 0.75,
+                        diff_vals = round(c(log2(1), log2(1.5), log2(2), log2(2.5), log2(3), log2(4), log2(5)), 3),
+                        min_genes = 10,
+                        max_genes = 250,
+                        min_frac_ct_passed = 0.5,
                         return_signatures = FALSE,
                         return_analysis = FALSE,
                         use_sillover = TRUE,
