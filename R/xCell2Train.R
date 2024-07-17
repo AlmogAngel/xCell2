@@ -153,57 +153,6 @@ prepRefMix <- function(ref, mix, ref_type, min_sc_genes, human2mouse){
 
   return(list(ref.out = ref, mix.out = mix))
 }
-makeGEPMat <- function(ref, labels){
-
-  celltypes <- unique(labels$label)
-
-  gep_mat <- sapply(celltypes, function(type){
-    type_samples <- labels[,2] == type
-    if (sum(type_samples) == 1) {
-      type_vec <- as.vector(ref[,type_samples])
-    }else{
-      type_vec <- Rfast::rowMedians(as.matrix(ref[,type_samples]))
-    }
-  })
-  rownames(gep_mat) <- rownames(ref)
-
-  return(gep_mat)
-}
-getCellTypeCorrelation <- function(gep_mat, ref_type){
-
-  celltypes <- colnames(gep_mat)
-
-  if (ref_type != "sc") {
-
-    # Use top 10% most variable genes
-    genes_var <- apply(gep_mat, 1, var)
-    most_var_genes_cutoff <- quantile(genes_var, 0.9, na.rm=TRUE)
-    gep_mat <- gep_mat[genes_var > most_var_genes_cutoff,]
-
-  }else{
-
-    # Use top 1% most variable genes
-    genes_var <- apply(gep_mat, 1, var)
-    most_var_genes_cutoff <- quantile(genes_var, 0.99, na.rm=TRUE)
-    gep_mat <- gep_mat[genes_var > most_var_genes_cutoff,]
-
-  }
-
-
-  # Make correlation matrix
-  cor_mat <- matrix(1, ncol = length(celltypes), nrow = length(celltypes), dimnames = list(celltypes, celltypes))
-  lower_tri_coord <- which(lower.tri(cor_mat), arr.ind = TRUE)
-
-  # TODO: Change for loop to apply function to measure time
-  for (i in 1:nrow(lower_tri_coord)) {
-    celltype_i <- rownames(cor_mat)[lower_tri_coord[i, 1]]
-    celltype_j <- colnames(cor_mat)[lower_tri_coord[i, 2]]
-    cor_mat[lower_tri_coord[i, 1], lower_tri_coord[i, 2]] <- cor(gep_mat[,celltype_i], gep_mat[,celltype_j], method = "spearman")
-    cor_mat[lower_tri_coord[i, 2], lower_tri_coord[i, 1]] <- cor(gep_mat[,celltype_i], gep_mat[,celltype_j], method = "spearman")
-  }
-
-  return(cor_mat)
-}
 getDependencies <- function(lineage_file_checked){
   ont <- read_tsv(lineage_file_checked, show_col_types = FALSE) %>%
     mutate_all(as.character)
@@ -250,10 +199,10 @@ makeQuantiles <- function(ref, labels, probs, num_threads){
 
   return(quantiles_mat_list)
 }
-createSignatures <- function(labels, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, min_frac_ct_passed, num_threads){
+createSignatures <- function(labels, dep_list, quantiles_matrix, probs, diff_vals, min_genes, max_genes, min_frac_ct_passed, num_threads){
 
 
-  getSigs <- function(celltypes, type, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, min_frac_ct_passed){
+  getSigs <- function(celltypes, type, dep_list, quantiles_matrix, probs, diff_vals, min_genes, max_genes, min_frac_ct_passed){
 
     # Remove dependent cell types
     not_dep_celltypes <- celltypes[!celltypes %in% c(type, unname(unlist(dep_list[[type]])))]
@@ -397,7 +346,7 @@ createSignatures <- function(labels, dep_list, quantiles_matrix, probs, cor_mat,
 
   all_sigs <- BiocParallel::bplapply(celltypes, function(type){
 
-    type.sigs <- getSigs(celltypes, type, dep_list, quantiles_matrix, probs, cor_mat, diff_vals,
+    type.sigs <- getSigs(celltypes, type, dep_list, quantiles_matrix, probs, diff_vals,
                          min_genes, max_genes, min_frac_ct_passed)
 
 
@@ -410,7 +359,7 @@ createSignatures <- function(labels, dep_list, quantiles_matrix, probs, cor_mat,
       min_genes2use <- round(min_genes*0.5)
       min_genes2use <- ifelse(min_genes2use < 3, 3, min_genes2use)
 
-      type.sigs <- getSigs(celltypes, type, dep_list, quantiles_matrix, probs = probs2use, cor_mat, diff_vals = diff_vals2use,
+      type.sigs <- getSigs(celltypes, type, dep_list, quantiles_matrix, probs = probs2use, diff_vals = diff_vals2use,
                            min_genes = min_genes2use, max_genes, min_frac_ct_passed = min_frac_ct_passed2use)
     }
 
@@ -427,6 +376,57 @@ createSignatures <- function(labels, dep_list, quantiles_matrix, probs, cor_mat,
 
 
   return(all_sigs)
+}
+makeGEPMat <- function(ref, labels){
+
+  celltypes <- unique(labels$label)
+
+  gep_mat <- sapply(celltypes, function(type){
+    type_samples <- labels[,2] == type
+    if (sum(type_samples) == 1) {
+      type_vec <- as.vector(ref[,type_samples])
+    }else{
+      type_vec <- Rfast::rowMedians(as.matrix(ref[,type_samples]))
+    }
+  })
+  rownames(gep_mat) <- rownames(ref)
+
+  return(gep_mat)
+}
+getCellTypeCorrelation <- function(gep_mat, ref_type){
+
+  celltypes <- colnames(gep_mat)
+
+  if (ref_type != "sc") {
+
+    # Use top 10% most variable genes
+    genes_var <- apply(gep_mat, 1, var)
+    most_var_genes_cutoff <- quantile(genes_var, 0.9, na.rm=TRUE)
+    gep_mat <- gep_mat[genes_var > most_var_genes_cutoff,]
+
+  }else{
+
+    # Use top 1% most variable genes
+    genes_var <- apply(gep_mat, 1, var)
+    most_var_genes_cutoff <- quantile(genes_var, 0.99, na.rm=TRUE)
+    gep_mat <- gep_mat[genes_var > most_var_genes_cutoff,]
+
+  }
+
+
+  # Make correlation matrix
+  cor_mat <- matrix(1, ncol = length(celltypes), nrow = length(celltypes), dimnames = list(celltypes, celltypes))
+  lower_tri_coord <- which(lower.tri(cor_mat), arr.ind = TRUE)
+
+  # TODO: Change for loop to apply function to measure time
+  for (i in 1:nrow(lower_tri_coord)) {
+    celltype_i <- rownames(cor_mat)[lower_tri_coord[i, 1]]
+    celltype_j <- colnames(cor_mat)[lower_tri_coord[i, 2]]
+    cor_mat[lower_tri_coord[i, 1], lower_tri_coord[i, 2]] <- cor(gep_mat[,celltype_i], gep_mat[,celltype_j], method = "spearman")
+    cor_mat[lower_tri_coord[i, 2], lower_tri_coord[i, 1]] <- cor(gep_mat[,celltype_i], gep_mat[,celltype_j], method = "spearman")
+  }
+
+  return(cor_mat)
 }
 learnParams <- function(gep_mat, cor_mat, signatures, dep_list, ref_type, top_spill_value, sc_spill_relaxing_factor, num_threads){
 
@@ -449,7 +449,7 @@ learnParams <- function(gep_mat, cor_mat, signatures, dep_list, ref_type, top_sp
       dep_cts <- unique(c(ctoi, unname(unlist(dep_list[[ctoi]]))))
       controls <- celltypes[!celltypes %in% dep_cts]
     }else{
-      controls <- celltypes[!celltypes != ctoi]
+      controls <- celltypes[celltypes != ctoi]
     }
 
     control <- names(sort(cor_mat[controls,ctoi])[1])
@@ -510,7 +510,7 @@ learnParams <- function(gep_mat, cor_mat, signatures, dep_list, ref_type, top_sp
       dep_cts <- unique(c(ctoi, unname(unlist(dep_list[[ctoi]]))))
       controls <- celltypes[!celltypes %in% dep_cts]
     }else{
-      controls <- celltypes[!celltypes != ctoi]
+      controls <- celltypes[celltypes != ctoi]
     }
 
     controls <- sapply(colnames(cts_mat_frac), function(ct){
@@ -546,10 +546,11 @@ learnParams <- function(gep_mat, cor_mat, signatures, dep_list, ref_type, top_sp
     names(controls_cts_mat_scores) <- controls
 
     final_scores <- round(mix_cts_mat_scores - controls_cts_mat_scores, 2)
-    dep_cts <- dep_cts[dep_cts != ctoi]
-    final_scores[dep_cts] <- 0
+    if (!is.null(dep_list)) {
+      dep_cts <- dep_cts[dep_cts != ctoi]
+      final_scores[dep_cts] <- 0
+    }
     final_scores[final_scores < 0] <- 0
-
 
 
     return(final_scores)
@@ -629,12 +630,6 @@ setClass("xCell2Object", slots = list(
 #' @param min_sc_genes Minimum number of genes for scRNA-Seq (default 10000).
 #' @param use_ontology A Boolean for using ontological integration (TRUE)
 #' @param lineage_file Path to the cell type lineage file generated with `xCell2GetLineage` function (optional).
-#' @param probs A numeric vector of probability thresholds to be used for generating signatures (optional).
-#' @param diff_vals A numeric vector of delta values to be used for generating signatures (optional).
-#' @param min_frac_ct_passed Use for calibration of signatures generation (remove!)
-#' @param sim_fracs A vector of mixture fractions to be used in signature filtering (optional).
-#' @param min_genes The minimum number of genes to include in the signature (optional).
-#' @param max_genes The maximum number of genes to include in the signature (optional).
 #' @param num_threads Number of threads for parallel processing.
 #' @param human2mouse A Boolean for converting human genes to mouse genes.
 #' @param top_spill_value Maximum spillover compensation correction value
@@ -654,11 +649,6 @@ xCell2Train <- function(ref,
                         seed = 123,
                         num_threads = 1,
                         use_ontology = TRUE,
-                        probs = c(0.01, 0.05, 0.1, 0.15, 0.2, 0.333),
-                        diff_vals = round(c(log2(1), log2(1.5), log2(2), log2(2.5), log2(3), log2(4), log2(5)), 3),
-                        min_genes = 10,
-                        max_genes = 250,
-                        min_frac_ct_passed = 0.5,
                         return_signatures = FALSE,
                         return_analysis = FALSE,
                         use_sillover = TRUE,
@@ -691,11 +681,6 @@ xCell2Train <- function(ref,
   mix <- out$mix.out
   shared_genes <- rownames(ref)
 
-  # Build cell types correlation matrix
-  message("Calculating cell-type correlation matrix...")
-  gep_mat <- makeGEPMat(ref, labels)
-  cor_mat <- getCellTypeCorrelation(gep_mat, ref_type)
-
   # Get cell type dependencies list
   if (use_ontology) {
     message("Loading dependencies...")
@@ -710,10 +695,15 @@ xCell2Train <- function(ref,
   }
 
   # Generate signatures
+  probs <- c(0.1, 0.25, 0.333, 0.49)
+  diff_vals <- c(0, 0.1, 0.585, 1, 1.585, 2, 3, 4, 5)
+  min_genes <- 8
+  max_genes <- 200
+  min_frac_ct_passed <- 0.5
   message("Calculating quantiles...")
   quantiles_matrix <- makeQuantiles(ref, labels, probs, num_threads)
   message("Generating signatures...")
-  signatures <- createSignatures(labels, dep_list, quantiles_matrix, probs, cor_mat, diff_vals, min_genes, max_genes, min_frac_ct_passed, num_threads)
+  signatures <- createSignatures(labels, dep_list, quantiles_matrix, probs, diff_vals, min_genes, max_genes, min_frac_ct_passed, num_threads)
 
   if (return_signatures) {
     xCell2.S4 <- new("xCell2Object",
@@ -727,16 +717,17 @@ xCell2Train <- function(ref,
 
   # Learn linear transformation parameters
   message("Learning linear transformation and spillover parameters...")
+  gep_mat <- makeGEPMat(ref, labels)
+  cor_mat <- getCellTypeCorrelation(gep_mat, ref_type)
   params <- learnParams(gep_mat, cor_mat, signatures, dep_list, ref_type, top_spill_value, sc_spill_relaxing_factor, num_threads)
-  spill_mat <- params$spillmat
-  params <- params$params
+
 
   # Save results in S4 object
   xCell2.S4 <- new("xCell2Object",
                    signatures = signatures,
                    dependencies = dep_list,
-                   params = params,
-                   spill_mat = spill_mat,
+                   params = params$params,
+                   spill_mat = params$spillmat,
                    genes_used = shared_genes)
 
   message("Your custom xCell2 reference object is ready!")
