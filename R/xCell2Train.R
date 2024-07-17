@@ -652,12 +652,12 @@ xCell2Train <- function(ref,
                         return_signatures = FALSE,
                         return_analysis = FALSE,
                         use_sillover = TRUE,
-                        spillover_alpha = 0.75,
+                        spillover_alpha = 0.25,
                         min_pb_cells = 30,
                         min_pb_samples = 10,
                         min_sc_genes = 1e4,
                         top_spill_value = 0.5,
-                        sc_spill_relaxing_factor = 0.5
+                        sc_spill_relaxing_factor = 0.1
 ){
 
   set.seed(seed)
@@ -723,6 +723,9 @@ xCell2Train <- function(ref,
 
 
   # Save results in S4 object
+  if (is.null(dep_list)) {
+    dep_list <- list()
+  }
   xCell2.S4 <- new("xCell2Object",
                    signatures = signatures,
                    dependencies = dep_list,
