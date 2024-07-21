@@ -56,12 +56,14 @@ sc2pseudoBulk <- function(ref, labels, min_pb_cells, min_pb_samples){
       })
 
     }else{
-      ref[,ctoi_samples]
+      tmp <- ref[,ctoi_samples]
+      colnames(tmp) <- as.character(1:ncol(tmp))
+      tmp
     }
 
   })
-
   names(groups_list) <- celltypes
+
   pseudo_ref <- as.matrix(bind_cols(groups_list))
   rownames(pseudo_ref) <- rownames(ref)
 
