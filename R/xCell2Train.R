@@ -652,7 +652,7 @@ xCell2Train <- function(ref,
                         min_pb_cells = 30,
                         min_pb_samples = 10,
                         min_sc_genes = 1e4,
-                        top_spill_value = 0.5,
+                        top_spill_value = 0.5
 ){
 
   set.seed(seed)
