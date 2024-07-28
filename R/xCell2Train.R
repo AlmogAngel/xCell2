@@ -430,7 +430,7 @@ getCellTypeCorrelation <- function(gep_mat, ref_type){
 
   return(cor_mat)
 }
-learnParams <- function(gep_mat, cor_mat, signatures, dep_list, ref_type, top_spill_value, sc_spill_relaxing_factor, num_threads){
+learnParams <- function(gep_mat, cor_mat, signatures, dep_list, top_spill_value, num_threads){
 
   param <- BiocParallel::MulticoreParam(workers = num_threads)
 
@@ -574,11 +574,6 @@ learnParams <- function(gep_mat, cor_mat, signatures, dep_list, ref_type, top_sp
   spill_mat[is.nan(spill_mat)] <- 0
   spill_mat[spill_mat > 1] <- 1
 
-  # TODO: Check this parameter
-  if (ref_type == "sc") {
-    top_spill_value <- top_spill_value * sc_spill_relaxing_factor
-  }
-
   spill_mat[spill_mat > top_spill_value] <- top_spill_value
   diag(spill_mat) <- 1
 
@@ -635,7 +630,6 @@ setClass("xCell2Object", slots = list(
 #' @param num_threads Number of threads for parallel processing.
 #' @param human2mouse A Boolean for converting human genes to mouse genes.
 #' @param top_spill_value Maximum spillover compensation correction value
-#' @param sc_spill_relaxing_factor description
 #' @param return_signatures A Boolean to return just the signatures.
 #' @param return_analysis A Boolean to return the xCell2Analysis results (do not return signatures object).
 #' @param use_sillover A Boolean to use spillover correction in xCell2Analysis (return_analysis much be TRUE)
@@ -659,7 +653,6 @@ xCell2Train <- function(ref,
                         min_pb_samples = 10,
                         min_sc_genes = 1e4,
                         top_spill_value = 0.5,
-                        sc_spill_relaxing_factor = 0.1
 ){
 
   set.seed(seed)
@@ -721,7 +714,7 @@ xCell2Train <- function(ref,
   message("Learning linear transformation and spillover parameters...")
   gep_mat <- makeGEPMat(ref, labels)
   cor_mat <- getCellTypeCorrelation(gep_mat, ref_type)
-  params <- learnParams(gep_mat, cor_mat, signatures, dep_list, ref_type, top_spill_value, sc_spill_relaxing_factor, num_threads)
+  params <- learnParams(gep_mat, cor_mat, signatures, dep_list, top_spill_value, num_threads)
 
 
   # Save results in S4 object
