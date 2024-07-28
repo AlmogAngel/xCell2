@@ -11,16 +11,16 @@
 #' @importFrom xgboost xgb.DMatrix
 #' @param mix a matrix containing gene expression data
 #' @param xcell2object S4 object of `xCell2Object`
-#' @param min_intersect description
+#' @param min_shared_genes description
+#' @param ref_is_sc description
 #' @param raw_scores description
-#' @param estimate_fracs Boolean
 #' @param spillover Boolean - should we use spillover correction on the transformed scores?
 #' @param spillover_alpha description
 #' @param num_threads description
 
 #' @return A data frame containing the cell type enrichment for each sample in the input matrix, as estimated by xCell2.
 #' @export
-xCell2Analysis <- function(mix, xcell2object, min_intersect = 0.9, raw_scores = FALSE, estimate_fracs = FALSE, spillover = TRUE, spillover_alpha = 0.2, num_threads = 1){
+xCell2Analysis <- function(mix, xcell2object, ref_is_sc, min_shared_genes = 0.9, raw_scores = FALSE, spillover = TRUE, spillover_alpha = 0.2, num_threads = 1){
 
   scoreMix <- function(ctoi, mix_ranked, signatures_ctoi){
 
@@ -39,9 +39,9 @@ xCell2Analysis <- function(mix, xcell2object, min_intersect = 0.9, raw_scores = 
 
   # Check reference/mixture genes intersection
   genes_intersect_frac <- length(intersect(rownames(mix), xcell2object@genes_used)) / length(xcell2object@genes_used)
-  if (genes_intersect_frac < min_intersect) {
-    stop("Intersect between reference and mixture's genes is: ", genes_intersect_frac, " and min_intersect = ", min_intersect, ".",
-         "\n", "Please use xCell2CleanGenes before using xCell2 signatures with that mixture.")
+  if (genes_intersect_frac < min_shared_genes) {
+    stop("This xCell2 reference shares ", genes_intersect_frac, " genes with the mixtures and min_shared_genes = ", min_shared_genes, ".",
+         "\n", "Consider training a new xCell2 reference or adjusting min_shared_genes.")
   }
 
 
@@ -61,36 +61,16 @@ xCell2Analysis <- function(mix, xcell2object, min_intersect = 0.9, raw_scores = 
   }, BPPARAM = param)
   names(res_raw) <- sigs_celltypes
 
-  if (estimate_fracs) {
+  res <- t(sapply(res_raw, function(ctoi){
+    rowMeans(ctoi)
+  }))
 
-    # a <- pull(filter(xcell2object@params, celltype == ctoi), a)
-    # b <- pull(filter(xcell2object@params, celltype == ctoi), b)
-    # intercepts <- pull(filter(xcell2object@params, celltype == ctoi), intercepts)[[1]]
-    # betas <- pull(filter(xcell2object@params, celltype == ctoi), betas)[[1]]
-    #
-    # # Linear transformation
-    # scores <- (scores^(1/b)) / a
-    #
-    # # Scale
-    # scores <- scale(scores)
-    #
-    # # Predict
-    # p <- (scores %*% betas) + intercepts
-    # p <- apply(p, 1, mean)
-    #
-    #
-    # return(p)
-  }else{
-    res <- t(sapply(res_raw, function(ctoi){
-      rowMeans(ctoi)
-    }))
-
-  }
 
   if (raw_scores) {
-    res <- round(res, 3)
+    res <- round(res, 4)
     return(res)
   }else{
+    # linear transformation
     res <- t(sapply(rownames(res), function(ctoi){
 
       ctoi_res <- res[ctoi,]
@@ -105,13 +85,17 @@ xCell2Analysis <- function(mix, xcell2object, min_intersect = 0.9, raw_scores = 
       # Shift values
       ctoi_res <- ctoi_res - min(ctoi_res)
 
-      ctoi_res <- round(ctoi_res, 5)
       return(ctoi_res)
     }))
+    if (ref_is_sc) {
+      warningCondition("Reference type is scRNA-Seq - Spillover correction is disabled.")
+      res <- round(res, 3)
+      return(res)
+    }
   }
 
-  if (spillover) {
 
+  if (spillover) {
 
     # Spillover correction
     spill_mat <- xcell2object@spill_mat * spillover_alpha
@@ -124,8 +108,10 @@ xCell2Analysis <- function(mix, xcell2object, min_intersect = 0.9, raw_scores = 
     #scores_corrected <- round(scores_corrected, 4)
     rownames(scores_corrected) <- rows
 
+    scores_corrected <- round(scores_corrected, 3)
     return(scores_corrected)
   }else{
+    res <- round(res, 3)
     return(res)
   }
 
