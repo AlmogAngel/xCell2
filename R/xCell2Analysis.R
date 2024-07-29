@@ -67,9 +67,9 @@ xCell2Analysis <- function(mix, xcell2object, ref_is_sc, min_shared_genes = 0.9,
 
 
   if (raw_scores) {
-    res <- round(res, 4)
     return(res)
   }else{
+
     # linear transformation
     res <- t(sapply(rownames(res), function(ctoi){
 
@@ -84,12 +84,13 @@ xCell2Analysis <- function(mix, xcell2object, ref_is_sc, min_shared_genes = 0.9,
 
       # Shift values
       ctoi_res <- ctoi_res - min(ctoi_res)
+      ctoi_res <- round(ctoi_res, 5)
 
       return(ctoi_res)
     }))
+
     if (ref_is_sc) {
       warningCondition("Reference type is scRNA-Seq - Spillover correction is disabled.")
-      res <- round(res, 3)
       return(res)
     }
   }
@@ -105,13 +106,10 @@ xCell2Analysis <- function(mix, xcell2object, ref_is_sc, min_shared_genes = 0.9,
 
     scores_corrected <- apply(res[rows, ], 2, function(x) pracma::lsqlincon(spill_mat[rows, rows], x, lb = 0))
     scores_corrected[scores_corrected < 0] <- 0
-    #scores_corrected <- round(scores_corrected, 4)
     rownames(scores_corrected) <- rows
 
-    scores_corrected <- round(scores_corrected, 3)
     return(scores_corrected)
   }else{
-    res <- round(res, 3)
     return(res)
   }
 
