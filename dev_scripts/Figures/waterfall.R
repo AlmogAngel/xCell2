@@ -30,10 +30,16 @@ data_sorted <- data %>%
   arrange(delta_cor) %>%
   mutate(x_axis = row_number())
 
+
+red_color_palette <- colorRampPalette(c("darkred", "red"))(54)
+blue_color_palette <- colorRampPalette(c("lightblue1", "darkblue"))(36)
+color_palette <- c(red_color_palette, blue_color_palette)
+
+
 # Create a waterfall plot
 ggplot(data_sorted, aes(x = x_axis, y = delta_cor, fill = delta_cor)) +
   geom_bar(stat = "identity") +
-  scale_fill_gradient2(low = "darkred", high = "darkblue", mid = "yellow", midpoint = 0) +
+  scale_fill_gradientn(colors = color_palette, guide = FALSE) +
   geom_hline(yintercept = mean(data_sorted$delta_cor), linetype = "dashed") +
   geom_hline(yintercept = 0) +
   theme_minimal() +
@@ -80,13 +86,17 @@ red_color_palette <- colorRampPalette(c("darkred", "red"))(11)
 blue_color_palette <- colorRampPalette(c("lightblue1", "darkblue"))(36)
 color_palette <- c(red_color_palette, blue_color_palette)
 
+
+mean_no_zero <- data_sorted$delta_cor
+mean_no_zero <- mean_no_zero[mean_no_zero>0]
+
 # Create a waterfall plot
 ggplot(data_sorted, aes(x = x_axis, y = delta_cor, fill = delta_cor)) +
   geom_bar(stat = "identity") +
   #scale_fill_gradientn(low = "darkred", high = "darkblue", midpoint = 0, guide = FALSE,space = "Lab",  limits = c(min(data_sorted$delta_cor), max(data_sorted$delta_cor))) +
   scale_fill_gradientn(colors = color_palette, guide = FALSE, ) +
-  geom_hline(yintercept = mean(data_sorted$delta_cor), linetype = "dashed") +
-  annotate("text", x = 100, y = mean(data_sorted$delta_cor)+0.005, label = paste0("Mean delta: ", round(mean(data_sorted$delta_cor), 2)), vjust = -0.5) +
+  geom_hline(yintercept = mean(mean_no_zero), linetype = "dashed") +
+  annotate("text", x = 100, y = mean(mean_no_zero), label = paste0("Mean delta: ", round(mean(mean_no_zero), 2)), vjust = -0.5) +
   theme(axis.title.x = element_blank()) +
   labs(x = "", y = "Delta Correlation", title = "") +
   scale_y_continuous(limits = c(-0.08, 0.23), breaks = seq(-0.08, 0.23, 0.04)) +

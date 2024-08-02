@@ -259,4 +259,26 @@ saveRDS(sc.refval.tbl, "/bigdata/almogangel/xCell2_data/benchmarking_data/ref_va
 #saveRDS(sc.refval.tbl.nodeps, "/bigdata/almogangel/xCell2_data/benchmarking_data/ref_val_pairs/sc_ref_val_nodeps.rds")
 
 
+# mouse -----------------------------
 
+
+# Cytometry validations
+cyto.vals.list.mouse <- list(other = c("chen", "petitprez"))
+cyto.vals.mouse <- loadVals(valList = cyto.vals.list.mouse,
+                            valMixDir = "/bigdata/almogangel/kassandra_data/24_validation_datasets/expressions/mouse/",
+                            valTruthDir = "/bigdata/almogangel/kassandra_data/24_validation_datasets/cell_values/mouse/",)
+saveRDS(cyto.vals.mouse, "/bigdata/almogangel/xCell2_data/benchmarking_data/ref_val_pairs/cyto.vals.mouse.rds")
+
+
+cyto.vals.mouse <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/ref_val_pairs/cyto.vals.mouse.rds")
+all_vals <- c("chen", "petitprez")
+vals_type <- c("rnaseq", "rnaseq")
+val2type <- setNames(vals_type, all_vals)
+
+refList.mouse <- list(rna_seq = c(mixed = "igd"),
+                array = c(),
+                sc = c(mixed = "mca_blood"))
+
+
+refval.tbl <- combineRefVal(vals = cyto.vals.mouse, val2type, refList = refList.mouse, splitDependencies = FALSE)
+saveRDS(refval.tbl, "/bigdata/almogangel/xCell2_data/benchmarking_data/ref_val_pairs/cyto_ref_val_mouse.rds")

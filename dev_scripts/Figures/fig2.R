@@ -1,10 +1,190 @@
 library(tidyverse)
 
+# ontology ----------------
+source("/bigdata/almogangel/xCell2/dev_scripts/benchmarking_functions.R")
 
-# A - Signatures generation and ontology integration --------------------------------------------------
+benchmark_correlations_ontology <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/benchmark_xcell1_params/xcell2_analysis_benchmark_output.rds")
+benchmark_correlations_no_ontology <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/benchmark_xcell1_params/no_ontology/xcell2_analysis_benchmark_output.rds")
 
-# GSE107572_bp
-truth_mat <- cyto.vals$truth$blood$GSE107572
+train_ds <- c()
+benchmark_correlations_ontology <- get_xcell2_correlations(vals2remove = train_ds, xCell2results = benchmark_correlations_ontology, round_xcell2_results = 3, weight_rhos = FALSE)
+benchmark_correlations_no_ontology <- get_xcell2_correlations(vals2remove = train_ds, xCell2results = benchmark_correlations_no_ontology, round_xcell2_results = 3, weight_rhos = FALSE)
+
+
+benchmark_correlations_ontology <- benchmark_correlations_ontology %>%
+  filter(method == "xCell2") %>%
+  mutate(ontology = "yes")
+
+benchmark_correlations_no_ontology <- benchmark_correlations_no_ontology %>%
+  filter(method == "xCell2") %>%
+  mutate(ontology = "no")
+
+
+delta_cor_index <- (benchmark_correlations_ontology$cor - benchmark_correlations_no_ontology$cor) != 0
+
+benchmark_correlations_ontology <- benchmark_correlations_ontology[delta_cor_index, ]
+benchmark_correlations_no_ontology <- benchmark_correlations_no_ontology[delta_cor_index, ]
+
+
+benchmark_correlations <- rbind(benchmark_correlations_no_ontology, benchmark_correlations_ontology)
+
+ggplot(benchmark_correlations, aes(x=ontology, y=cor, fill=ontology)) +
+  geom_boxplot(width = .5, show.legend = TRUE, position = "dodge") +
+  #geom_jitter(alpha = 0.2, size = 0.5) +
+  scale_fill_manual(values = c("yes" = "tomato", "no" = "gray")) +
+  coord_cartesian(ylim = c(0.2, 1.1)) +
+  scale_y_continuous(breaks = seq(0, 1, by = 0.1)) +
+  theme_minimal() +
+  ggpubr::stat_compare_means(comparisons = list(c("yes", "no")),
+                             method = "wilcox.test",
+                             label = "p.format",
+                             label.y = 1) +
+  theme(axis.title.y = element_text(size = 14),
+        axis.text.x = element_blank()) +
+  labs(x="", y="Spearman Rho", fill="Ontology?")
+
+
+
+# xCell1 vs 2 -------------------------
+refval.tbl <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/ref_val_pairs/cyto_ref_val.rds")
+cyto.vals <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/ref_val_pairs/cyto.vals.rds")
+
+celltype_conversion <- read_tsv("/bigdata/almogangel/xCell2_data/dev_data/celltype_conversion_with_ontology.txt") %>%
+  rowwise() %>%
+  mutate(all_labels = str_split(all_labels, ";")) %>%
+  unnest(cols = c(all_labels))
+
+
+# Load xCell1 signatures
+xcell.data <- xCell::xCell.data
+xcell.sigs <- list()
+for (i in 1:length(xcell.data$signatures@.Data)) {
+  signame <- GSEABase::setName(xcell.data$signatures@.Data[[i]])
+  ct <- gsub("%.*","", signame)
+  ref <- gsub(".*%(.+)%.*", "\\1", signame)
+
+  if (!ref %in% c("BLUEPRINT", "ENCODE")) {
+    next
+  }
+
+  genes <- GSEABase::geneIds(xcell.data$signatures@.Data[[i]])
+
+  if (!ct %in% names(xcell.sigs)) {
+    xcell.sigs[[ct]] <- list()
+  }
+  xcell.sigs[[ct]][[paste0("sig-", length(xcell.sigs[[ct]]))]] <- genes
+
+}
+names(xcell.sigs) <- plyr::mapvalues(names(xcell.sigs), from = celltype_conversion$all_labels, to = celltype_conversion$xCell2_labels, warn_missing = FALSE)
+xcell.cts <- names(xcell.sigs)
+
+
+# Get correlations
+
+getCors <- function(val_data, cts, sigs = NULL,
+                    cyto.vals, is_xcell2 = FALSE, xcell2objects_dir = "/bigdata/almogangel/xCell2_data/benchmarking_data/benchmark_xcell1_params/"){
+
+  # Load truth table
+  truth_mat <- cyto.vals$truth$blood[[val_data]]
+  if (is.null(truth_mat)) {
+    truth_mat <- cyto.vals$truth$tumor[[val_data]]
+  }
+  if (is.null(truth_mat)) {
+    truth_mat <- cyto.vals$truth$other[[val_data]]
+  }
+  truth_cts <- rownames(truth_mat)
+
+  # Load mixture
+  mix <- cyto.vals$mixtures$blood[[val_data]]
+  if (is.null(mix)) {
+    mix <- cyto.vals$mixtures$tumor[[val_data]]
+  }
+  if (is.null(mix)) {
+    mix <- cyto.vals$mixtures$other[[val_data]]
+  }
+  mix_ranked <- singscore::rankGenes(mix)
+
+  if (is.null(sigs) & is_xcell2) {
+   xcell2_obj <- readRDS(paste0(xcell2objects_dir, val_data, "_bp.xcell2object.rds"))
+   sigs <- xcell2_obj@signatures
+   split_names <- strsplit(names(sigs), "#")
+   named_list <- setNames(sigs, sapply(split_names, `[`, 1))
+   sigs <- split(sigs, names(named_list))
+  }
+
+  ct2use <- intersect(cts, names(sigs))
+  cts_cors <- parallel::mclapply(ct2use, function(ct){
+
+    # Score sigs
+    xcell.scores <- sapply(sigs[[ct]], simplify = TRUE, function(sig){
+      singscore::simpleScore(mix_ranked, upSet = sig, centerScore = FALSE)$TotalScore
+    })
+    rownames(xcell.scores) <- colnames(mix_ranked)
+    xcell.scores <- round(rowMeans(xcell.scores), 3)
+
+    # Get shared samples
+    samples <- intersect(colnames(truth_mat), names(xcell.scores))
+    xcell.scores <- xcell.scores[samples]
+    truth <- truth_mat[ct, samples]
+
+    # Calculate correlation
+    cor(truth, xcell.scores, method = "spearman", use = "pairwise.complete.obs")
+
+  }, mc.cores = 20)
+  cts_cors <- unlist(cts_cors)
+  names(cts_cors) <- ct2use
+
+  return(cts_cors)
+}
+
+xcell1_cors <- refval.tbl %>%
+  filter(ref_name == "bp") %>%
+  rowwise() %>%
+  mutate(cor = list(getCors(val_data = val_dataset, cts = shared_celltypes, sigs = xcell.sigs, cyto.vals = cyto.vals))) %>%
+  unnest_longer(cor, indices_to = "celltype") %>%
+  mutate(method = "xCell") %>%
+  select(method, val_dataset, celltype, cor)
+
+
+xcell2_cors <- refval.tbl %>%
+  filter(ref_name == "bp") %>%
+  rowwise() %>%
+  mutate(cor = list(getCors(val_data = val_dataset, cts = shared_celltypes, is_xcell2 = TRUE, cyto.vals = cyto.vals))) %>%
+  unnest_longer(cor, indices_to = "celltype") %>%
+  mutate(method = "xCell 2.0") %>%
+  select(method, val_dataset, celltype, cor)
+
+
+res_combined <- rbind(xcell1_cors, xcell2_cors)
+
+res_combined %>%
+  ggplot(., aes(x=method, y=cor, fill=method)) +
+  geom_boxplot(width = .5, show.legend = TRUE, position = "dodge") +
+  scale_fill_manual(values = c("xCell 2.0" = "tomato", "xCell" = "#7AC5CD")) +
+  coord_cartesian(ylim = c(0, 1.1)) +
+  scale_y_continuous(breaks = seq(0, 1, by = 0.1)) +
+  theme_minimal() +
+  ggpubr::stat_compare_means(comparisons = list(c("xCell", "xCell 2.0")),
+                             method = "wilcox.test",
+                             label = "p.format",
+                             label.y = 1,
+                             paired = TRUE) +
+  theme(axis.title.y = element_text(size = 14),
+        axis.text.x = element_blank()) +
+  labs(x="", y="Spearman Rho", fill="")
+
+res_combined %>%
+  filter(method == "xCell 2.0") %>%
+  filter(cor < -0.5)
+
+
+
+# Archive ------------------------------------------------
+
+# A - Signatures generation and ontology integration
+
+# BG_Blood_ts_blood
+truth_mat <- cyto.vals$truth$blood$BG_blood
 
 
 ###
@@ -18,13 +198,15 @@ gep_mat
 signatures
 
 
-ctoi <- "CD8-positive, alpha-beta T cell"
+ctoi <- "B cell"
+# ctoi <- "CD4-positive, alpha-beta T cell"
+
 signatures_ctoi <- signatures[startsWith(names(signatures), paste0(ctoi, "#"))]
 
 length(signatures_ctoi)
-# [1] 730
+# [1] 274
 length(unique(unlist(signatures_ctoi)))
-# [1] 390
+# [1] 359
 
 
 # Get signatures scores with reference
@@ -38,14 +220,14 @@ rownames(gep_mat_ranked_scores) <- colnames(gep_mat_ranked)
 # Heatmap
 color_palette <- colorRampPalette(c("darkred" ,"red", "white", "lightblue1", "darkblue"))(50)
 
-ct2use <- c(ctoi, "central memory CD8-positive, alpha-beta T cell",
-            "effector memory CD8-positive, alpha-beta T cell", "CD4-positive, alpha-beta T cell",
-            "central memory CD4-positive, alpha-beta T cell", "effector memory CD4-positive, alpha-beta T cell",
-            "regulatory T cell", "eosinophil", "naive B cell", "plasma cell", "neutrophil", "monocyte",  "epithelial cell", "fibroblast")
+ct2use <- rownames(gep_mat_ranked_scores)
 
 data <- gep_mat_ranked_scores[ct2use, names(sort(gep_mat_ranked_scores[1,]))]
-rownames(data) <- c("CD8+ T", "CM CD8+ T", "EM CD8+ T", "CD4+ T", "CM CD4+ T", "EM CD4+ T",
-                    "T-reg", "Eosinophil", "Naive B", "Plasma cell", "Neutrophil", "Monocyte",  "Epithelial", "Fibroblast")
+
+rownames(data) <- gsub("CD4-positive, alpha-beta", "CD4+", rownames(data))
+rownames(data) <- gsub("CD8-positive, alpha-beta", "CD8+", rownames(data))
+rownames(data) <- gsub("thymus-derived", "", rownames(data))
+
 
 ht_list <- ComplexHeatmap::Heatmap(data, show_row_dend = FALSE, col = color_palette,
                         show_column_dend = FALSE, cluster_columns = FALSE, show_column_names = FALSE,
@@ -53,6 +235,8 @@ ht_list <- ComplexHeatmap::Heatmap(data, show_row_dend = FALSE, col = color_pale
                         heatmap_legend_param = list(title = "Enrichment score", direction = "horizontal",
                                                     title_position = "lefttop", at = seq(0, 1, 0.2), color_bar_len = 4))
 ComplexHeatmap::draw(ht_list, heatmap_legend_side = "bottom", annotation_legend_side = "bottom")
+
+
 
 
 ###
@@ -116,8 +300,28 @@ c <- apply(scores_tmp, 2, function(x){
 })
 c_noOnto <- sort(c, decreasing = TRUE)
 
+
+# 3) Run createSignatures with dep_list = NULL - only bad sigs
+signatures_ctoi <- signatures[colnames(data)[1:50]]
+mix_ranked_tmp <- singscore::rankGenes(mix)
+scores_tmp <- sapply(signatures_ctoi, simplify = TRUE, function(sig){
+  suppressWarnings(singscore::simpleScore(mix_ranked_tmp, upSet = sig, centerScore = FALSE)$TotalScore)
+})
+fracs <- truth_mat[ctoi,colnames(mix_ranked_tmp)]
+c <- apply(scores_tmp, 2, function(x){
+  cor(x, fracs, method = "spearman", use = "pairwise.complete.obs")
+})
+c_noOntoBad <- sort(c, decreasing = TRUE)
+
+
 # Plot results
-data <- tibble(cors = c(c_onto, c_noOnto), label = c(rep("Ontology", length(c_onto)), rep("No Ontology", length(c_noOnto))))
+data <- tibble(cors = c(c_onto, c_noOnto, c_noOntoBad), label = c(rep("Ontology", length(c_onto)),
+                                                     rep("No Ontology", length(c_noOnto)),
+                                                     rep("No Ontology (sub)", length(c_noOntoBad))))
+
+data <- tibble(cors = c(c_onto, c_noOnto), label = c(rep("Ontology", length(c_onto)),
+                                                                  rep("No Ontology", length(c_noOnto))))
+
 
 ggpubr::compare_means(cors~label, data, method = "wilcox.test")
 
@@ -126,8 +330,8 @@ data %>%
   geom_boxplot() +
   theme_minimal() +
   labs(title = "", x = "", y = "Spearman Rho with ground truth", fill = "") +
-  scale_fill_manual(values = c("lightblue1", "darkblue")) +
-  scale_y_continuous(limits = c(-0.8, 1.001), breaks = seq(-0.8, 1, 0.2)) +
+  scale_fill_manual(values = c("lightblue1", "#E9C61D", "tomato")) +
+  scale_y_continuous(limits = c(0.3, 1), breaks = seq(0.3, 1, 0.2)) +
   theme(legend.text = element_text(face = "bold", size = 10),
         axis.text.x = element_blank(),
         axis.text.y = element_text(size = 10),
@@ -137,6 +341,59 @@ data %>%
         panel.background = element_blank(),
         axis.line = element_line(colour = "black")) +
   ggpubr::stat_compare_means(comparisons = list(c("Ontology", "No Ontology")), method = "wilcox.test", label = "p.signif", paired = FALSE)
+
+###
+# Ontology waterfall
+###
+
+# (1) get_xcell2_res.R - Make signatures
+# (2) fig3.R - Make correlations
+data.no = readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/sig_gen_tuning_3/onto/grid_26_cors_noonto.rds")
+
+data.no <- data.no %>%
+  filter(method == "xCell2") %>%
+  mutate(with_onto = "no") %>%
+  select(ref, val, celltype, cor, with_onto)
+
+
+data.yes = readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/sig_gen_tuning_3/onto/cors.rds")
+
+data.yes <- data.yes %>%
+  filter(method == "xCell2") %>%
+  mutate(with_onto = "yes") %>%
+  select(ref, val, celltype, cor, with_onto)
+
+
+data <- data.yes %>%
+  full_join(data.no, by = c("ref", "val", "celltype")) %>%
+  #filter(cor.x >= 0.3 | cor.y >= 0.3) %>%
+  mutate(delta_cor = cor.x - cor.y) %>%
+  select(ref, val, celltype, delta_cor)
+
+data_sorted <- data %>%
+  ungroup() %>%
+  arrange(delta_cor) %>%
+  filter(delta_cor != 0) %>%
+  mutate(x_axis = row_number())
+
+
+red_color_palette <- colorRampPalette(c("darkred", "red"))(33)
+blue_color_palette <- colorRampPalette(c("lightblue1", "darkblue"))(34)
+color_palette <- c(red_color_palette, blue_color_palette)
+
+
+# Create a waterfall plot
+data_sorted %>%
+  ggplot(., aes(x = x_axis, y = delta_cor, fill = delta_cor)) +
+  geom_bar(stat = "identity") +
+  scale_fill_gradientn(colors = color_palette, guide = FALSE) +
+  geom_hline(yintercept = mean(data_sorted$delta_cor), linetype = "dashed") +
+  annotate("text", x = 100, y = mean(data_sorted$delta_cor), label = paste0("Mean delta: ", round(mean(data_sorted$delta_cor), 2)), vjust = -0.5) +
+  theme(axis.title.x = element_blank()) +
+  labs(x = "", y = "Delta Correlation", title = "") +
+  scale_y_continuous(limits = c(round(min(data_sorted$delta_cor), 1), round(max(data_sorted$delta_cor), 1)+0.1),
+                     breaks = seq(round(min(data_sorted$delta_cor), 1), round(max(data_sorted$delta_cor), 1), 0.1)) +
+  theme_minimal()
 
 
 
@@ -165,9 +422,26 @@ c <- sort(c, decreasing = TRUE)
 data <- tibble(sig = names(c), rho = c, filtered = "All")
 data2 <- tibble(sig = best_sigs, rho = c[best_sigs], filtered = "Filtered")
 
-data_mix <- rbind(data, data2)
+
+# Run the complete filterSignatures to have the filtered signature including the essential genes
+signatures_ctoi <- signatures[startsWith(names(signatures), paste0(ctoi, "#"))]
+mix_ranked_tmp <- singscore::rankGenes(mix)
+scores_tmp <- sapply(signatures_ctoi, simplify = TRUE, function(sig){
+  suppressWarnings(singscore::simpleScore(mix_ranked_tmp, upSet = sig, centerScore = FALSE)$TotalScore)
+})
+fracs <- truth_mat[ctoi,colnames(mix_ranked_tmp)]
+c <- apply(scores_tmp, 2, function(x){
+  cor(x, fracs, method = "spearman", use = "pairwise.complete.obs")
+})
+c <- sort(c, decreasing = TRUE)
+
+
+data3 <- tibble(sig = names(signatures_ctoi), rho = c, filtered = "Filtered + Essential")
+
+
+data_mix <- rbind(data, data2, data3)
 data_mix$data_type <- "Input Dataset"
-data_mix$dataset <- "GSE107572"
+data_mix$dataset <- "GSE127813"
 
 data_mix <- data_mix %>%
   select(dataset, rho, sig, filtered, data_type)
@@ -192,15 +466,35 @@ data_final <- rbind(data_mix, data_val)
 
 
 # Boxplot
-color_palette <- c("gray", "darkblue")
+color_palette <- c("lightblue1", "tomato")
+# data_final %>%
+#   ggplot(., aes(x=dataset, y=rho, fill=filtered)) +
+#   geom_boxplot(width = 0.8) +
+#   facet_grid(~data_type, scales = "free_x", space = "free") +
+#   theme_minimal() +  # A minimal theme for a nicer look
+#   labs(title = "", x = "", y = "Spearman Rho", fill = "Signatures") +
+#   scale_fill_manual(values = as.character(color_palette)) +  # Remove fill legend
+#   scale_y_continuous(limits = c(0, 1), breaks = seq(0, 1, 0.25)) +  # Set y-axis limits
+#   theme(axis.text.x = element_text(angle = 45, hjust = 1, face = "bold", size = 8),
+#         axis.text.y = element_text(size = 10),
+#         legend.position = "bottom",
+#         axis.title.y = element_text(face = "bold", size = 10),
+#         title = element_text(face = "bold", size = 12),
+#         legend.text = element_text(face = "bold", size = 10),
+#         panel.grid.major = element_blank(),
+#         panel.grid.minor = element_blank(),
+#         panel.background = element_blank(),
+#         strip.text = element_text(face="bold", size=10),
+#         axis.line = element_line(colour = "black"))
+
 data_final %>%
+  filter(data_type != "Input Dataset") %>%
   ggplot(., aes(x=dataset, y=rho, fill=filtered)) +
   geom_boxplot(width = 0.8) +
-  facet_grid(~data_type, scales = "free_x", space = "free") +
   theme_minimal() +  # A minimal theme for a nicer look
   labs(title = "", x = "", y = "Spearman Rho", fill = "Signatures") +
   scale_fill_manual(values = as.character(color_palette)) +  # Remove fill legend
-  scale_y_continuous(limits = c(-0.52, 1), breaks = seq(-0.5, 1, 0.25)) +  # Set y-axis limits
+  scale_y_continuous(limits = c(0, 1), breaks = seq(0, 1, 0.25)) +  # Set y-axis limits
   theme(axis.text.x = element_text(angle = 45, hjust = 1, face = "bold", size = 8),
         axis.text.y = element_text(size = 10),
         legend.position = "bottom",
@@ -214,8 +508,115 @@ data_final %>%
         axis.line = element_line(colour = "black"))
 
 
+color_palette <- c("lightblue1", "#E9C61D", "tomato")
+data_final %>%
+  filter(data_type == "Input Dataset") %>%
+  ggplot(., aes(x=dataset, y=rho, fill=filtered)) +
+  geom_boxplot(width = 0.8) +
+  theme_minimal() +  # A minimal theme for a nicer look
+  labs(title = "", x = "", y = "Spearman Rho", fill = "Signatures") +
+  scale_fill_manual(values = as.character(color_palette)) +  # Remove fill legend
+  scale_y_continuous(limits = c(0.4, 0.9), breaks = seq(0.4, 0.9, 0.1)) +  # Set y-axis limits
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, face = "bold", size = 8),
+        axis.text.y = element_text(size = 10),
+        legend.position = "bottom",
+        axis.title.y = element_text(face = "bold", size = 10),
+        title = element_text(face = "bold", size = 12),
+        legend.text = element_text(face = "bold", size = 10),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        strip.text = element_text(face="bold", size=10),
+        axis.line = element_line(colour = "black"))
 
-# B --------------------------------------------------
+
+# Filterting boxplot
+
+no_filt <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/xcell2_objects_23jun_nofilt/data_combined.rds")
+filt <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/xcell2_objects_23jun/data_combined.rds")
+
+no_filt <- no_filt %>%
+  filter(method == "xCell2") %>%
+  select(ref, ref_rho) %>%
+  mutate(is_filt = "no")
+
+filt <- filt %>%
+  filter(method == "xCell2") %>%
+  select(ref, ref_rho) %>%
+  mutate(is_filt = "yes")
+
+data <- rbind(filt, no_filt)
+
+
+data %>%
+  ggplot(., aes(x=ref, y=ref_rho, fill=is_filt)) +
+  geom_boxplot() +
+  coord_cartesian(ylim = c(0.2, 0.9))
+
+
+
+
+
+
+
+###
+# filtering waterfall
+###
+
+# (1) get_xcell2_res.R - Make signatures
+# (2) fig3.R - Make correlations
+
+data.no = readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/xcell2_objects_23jun_nofilt/cors.rds")
+
+data.no <- data.no %>%
+  filter(method == "xCell2") %>%
+  mutate(with_filt = "no") %>%
+  select(ref, val, celltype, cor, with_filt)
+
+
+data.yes = readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/xcell2_objects_23jun/cors.rds")
+
+data.yes <- data.yes %>%
+  filter(method == "xCell2") %>%
+  mutate(with_filt = "yes") %>%
+  select(ref, val, celltype, cor, with_filt)
+
+
+data <- data.yes %>%
+  full_join(data.no, by = c("ref", "val", "celltype")) %>%
+  filter(cor.x >= 0.3 | cor.y >= 0.3) %>%
+  mutate(delta_cor = cor.x - cor.y) %>%
+  select(ref, val, celltype, delta_cor)
+
+data_sorted <- data %>%
+  ungroup() %>%
+  arrange(delta_cor) %>%
+  filter(delta_cor != 0) %>%
+  mutate(x_axis = row_number())
+
+
+red_color_palette <- colorRampPalette(c("darkred", "red"))(37)
+blue_color_palette <- colorRampPalette(c("lightblue1", "darkblue"))(34)
+color_palette <- c(red_color_palette, blue_color_palette)
+
+
+# Create a waterfall plot
+data_sorted %>%
+  ggplot(., aes(x = x_axis, y = delta_cor, fill = delta_cor)) +
+  geom_bar(stat = "identity") +
+  scale_fill_gradientn(colors = color_palette, guide = FALSE) +
+  geom_hline(yintercept = mean(data_sorted$delta_cor), linetype = "dashed") +
+  annotate("text", x = 100, y = mean(data_sorted$delta_cor), label = paste0("Mean delta: ", round(mean(data_sorted$delta_cor), 2)), vjust = -0.5) +
+  theme(axis.title.x = element_blank()) +
+  labs(x = "", y = "Delta Correlation", title = "") +
+  scale_y_continuous(limits = c(round(min(data_sorted$delta_cor), 1), round(max(data_sorted$delta_cor), 1)),
+                     breaks = seq(round(min(data_sorted$delta_cor), 1), round(max(data_sorted$delta_cor), 1), 0.1)) +
+  theme_minimal()
+
+
+
+
+# B - Signatures filtering
 
 
 refval.tbl <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/ref_val_pairs/cyto_ref_val.rds")
@@ -329,13 +730,23 @@ xcell.cts <- names(xcell.sigs)
 
 # Get xCell2's signatures data (before/after filtering
 
-xcell2.sigs <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/results/correlations/xcell2.filteredSigsCors.newEssentialv2valtype.3aprNewVal.rds")
+# xcell2.sigs <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/results/correlations/xcell2.filteredSigsCors.newEssentialv2valtype.3aprNewVal.rds")
 
-xcell2.sigs <- xcell2.sigs %>%
+# xcell2.sigs <- xcell2.sigs %>%
+#   bind_rows() %>%
+#   filter(ref == "bp") %>%
+#   mutate(label = ifelse(is_filtered == "yes", "xCell 2.0 (filtered)", "xCell 2.0 (all)")) %>%
+#   select(-c(ref, is_filtered))
+
+
+all_cors # from figure 3
+
+xcell2.sigs <- all_cors %>%
   bind_rows() %>%
-  filter(ref == "bp") %>%
-  mutate(label = ifelse(is_filtered == "yes", "xCell 2.0 (filtered)", "xCell 2.0 (all)")) %>%
-  select(-c(ref, is_filtered))
+  filter(ref == "bp" & method == "xCell2") %>%
+  mutate(sig_name = "xCell2",
+         label = "xCell 2.0") %>%
+  select(val, celltype, sig_name, cor, label)
 
 
 # Get correlations for first xCell version signatures
@@ -379,18 +790,26 @@ results <- list(xcell.sigs.data, xcell2.sigs) %>%
   map(~inner_join(.x, common_combinations, by = c("val", "celltype"))) %>%
   bind_rows()
 
-color_palette <- c("#EE3A8C", "gray", "darkblue")
+color_palette <- c("lightblue1", "tomato")
 
 
-results %>%
-  group_by(val, celltype, label) %>%
-  summarise(cor = mean(cor)) %>%
-  ggplot(., aes(x=val, y=cor, fill=label)) +
+# data <- results %>%
+#   group_by(val, celltype, label) %>%
+#   summarise(cor = mean(cor))
+data <- results
+
+pval <- ggpubr::compare_means(cor~label, data, method = "wilcox.test")
+
+
+data %>%
+  ungroup() %>%
+  ggplot(., aes(x=label, y=cor, fill=label)) +
   geom_boxplot() +
+  ggpubr::stat_compare_means(data = data, comparisons = list(c("xCell", "xCell 2.0")), method = "wilcox.test", label = "p.format", paired = FALSE) +
   theme_minimal() +  # A minimal theme for a nicer look
   labs(title = "", x = "", y = "Mean Spearman Rho", fill = "") +
   scale_fill_manual(values = as.character(color_palette)) +  # Remove fill legend
-  scale_y_continuous(limits = c(-0, 1.001), breaks = seq(0, 1, 0.1)) +  # Set y-axis limits
+  scale_y_continuous(limits = c(0, 1.1), breaks = seq(0, 1, 0.1)) +  # Set y-axis limits
   theme(axis.text.x = element_text(angle = 45, hjust = 1, face = "bold", size = 8),
         axis.text.y = element_text(size = 10),
         axis.title.y = element_text(face = "bold", size = 10),
@@ -401,7 +820,6 @@ results %>%
         panel.background = element_blank(),
         strip.text = element_text(face="bold", size=10),
         axis.line = element_line(colour = "black"))
-
 
 
 results %>%
@@ -423,6 +841,56 @@ results %>%
         axis.line = element_line(colour = "black"))
 
 
+### Heatmaps ###
+
+celltypes <- results %>% select(val, celltype) %>%  unique() %>% pull(celltype) %>% table() %>% sort(.,decreasing = T) %>% names()
+top_celltype <- celltypes[1:10]
+
+xcell.hm <- results %>%
+  filter(label == "xCell" & celltype %in% top_celltype) %>%
+  group_by(val, celltype) %>%
+  summarise(cor = mean(cor)) %>%
+  pivot_wider(names_from = "val", values_from = cor)
+
+ds <- colnames(xcell.hm)[-1]
+
+cts <- xcell.hm$celltype
+xcell.hm <- as.matrix(xcell.hm[,-1])
+rownames(xcell.hm) <- cts
+
+xcell.hm <- xcell.hm[top_celltype,ds]
+
+color_palette <- c(colorRampPalette(c("darkred" ,"red", "#f07167", "white"))(40),
+                   colorRampPalette(c("lightblue1", "blue", "darkblue"))(50))
+
+
+ht_list <- ComplexHeatmap::Heatmap(xcell.hm, show_row_dend = FALSE, col = color_palette,
+                                   show_column_dend = TRUE, cluster_columns = FALSE, show_column_names = TRUE,
+                                   row_names_side = "left", row_names_gp = gpar(fontface = "bold", fontsize = 10),
+                                   heatmap_legend_param = list(title = "Correlation", direction = "horizontal",
+                                                               title_position = "lefttop", at = seq(-1, 1, 0.2), color_bar_len = 6))
+ComplexHeatmap::draw(ht_list, heatmap_legend_side = "bottom", annotation_legend_side = "bottom")
+
+
+
+
+
+
+xcell2.hm <- results %>%
+  filter(label == "xCell 2.0" & celltype %in% top_celltype) %>%
+  group_by(val, celltype) %>%
+  summarise(cor = mean(cor)) %>%
+  pivot_wider(names_from = "val", values_from = cor)
+
+cts <- xcell2.hm$celltype
+xcell2.hm <- as.matrix(xcell2.hm[,-1])
+rownames(xcell2.hm) <- cts
+
+xcell2.hm <- xcell2.hm[top_celltype,ds]
+
+ComplexHeatmap::Heatmap(xcell2.hm, show_row_dend = FALSE, col = color_palette,
+                                   show_column_dend = FALSE, cluster_columns = FALSE, show_column_names = FALSE,
+                                   row_names_side = "left", row_names_gp = gpar(fontface = "bold", fontsize = 10), show_heatmap_legend = FALSE)
 
 
 # Archive code  --------------------------------------------------

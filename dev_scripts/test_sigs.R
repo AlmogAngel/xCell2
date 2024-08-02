@@ -1,5 +1,5 @@
 # xCell2Analysis
-res_mat <- xCell2::xCell2Analysis(mix = mix, xcell2sigs = sigs, tranform = TRUE, spillover = FALSE, spillover_alpha = 0.5)
+#res_mat <- xCell2::xCell2Analysis(mix = mix, xcell2sigs = sigs, tranform = TRUE, spillover = FALSE, spillover_alpha = 0.5)
 #res_mat <- res_mat[vals.refs.res[1,]$shared_celltypes[[1]], ]
 #res_mat
 
@@ -55,7 +55,7 @@ scores_tmp <- sapply(signatures_ctoi, simplify = TRUE, function(sig){
   suppressWarnings(singscore::simpleScore(mix_ranked_tmp, upSet = sig, centerScore = FALSE)$TotalScore)
 })
 
-fracs <- truth_mat[ctoi,colnames(mix_ranked_tmp)]
+fracs <- truth_mat[ctoi, colnames(mix_ranked_tmp)]
 # fracs=as.numeric(gsub(".*mix%%", "", colnames(mix_ranked)))
 c <- apply(scores_tmp, 2, function(x){
   cor(x, fracs, method = "spearman", use = "pairwise.complete.obs")
@@ -63,6 +63,10 @@ c <- apply(scores_tmp, 2, function(x){
 sort(c)
 range(c)
 mean(c)
+
+cor(round(rowMeans(scores_tmp), 3), fracs, method = "spearman", use = "pairwise.complete.obs")
+
+
 
 scores_tmp2 <- (scores_tmp^(1/b)) / a
 # scores_tmp2 <- scale(scores_tmp2)

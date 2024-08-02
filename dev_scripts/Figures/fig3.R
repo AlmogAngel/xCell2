@@ -11,7 +11,7 @@ library(grid)
 
 
 methods2use <- c("xCell2", "BayesPrism", "CIBERSORTx", "DeconRNASeq", "EPIC", "MCPcounter", "dtangle")
-xcell2_resfile <- "/bigdata/almogangel/xCell2_data/benchmarking_data/xcell2_objects_10may/xcell2.cyto.res.rds"
+xcell2_resfile <- "/bigdata/almogangel/xCell2_data/benchmarking_data/xcell2_objects_23jun/raw_scores_ontology.rds"
 cyto.vals <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/ref_val_pairs/cyto.vals.rds")
 
 
@@ -28,7 +28,10 @@ cyto.Res <- lapply(files, function(f){
 }) %>%
   do.call(rbind, .)
 
-
+# x=cyto.Res[1,]$res
+cyto.Res <- cyto.Res %>%
+  rowwise() %>%
+  mutate(res = list(round(res, 3)))
 
 # Calculate correlations --------------
 
@@ -39,8 +42,12 @@ ref_val_pairs <- cyto.Res %>%
   select(-n) %>%
   ungroup()
 
+# res = cyto.Res.tmp[1,]$res[[1]]
+# truth = truth_mat; shared_cts = shared_celltypes; shared_samp = shared_samples
 
-getCors <- function(res, truth, shared_cts, shared_samp){
+source("/bigdata/almogangel/xCell2/dev_scripts/xCell2Train_tmp_version.R")
+
+getCors <- function(ref, res, truth, shared_cts, shared_samp, get_spill_cors){
 
   celltypes <- intersect(rownames(res), rownames(truth))
   celltypes <- celltypes[celltypes %in% shared_cts]
@@ -60,18 +67,55 @@ getCors <- function(res, truth, shared_cts, shared_samp){
   }) %>%
     bind_rows()
 
-  df %>%
-    group_by(celltype) %>%
-    dplyr::summarize(
-      cor = cor(truth, prediction, method = "spearman", use = "pairwise.complete.obs"),
-      p_value = cor.test(truth, prediction, method = "spearman", exact = FALSE)$p.value,
-      n = sum(!is.na(truth) & !is.na(prediction))
-    ) %>%
-    mutate(cor = ifelse(is.na(cor), 0, cor)) %>%
-    return(.)
+
+  if (get_spill_cors) {
+    # Generate all pairs of cell types
+    celltype_pairs <- crossing(predicted_celltype = unique(df$celltype), true_celltype = unique(df$celltype))
+
+    #     source("/bigdata/almogangel/xCell2/dev_scripts/xCell2Train_tmp_version.R")
+    ref.in <- readRDS(paste0("/bigdata/almogangel/xCell2_data/benchmarking_data/references/", ref, "_ref.rds"))
+    dep_list <- getDependencies(ref.in$lineage_file)
+
+    celltype_pairs <- celltype_pairs %>%
+      rowwise() %>%
+      mutate(true_celltype = ifelse(true_celltype %in% c(predicted_celltype, unlist(dep_list[predicted_celltype])), NA, true_celltype)) %>%
+      drop_na()
+
+    cors.out <- celltype_pairs %>%
+      rowwise() %>%
+      mutate(cor = cor(
+        df %>% filter(celltype == predicted_celltype) %>% pull(prediction),
+        df %>% filter(celltype == true_celltype) %>% pull(truth),
+        method = "spearman", use = "pairwise.complete.obs"),
+        p_value = cor.test(
+          df %>% filter(celltype == predicted_celltype) %>% pull(prediction),
+          df %>% filter(celltype == true_celltype) %>% pull(truth),
+          method = "spearman", exact = FALSE)$p.value,
+        n = sum(!is.na(df %>% filter(celltype == predicted_celltype) %>% pull(prediction)) &
+                  !is.na(df %>% filter(celltype == true_celltype) %>% pull(truth)))) %>%
+      mutate(cor = ifelse(is.na(cor), 0, cor)) %>%
+      ungroup()
+
+    cors.out %>%
+      mutate(celltype = paste0(predicted_celltype, "_", true_celltype)) %>%
+      select(celltype, cor, p_value, n) %>%
+      return(.)
+
+  }else{
+    df %>%
+      group_by(celltype) %>%
+      dplyr::summarize(
+        cor = cor(truth, prediction, method = "spearman", use = "pairwise.complete.obs"),
+        p_value = cor.test(truth, prediction, method = "spearman", exact = FALSE)$p.value,
+        n = sum(!is.na(truth) & !is.na(prediction))
+      ) %>%
+      mutate(cor = ifelse(is.na(cor), 0, cor)) %>%
+      return(.)
+  }
 
 }
 
+get_spill_cors <- FALSE
 
 all_cors <- parallel::mclapply(1:nrow(ref_val_pairs), function(i){
 
@@ -94,7 +138,7 @@ all_cors <- parallel::mclapply(1:nrow(ref_val_pairs), function(i){
 
   out <- cyto.Res.tmp %>%
     rowwise() %>%
-    mutate(cors = list(getCors(res, truth = truth_mat, shared_cts = shared_celltypes, shared_samp = shared_samples))) %>%
+    mutate(cors = list(getCors(ref = ref_name, res, truth = truth_mat, shared_cts = shared_celltypes, shared_samp = shared_samples, get_spill_cors))) %>%
     dplyr::select(method, cors) %>%
     unnest(cols = c(cors)) %>%
     mutate(ref = refName,
@@ -103,15 +147,12 @@ all_cors <- parallel::mclapply(1:nrow(ref_val_pairs), function(i){
   return(out)
 
 
-}, mc.cores = 5) %>%
+}, mc.cores = 10) %>%
   bind_rows()
 
-# # Remove those?
-# x <- all_cors %>%
-#   group_by(ref, val, celltype) %>%
-#   summarise(min_p = min(p_value, na.rm = T)) %>%
-#   filter(min_p > 0.05) %>%
-#   arrange(min_p)
+# For Figure 2
+# saveRDS(all_cors, "/bigdata/almogangel/xCell2_data/benchmarking_data/xcell2_objects_23jun_nofilt/cors.rds")
+# saveRDS(all_cors, "/bigdata/almogangel/xCell2_data/benchmarking_data/xcell2_objects_23jun/cors.rds")
 
 
 # Combine correlations  --------------
@@ -184,23 +225,32 @@ combineRhos <- function(rhos, sample_sizes = NULL, use_median = TRUE, summarize 
 }
 
 
+if (get_spill_cors) {
+  all_cors_ref_combined <- all_cors %>%
+    separate(celltype, into = c("predicted_celltype", "true_celltype"), remove = FALSE, sep = "_") %>%
+    filter(predicted_celltype != true_celltype) %>%
+    select(-c("predicted_celltype", "true_celltype")) %>%
+    group_by(method, ref) %>%
+    dplyr::summarise(cors_list = list(cor),
+                     n_ct_samples = list(n)) %>% # Rhos are weighted by number of samples per cell type
+    rowwise() %>%
+    mutate(ref_rho = list(combineRhos(rhos = cors_list, sample_sizes = log(n_ct_samples), use_median = FALSE, summarize = FALSE)),
+           n_val_cts = length(cors_list))
 
-all_cors_ref_combined <- all_cors %>%
-  #filter(!val %in% c("GSE77344")) %>%
-  group_by(method, ref) %>%
-  dplyr::summarise(cors_list = list(cor),
-            n_ct_samples = list(n)) %>% # Rhos are weighted by number of samples per cell type
-  rowwise() %>%
-  mutate(ref_rho = list(combineRhos(rhos = cors_list, sample_sizes = log(n_ct_samples), use_median = FALSE, summarize = FALSE)),
-         n_val_cts = length(cors_list))
 
-  # %>%
-#   group_by(method, ref) %>%
-#   summarise(cors_list2 = list(ref_val_rho),
-#             n_val_cts_combied = list(n_val_cts)) %>% # Rhos are weighted by number of cell types per validation dataset
-# #            n_val_cts_combied = list(rep(1, length(n_val_cts)))) %>% # Rhos are weighted by number of cell types per validation dataset
-#   rowwise() %>%
-#   mutate(ref_rho = combineRhos(rhos = cors_list2, sample_sizes = n_val_cts_combied))
+}else{
+  all_cors_ref_combined <- all_cors %>%
+    #filter(!val %in% c("GSE77344")) %>%
+    group_by(method, ref) %>%
+    dplyr::summarise(cors_list = list(cor),
+                     n_ct_samples = list(n)) %>% # Rhos are weighted by number of samples per cell type
+    rowwise() %>%
+    mutate(ref_rho = list(combineRhos(rhos = cors_list, sample_sizes = log(n_ct_samples), use_median = FALSE, summarize = FALSE)),
+           n_val_cts = length(cors_list))
+}
+
+
+
 
 
 # Plot  --------------
@@ -231,7 +281,7 @@ ggplot(data_combined, aes(x = tidytext::reorder_within(method, ref_rho, ref, sep
   geom_boxplot(width=.5, outlier.colour=NA, coef = 0, show.legend = F, position = "dodge") +
   scale_fill_manual(values = c("yes"="tomato", "no"="gray")) +
   theme_minimal() +
-  scale_y_continuous(limits = c(0, 1), breaks = seq(-1, 1, by = 0.2)) +
+  scale_y_continuous(limits = c(-1, 1), breaks = seq(-1, 1, by = 0.2)) +
   coord_flip() +
   facet_wrap(~ ref, scales = "free", ncol = 1) +
   tidytext::scale_x_reordered() +
@@ -240,20 +290,24 @@ ggplot(data_combined, aes(x = tidytext::reorder_within(method, ref_rho, ref, sep
   guides(fill=FALSE)
 
 
+# For Figure 2
+# saveRDS(data_combined, "/bigdata/almogangel/xCell2_data/benchmarking_data/xcell2_objects_23jun_nofilt/data_combined.rds")
+# saveRDS(data_combined, "/bigdata/almogangel/xCell2_data/benchmarking_data/xcell2_objects_23jun/data_combined.rds")
+
+
 # Per ref
 data_combined %>%
-  filter(ref == "sc_pan_cancer") %>%
+  summarise(ref_rho = mean(ref_rho)) %>%
   ggplot(., aes(x = tidytext::reorder_within(method, ref_rho, ref, sep = "#", fun = median), y = ref_rho, fill = is_xcell2)) +
   geom_boxplot(width=.5, outlier.colour=NA, coef = 0, show.legend = F, position = "dodge") +
   scale_fill_manual(values = c("yes"="tomato", "no"="gray")) +
   theme_minimal() +
-  scale_y_continuous(limits = c(0, 1), breaks = seq(-1, 1, by = 0.2)) +
-  coord_flip() +
+  scale_y_continuous(limits = c(-1, 1), breaks = seq(-1, 1, by = 0.2)) +
   tidytext::scale_x_reordered() +
   scale_x_discrete(labels=bold_xCell2_labels) +
   labs(x="", y="") +
   guides(fill=FALSE) +
-  theme(axis.text.x = element_text(face = "bold", size = 14),
+  theme(axis.text.x = element_text(face = "bold", size = 14, angle = 45, hjust = 1),
         axis.text.y = element_text(size = 20),
         panel.background = element_blank(),
         strip.text = element_text(face="bold", size=10),

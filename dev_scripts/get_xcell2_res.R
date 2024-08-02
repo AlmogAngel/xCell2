@@ -38,7 +38,7 @@ vals.refs.res <- refval.tbl %>%
 # xCell 2.0 settings
 thisseed <- 123
 cores2use <- 40
-objects_dir <- "/bigdata/almogangel/xCell2_data/benchmarking_data/xcell2_objects_10may/"
+objects_dir <- "/bigdata/almogangel/xCell2_data/benchmarking_data/xcell2_objects_23jun_nofilt/"
 
 
 # Make xCell2 objects
@@ -97,9 +97,11 @@ if (FALSE) {
 
 
 # Get results using xCell2 objects
+return_raw_scores <- TRUE
 predict_res = FALSE
 use_sillover = FALSE
 cores2use <- 15
+spillAlpha = 0.8
 
 if (TRUE) {
 all_res <- parallel::mclapply(1:nrow(vals.refs.res), function(i){
@@ -122,7 +124,8 @@ all_res <- parallel::mclapply(1:nrow(vals.refs.res), function(i){
       errorCondition("Missing file!")
     }
 
-    res <- xCell2::xCell2Analysis(mix.in, xcell2object = xcell2_object, predict = predict_res, spillover = use_sillover, ncores = cores2use)
+    res <- xCell2::xCell2Analysis(mix.in, xcell2object = xcell2_object, raw_scores = return_raw_scores,
+                                  spillover = use_sillover, spillover_alpha = spillAlpha, num_threads = cores2use)
     return(res)
 
   }, mc.cores = 15)
@@ -130,4 +133,4 @@ vals.refs.res$res <- all_res
 }
 
 # saveRDS(vals.refs.res, "/bigdata/almogangel/xCell2_data/benchmarking_data/xcell2_objects_4apr/xcell2.cyto.predict.res.rds")
-saveRDS(vals.refs.res, "/bigdata/almogangel/xCell2_data/benchmarking_data/xcell2_objects_10may/xcell2.cyto.res.rds")
+saveRDS(vals.refs.res, "/bigdata/almogangel/xCell2_data/benchmarking_data/xcell2_objects_23jun_nofilt/raw_scores_ontology.rds")

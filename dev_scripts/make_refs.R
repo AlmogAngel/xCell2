@@ -1,10 +1,54 @@
 library(tidyverse)
 library(Matrix)
 library(limma)
+library(ontologyIndex)
 
 setwd("/bigdata/almogangel/xCell2/")
 source("R/xCell2Train.R")
 source("R/xCell2GetLineage.R")
+cl <- ontoProc::getOnto(ontoname = "cellOnto", year_added = "2023")
+
+
+getDependencies <- function(lineage_file_checked){
+  ont <- read_tsv(lineage_file_checked, show_col_types = FALSE) %>%
+    mutate_all(as.character)
+
+  celltypes <- pull(ont[,2])
+  celltypes <- gsub("_", "-", celltypes)
+  dep_list <- vector(mode = "list", length = length(celltypes))
+  names(dep_list) <- celltypes
+
+  for (i in 1:nrow(ont)) {
+    descendants <-  gsub("_", "-", strsplit(pull(ont[i,3]), ";")[[1]])
+    descendants <- descendants[!is.na(descendants)]
+
+    ancestors <-  gsub("_", "-", strsplit(pull(ont[i,4]), ";")[[1]])
+    ancestors <- ancestors[!is.na(ancestors)]
+
+    dep_list[[i]] <- list("descendants" = descendants, "ancestors" = ancestors)
+
+  }
+
+  return(dep_list)
+}
+get_ontology_id <- function(cell_type_name, ontology = cl) {
+  # Find the ontology ID corresponding to the cell type name
+  ontology_id <- names(ontology$name)[ontology$name == cell_type_name]
+
+  if (length(ontology_id) > 0) {
+    return(ontology_id)
+  } else {
+    return(NA) # Return NA if the cell type name is not found
+  }
+}
+get_cell_type_name <- function(ontology_id, ontology = cl) {
+  # Check if the ontology ID exists
+  if (ontology_id %in% names(ontology$name)) {
+    return(ontology$name[[ontology_id]])
+  } else {
+    return(NA) # Return NA if the ontology ID is not found
+  }
+}
 
 celltype_conversion_long <- read_tsv("/bigdata/almogangel/xCell2_data/dev_data/celltype_conversion_with_ontology.txt") %>%
   rowwise() %>%
@@ -36,6 +80,7 @@ ts_labels.nested <- tibble(ts_labels) %>%
   nest() %>%
   rowwise() %>%
   mutate(n_celltypes = length(unique(data$label)),
+         n_cells = nrow(data),
          celltypes = list(unique(data$label)))
 
 # data = ts_labels.nested[3,]$data[[1]]
@@ -43,7 +88,7 @@ ts_labels.nested <- tibble(ts_labels) %>%
 makeRef <- function(data, tissue, ts_ref){
   print(tissue)
 
-  xCell2GetLineage(data, out_file = paste0("/bigdata/almogangel/xCell2_data/dev_data/ts_", tissue, "_dependencies.tsv"))
+  xCell2GetLineage(data, out_file = paste0("/bigdata/almogangel/xCell2_data/references/human/ts/ts_", tissue, "_dependencies.tsv"))
   # View(read.table(paste0("/bigdata/almogangel/xCell2_data/dev_data/ts_", tissue, "_dependencies.tsv"), sep = "\t", header = TRUE))
 
   ref_tmp <- ts_ref[,data$sample]
@@ -354,6 +399,156 @@ sc_melanoma_cancer_ref <- list(ref = ref.mat,
                                lineage_file = "/bigdata/almogangel/xCell2_data/dev_data/sc_melanoma_dependencies.tsv")
 saveRDS(sc_melanoma_cancer_ref, "/bigdata/almogangel/xCell2_data/benchmarking_data/references/sc_melanoma_ref.rds")
 
+###### MCA - blood -----------
+
+
+load("/bigdata/almogangel/xCell2_data/mouse/MCDAA.rdata")
+mca_labels <- read_csv("/bigdata/almogangel/xCell2_data/mouse/MCDAA_cellinfo.csv") %>%
+  select(barcodes, cell_type)
+colnames(mca_labels) <- c("sample", "label")
+
+mca_blood_labels <- mca_labels[mca_labels$sample %in% rownames(data@meta.data[data@meta.data$tissue %in% c("PeripheralBlood", "Spleen", "BoneMarrow", "Thymus"),]),]
+mca_blood_ref <- data[,mca_blood_labels$sample]
+
+all(colnames(mca_blood_ref) == mca_blood_labels$sample)
+
+mca_blood_labels$dataset <- "MCA"
+
+
+mca_blood_labels <- as_tibble(mca_blood_labels) %>%
+  rowwise() %>%
+  mutate(label = plyr::mapvalues(label, from = celltype_conversion_long$all_labels, to = celltype_conversion_long$xCell2_labels, warn_missing = FALSE))
+
+ct2use <- sort(table(mca_blood_labels$label), decreasing = T)
+ct2use <- names(ct2use[ct2use > 1000])
+
+mca_blood_labels <- mca_blood_labels %>%
+  filter(label %in% ct2use)
+
+table(mca_blood_labels$label)
+
+mca_blood_labels[mca_blood_labels$label == "Erythroblast", ]$label <- "erythroblast"
+mca_blood_labels[mca_blood_labels$label == "Erythroid cell", ]$label <- "erythrocyte"
+
+
+mca_blood_labels <- mca_blood_labels %>%
+  rowwise() %>%
+  mutate(ont = get_ontology_id(label))
+
+
+# Remove cells with low/high counts
+n_genes <- colSums(mca_blood_ref)
+median(n_genes)
+plot(sort(n_genes))
+plot(sort(n_genes[which(n_genes <= 3000)]))
+plot(sort(n_genes))
+
+table(mca_blood_labels[mca_blood_labels$sample %in% names(n_genes[which(n_genes <= 2000 & n_genes >= 1000)]),]$label)
+cells2use <- names(n_genes[which(n_genes <= 2000 &  n_genes >= 1000)])
+median(n_genes[cells2use])
+
+
+mca_blood_labels <- mca_blood_labels[mca_blood_labels$sample %in% cells2use,]
+mca_blood_ref <- mca_blood_ref[,mca_blood_labels$sample ]
+all(colnames(mca_blood_ref) == mca_blood_labels$sample)
+
+
+# Subset cells
+set.seed(123)
+
+mca_blood_labels <- tibble(mca_blood_labels) %>%
+  group_by(label) %>%
+  sample_n(min(500, n())) %>%
+  select(ont, label, sample, dataset) %>%
+  ungroup()
+
+table(mca_blood_labels$label)
+
+
+xCell2GetLineage(mca_blood_labels, out_file = "/bigdata/almogangel/xCell2_data/dev_data/mca_blood_dependencies.tsv")
+
+read_tsv("/bigdata/almogangel/xCell2_data/dev_data/mca_blood_dependencies.tsv")
+
+mca_blood_ref <- data@assays$RNA@counts[,mca_blood_labels$sample]
+
+all(colnames(mca_blood_ref) == mca_blood_labels$sample)
+
+mca_blood_ref <- mca_blood_ref[rowSums(mca_blood_ref) != 0,]
+
+
+
+mca_blood_ref <- list(ref = mca_blood_ref,
+                labels = as.data.frame(mca_blood_labels),
+                lineage_file = "/bigdata/almogangel/xCell2_data/dev_data/mca_blood_dependencies.tsv")
+
+
+saveRDS(mca_blood_ref, "/bigdata/almogangel/xCell2_data/dev_data/mca_blood_ref.rds")
+
+
+# library(ExperimentHub)
+# library(SingleCellExperiment)
+#
+#
+# eh <- ExperimentHub()
+# query(eh, "TabulaMurisData")
+#
+# tm.droplet <- eh[["EH1617"]]
+# # tm.ss2 <- eh[["EH1618"]]
+# # tm.droplet <- tm.ss2
+#
+# tm_ref <- tm.droplet@assays@data$counts
+#
+# tm_labels <- as_tibble(tm.droplet@colData) %>%
+#   select(ont = cell_ontology_id, label = cell_ontology_class, sample = cell, dataset = mouse_id, tissue = tissue) %>%
+#   drop_na()
+#
+# tm_ref <- tm_ref[,tm_labels$sample]
+#
+# all(colnames(tm_ref) == tm_labels$sample)
+#
+#
+#
+#
+# # Subset blood related samples
+# ts_labels <- ts_labels[ts_labels$tissue %in% c("blood", "lymph node", "Spleen", "Thymus", "Marrow", "inguinal lymph node"),]
+#
+#
+# # Use only shared cell types
+# shared <- intersect(val_celltypes, ts_labels$label)
+#
+# # Use only cell type with at least 200 cells
+# shared <- names(which(sort(table(ts_labels[ts_labels$label %in% shared,]$label), decreasing = T) > 200))
+#
+# # Subset cells
+# set.seed(123)
+#
+# ts_labels_blood <- tibble(ts_labels) %>%
+#   filter(label %in% shared) %>%
+#   group_by(label, dataset) %>%
+#   sample_n(min(200, n())) %>%
+#   select(-tissue) %>%
+#   ungroup() %>%
+#   mutate(ont = as.character(ont),
+#          label = as.character(label),
+#          dataset = as.character(dataset))
+#
+# labels <- data.frame(ts_labels_blood)
+# ref <- ts_ref[,labels$sample]
+# ref <- ref[Matrix::rowSums(ref) > 0,]
+#
+#
+# xCell2GetLineage(labels = labels, out_file = "/bigdata/almogangel/xCell2_data/dev_data/ts_human_blood_dependencies.tsv")
+#
+# View(read.table("/bigdata/almogangel/xCell2_data/dev_data/ts_human_blood_dependencies.tsv", sep = "\t", header = TRUE))
+#
+# ts_blood_ref <- list(ref = ref,
+#                      labels = labels,
+#                      lineage_file = "/bigdata/almogangel/xCell2_data/dev_data/ts_human_blood_dependencies.tsv")
+# saveRDS(ts_blood_ref, "/bigdata/almogangel/xCell2_data/benchmarking_data/references/ts_blood_ref.rds")
+
+
+
+
 ########################  Bulk RNA-seq sorted cells references ---------------------------------------
 ############# Human ---------------------------------------
 # Tumor ref (Kassandra) ----
@@ -581,6 +776,99 @@ all(colnames(ref) == labels$sample)
 
 saveRDS(labels, "/bigdata/almogangel/xCell2/dev_data/sref_blood_labels_bulk.rds")
 saveRDS(ref, "/bigdata/almogangel/xCell2/dev_data/sref_blood_data_bulk.rds")
+
+
+
+############# Mouse ---------------------------------------
+# ImmGenData ----
+
+igd <- celldex::ImmGenData()
+
+igd_ref <- as.matrix(igd@assays@data$logcounts)
+
+# Anti log2 data
+igd_ref <- 2^igd_ref
+igd_ref <- igd_ref-1
+
+igd_labels <- igd@colData
+
+
+# igd_labels <- as_tibble(igd_labels) %>%
+#   rowwise() %>%
+#   mutate(ont.label = get_cell_type_name(label.ont))
+
+
+igd_labels <- igd_labels %>%
+  as_tibble() %>%
+  dplyr::rename("ont" = "label.ont") %>%
+  rowwise() %>%
+  mutate(label = plyr::mapvalues(label.main, from = celltype_conversion_long$all_labels, to = celltype_conversion_long$xCell2_labels, warn_missing = FALSE)) %>%
+  ungroup() %>%
+  mutate(sample = rownames(igd_labels),
+         dataset = "ImmGenData") %>%
+  select(ont, label, sample, dataset)
+
+all(colnames(igd_ref) == igd_labels$sample)
+
+
+igd_labels_fine <- igd@colData
+igd_labels_fine <- igd_labels_fine %>%
+  as_tibble() %>%
+  dplyr::rename("ont" = "label.ont") %>%
+  rowwise() %>%
+  mutate(label = plyr::mapvalues(label.fine, from = celltype_conversion_long$all_labels, to = celltype_conversion_long$xCell2_labels, warn_missing = FALSE)) %>%
+  ungroup() %>%
+  mutate(sample = rownames(igd_labels_fine),
+         dataset = "ImmGenData") %>%
+  select(ont, label, sample, dataset)
+igd_labels_fine[grepl("CD4", igd_labels_fine$label),]$label <- "CD4-positive, alpha-beta T cell"
+igd_labels_fine[grepl("CD8", igd_labels_fine$label),]$label <- "CD8-positive, alpha-beta T cell"
+
+samples2dup <- igd_labels_fine[igd_labels_fine$label %in% c("CD4-positive, alpha-beta T cell", "CD8-positive, alpha-beta T cell"),]$sample
+labels_dup <- igd_labels_fine[igd_labels_fine$sample %in% samples2dup,]
+
+
+
+igd_ref_dup <- igd_ref[,labels_dup$sample]
+labels_dup$sample <- paste0(labels_dup$sample, "_dup")
+
+colnames(igd_ref_dup) <- labels_dup$sample
+
+igd_ref <- cbind(igd_ref, igd_ref_dup)
+igd_labels <- rbind(igd_labels, labels_dup)
+
+all(colnames(igd_ref) == igd_labels$sample)
+
+igd_labels <- igd_labels %>%
+  rowwise() %>%
+  mutate(ont = get_ontology_id(label))
+
+igd_labels <- igd_labels %>%
+  drop_na()
+
+igd_ref <- igd_ref[,igd_labels$sample]
+all(colnames(igd_ref) == igd_labels$sample)
+
+
+igd_labels <- igd_labels[igd_labels$label != "pro-B cell",]
+igd_ref <- igd_ref[,igd_labels$sample]
+all(colnames(igd_ref) == igd_labels$sample)
+
+igd_labels <- as.data.frame(igd_labels)
+
+xCell2GetLineage(igd_labels, out_file = "/bigdata/almogangel/xCell2_data/dev_data/igd_dependencies.tsv")
+dep_list <- getDependencies("/bigdata/almogangel/xCell2_data/dev_data/igd_dependencies.tsv")
+
+x <- read_tsv("/bigdata/almogangel/xCell2_data/dev_data/igd_dependencies.tsv")
+x
+
+
+igd_ref <- list(ref = as.matrix(igd_ref),
+               labels = as.data.frame(igd_labels),
+               lineage_file = "/bigdata/almogangel/xCell2_data/dev_data/igd_dependencies.tsv")
+saveRDS(igd_ref, "/bigdata/almogangel/xCell2_data/dev_data/igd_ref.rds")
+
+
 
 
 

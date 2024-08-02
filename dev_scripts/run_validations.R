@@ -52,10 +52,10 @@ celltype_conversion <- read_tsv("/bigdata/almogangel/xCell2_data/dev_data/cellty
   mutate(all_labels = str_split(all_labels, ";")) %>%
   unnest(cols = c(all_labels))
 
-# Method functions
+# Method functions ----------------
 
 # Run CIBERSORTx
-getCIBERSORTxRes <- function(ref_val_table, vals, celltype_conversion){
+getCIBERSORTxRes <- function(ref_val_table, vals, celltype_conversion, res_file){
 
 
   runCIBERSORTx <- function(vals, valType, valName, refName, refType, celltypes2use, dir = "/bigdata/almogangel/CIBERSORTx_docker", suffix = "8jan"){
@@ -91,7 +91,7 @@ getCIBERSORTxRes <- function(ref_val_table, vals, celltype_conversion){
 
       # CIBERSORTx work on non-log space
       if(max(mix) < 50){
-        mix <- (2^mix)+1
+        mix <- (2^mix)-1
       }
 
       mix_tmp <- cbind("genes" = rownames(mix), mix)
@@ -205,6 +205,7 @@ getCIBERSORTxRes <- function(ref_val_table, vals, celltype_conversion){
   # valType = x[i,]$val_type[[1]]; valName = x[i,]$val_dataset[[1]]; refName = x[i,]$ref_name[[1]]; refType = x[i,]$ref_type[[1]]; celltypes2use = x[i,]$celltype_classes[[1]]
 
 
+
 # Run CIBERSORTx
   vals.refs.res <- ref_val_table %>%
     rowwise() %>%
@@ -243,7 +244,7 @@ getEPICRes <- function(ref_val_table, vals, celltype_conversion){
       }
 
       if(max(ref.raw) < 50){
-        ref.raw <- (2^ref.raw)+1
+        ref.raw <- (2^ref.raw)-1
       }
 
 
@@ -274,7 +275,7 @@ getEPICRes <- function(ref_val_table, vals, celltype_conversion){
 
     # EPIC does not recommend log space
     if(max(mix) < 50){
-      mix <- (2^mix)+1
+      mix <- (2^mix)-1
     }
 
 
@@ -376,7 +377,7 @@ getBayesPrismRes <- function(ref_val_table, vals, celltype_conversion){
 
       # BayesPrism does not recommend log-space data
       if(max(ref.raw) < 50){
-        ref.raw <- (2^ref.raw)+1
+        ref.raw <- (2^ref.raw)-1
       }
 
       type <- ifelse(refType == "sc", "count.matrix", "GEP")
@@ -453,7 +454,7 @@ getBayesPrismRes <- function(ref_val_table, vals, celltype_conversion){
 
     # BayesPrism does not recommend log-space data
     if(max(mix) < 50){
-      mix <- (2^mix)+1
+      mix <- (2^mix)-1
     }
 
 
@@ -743,7 +744,7 @@ getDeconRNASeqRes <- function(ref_val_table, vals, celltype_conversion){
       sigmat <- sigmat[,cell_types]
 
       if(max(sigmat) < 50){
-        sigmat <- (2^sigmat)+1
+        sigmat <- (2^sigmat)-1
       }
 
       # Run DeconRNASeq
@@ -761,7 +762,7 @@ getDeconRNASeqRes <- function(ref_val_table, vals, celltype_conversion){
 
     # DeconRNASeq recommended not in log space
     if(max(mix) < 50){
-      mix <- (2^mix)+1
+      mix <- (2^mix)-1
     }
 
 
@@ -870,7 +871,7 @@ getquanTIseqRes <- function(ref_val_table, vals, celltype_conversion){
 
 
       if(max(sigmat) < 50){
-        sigmat <- (2^sigmat)+1
+        sigmat <- (2^sigmat)-1
       }
 
       # Run quanTIseq
@@ -885,7 +886,7 @@ getquanTIseqRes <- function(ref_val_table, vals, celltype_conversion){
     mix <- vals$mixtures[[valType]][[valName]]
 
     if(max(mix) < 50){
-      mix <- (2^mix)+1
+      mix <- (2^mix)-1
     }
 
     results_file <- paste0("/bigdata/almogangel/xCell2_data/benchmarking_data/other_methods/quanTIseq#", valName, "#", refName, "#", suffix, ".rds")
@@ -977,7 +978,7 @@ getquanTIseqRes <- function(ref_val_table, vals, celltype_conversion){
 # Run cytometry/other validations -----------------------
 
 print("Running CIBERSORTx...")
-cbrx.cyto.res <- getCIBERSORTxRes(ref_val_table = refval.tbl, vals = cyto.vals, celltype_conversion)
+cbrx.cyto.res <- getCIBERSORTxRes(ref_val_table = refval.tbl, vals = cyto.vals, celltype_conversion, res_file = cbr_xres_file)
 saveRDS(cbrx.cyto.res, "/bigdata/almogangel/xCell2_data/benchmarking_data/results/correlations/cbrx.cyto.res.rds")
 
 print("Running EPIC...")
@@ -1000,9 +1001,321 @@ print("Running DeconRNASeq")
 decon.cyto.res <- getDeconRNASeqRes(ref_val_table = refval.tbl, vals = cyto.vals, celltype_conversion)
 saveRDS(decon.cyto.res, "/bigdata/almogangel/xCell2_data/benchmarking_data/results/correlations/decon.cyto.res.rds")
 
-print("Running quanTIseq")
-quanti.cyto.res <- getquanTIseqRes(ref_val_table = refval.tbl, vals = cyto.vals, celltype_conversion)
-saveRDS(quanti.cyto.res, "/bigdata/almogangel/xCell2_data/benchmarking_data/results/correlations/quanti.cyto.res.rds")
+# print("Running quanTIseq")
+# quanti.cyto.res <- getquanTIseqRes(ref_val_table = refval.tbl, vals = cyto.vals, celltype_conversion)
+# saveRDS(quanti.cyto.res, "/bigdata/almogangel/xCell2_data/benchmarking_data/results/correlations/quanti.cyto.res.rds")
+
+# omnideconv ---------------------------
+library(omnideconv)
+
+
+refsRDSList <- lapply(refList, function(ref_type){
+  refs <- lapply(ref_type, function(ref){
+    # Load reference
+    ref.in <- readRDS(paste0("/bigdata/almogangel/xCell2_data/benchmarking_data/references/", ref, "_ref.rds"))
+    ref.in
+  })
+  names(refs) <- ref_type
+  refs
+})
+
+
+i <- 2
+ref_name = refval.tbl$ref_name[i]
+ref_type = refval.tbl$ref_type[i]
+val_dataset = refval.tbl$val_dataset[i]
+val_type = refval.tbl$val_type[i]
+celltypes2use = refval.tbl$shared_celltypes[[i]]
+
+ref.in <- refsRDSList[[ref_type]][[ref_name]]$ref
+mix.in <- cyto.vals$mixtures[[val_type]][[val_dataset]]
+labels.in <- refsRDSList[[ref_type]][[ref_name]]$labels$label
+ds.in <- refsRDSList[[ref_type]][[ref_name]]$labels$dataset
+
+# Bisque
+getBisqueRes <- function(ref_name, ref_type, val_dataset, val_type, celltypes2use){
+
+  ref.in <- refsRDSList[[ref_type]][[ref_name]]$ref
+  mix.in <- cyto.vals$mixtures[[val_type]][[val_dataset]]
+  labels.in <- refsRDSList[[ref_type]][[ref_name]]$labels$label
+  ds.in <- refsRDSList[[ref_type]][[ref_name]]$labels$dataset
+
+  if (length(unique(ds.in)) == 1) {
+    ds.in[sample(1:length(ds.in), round(length(ds.in)/2))] <- paste0(unique(ds.in), "_2")
+  }
+
+  bisque.out <- omnideconv::deconvolute_bisque(single_cell_object = as.matrix(ref.in),
+                                               bulk_gene_expression = mix.in,
+                                               cell_type_annotations = labels.in,
+                                               batch_ids = ds.in
+  )
+  return(bisque.out$bulk.props[celltypes2use,])
+}
+
+bisque.cyto.res <- refval.tbl %>%
+  rowwise() %>%
+  mutate(res = list(getBisqueRes(ref_name, ref_type, val_dataset, val_type, shared_celltypes)))
+
+saveRDS(bisque.cyto.res, "/bigdata/almogangel/xCell2_data/benchmarking_data/results/correlations/bisque.cyto.res.rds")
+
+
+# DWLS
+getDWLSRes <- function(ref_name, ref_type, val_dataset, val_type, celltypes2use){
+
+  mix.in <- cyto.vals$mixtures[[val_type]][[val_dataset]]
+  dwls.sigmat <- read.csv(paste0("/bigdata/almogangel/CIBERSORTx_docker/", ref_name, "_sigmat.txt"), sep = "\t", header = T, check.names = F, row.names = 1)
+
+  genes <- intersect(rownames(dwls.sigmat), rownames(mix.in))
+  mix.in <- mix.in[genes, , drop = FALSE]
+  dwls.sigmat <- dwls.sigmat[genes, , drop = FALSE]
+
+  solutions_ols <- parallel::mclapply(1:ncol(mix.in), function(i){
+    mix.in_i <- mix.in[, i]
+    DWLS::solveSVR(as.matrix(dwls.sigmat), mix.in_i)
+
+  }, mc.cores = 20)
+  names(solutions_ols) <- colnames(mix.in)
+  dwls.out <- do.call(cbind, solutions_ols)
+
+  return(dwls.out[celltypes2use,])
+}
+
+dwlr.cyto.res <- refval.tbl %>%
+  rowwise() %>%
+  mutate(res = list(getDWLSRes(ref_name, ref_type, val_dataset, val_type, shared_celltypes)))
+
+saveRDS(dwlr.cyto.res, "/bigdata/almogangel/xCell2_data/benchmarking_data/results/correlations/dwlr.cyto.res.rds")
+
+
+# SCDC
+getSCDCRes <- function(ref_name, ref_type, val_dataset, val_type, celltypes2use){
+
+  ref.in <- refsRDSList[[ref_type]][[ref_name]]$ref
+  mix.in <- cyto.vals$mixtures[[val_type]][[val_dataset]]
+  labels.in <- refsRDSList[[ref_type]][[ref_name]]$labels$label
+  ds.in <- refsRDSList[[ref_type]][[ref_name]]$labels$dataset
+
+  scdc.out <- omnideconv::deconvolute_scdc(single_cell_object = as.matrix(ref.in),
+                                           bulk_gene_expression = mix.in,
+                                           cell_type_annotations = labels.in,
+                                           batch_ids = ds.in
+  )
+
+
+  return(t(scdc.out$prop.est.mvw[,celltypes2use]))
+}
+
+scdc.cyto.res <- refval.tbl %>%
+  rowwise() %>%
+  mutate(res = list(getSCDCRes(ref_name, ref_type, val_dataset, val_type, shared_celltypes)))
+
+saveRDS(scdc.cyto.res, "/bigdata/almogangel/xCell2_data/benchmarking_data/results/correlations/scdc.cyto.res.rds")
+
+
+# Scaden
+getScadenRes <- function(ref_name, ref_type, val_dataset, val_type, celltypes2use){
+
+  ref.in <- refsRDSList[[ref_type]][[ref_name]]$ref
+  mix.in <- cyto.vals$mixtures[[val_type]][[val_dataset]]
+  labels.in <- refsRDSList[[ref_type]][[ref_name]]$labels$label
+  ds.in <- refsRDSList[[ref_type]][[ref_name]]$labels$dataset
+
+  labels_tmp <- gsub("[^[:alnum:]]+", ".", labels.in)
+
+  model_dir <- paste0("/bigdata/almogangel/scaden/", ref_name, "_", val_dataset)
+
+  if (!dir.exists(model_dir)) {
+    dir.create(model_dir)
+  }
+  scaden.model <- omnideconv::build_model_scaden(single_cell_object = as.matrix(ref.in),
+                                                 bulk_gene_expression = mix.in,
+                                                 cell_type_annotations = labels_tmp,
+                                                 model_path = model_dir)
+
+
+  scaden.out <- omnideconv::deconvolute_scaden(
+    scaden.model,
+    bulk_gene_expression = as.matrix(mix.in),
+    temp_dir = NULL,
+    verbose = FALSE
+  )
+
+
+  find_closest_match <- function(source_vec, target_vec) {
+    dist_matrix <- stringdist::stringdistmatrix(source_vec, target_vec, method = "jw")
+    closest_match_indices <- apply(dist_matrix, 1, which.min)
+    closest_matches <- target_vec[closest_match_indices]
+    return(closest_matches)
+  }
+  colnames(scaden.out) <- find_closest_match(colnames(scaden.out), unique(labels.in))
+  scaden.out <- t(scaden.out)
+
+
+  return(scaden.out[celltypes2use,])
+}
+
+scaden.cyto.res <- refval.tbl %>%
+  rowwise() %>%
+  mutate(res = list(getScadenRes(ref_name, ref_type, val_dataset, val_type, shared_celltypes)))
+
+saveRDS(scaden.cyto.res, "/bigdata/almogangel/xCell2_data/benchmarking_data/results/correlations/scaden.cyto.res.rds")
+
+
+# AutoGeneS
+getAutoGeneSRes <- function(ref_name, ref_type, val_dataset, val_type, celltypes2use){
+
+  ref.in <- refsRDSList[[ref_type]][[ref_name]]$ref
+  mix.in <- cyto.vals$mixtures[[val_type]][[val_dataset]]
+  labels.in <- refsRDSList[[ref_type]][[ref_name]]$labels$label
+  ds.in <- refsRDSList[[ref_type]][[ref_name]]$labels$dataset
+
+  autogenes.out <- deconvolute_autogenes(single_cell_object = ref.in,
+                                         bulk_gene_expression = mix.in,
+                                         cell_type_annotations = labels.in
+  )
+  autogenes.out <- t(autogenes.out$proportions)
+
+  return(autogenes.out[,celltypes2use])
+}
+
+auto.cyto.res <- refval.tbl %>%
+  rowwise() %>%
+  mutate(res = list(getAutoGeneSRes(ref_name, ref_type, val_dataset, val_type, shared_celltypes)))
+
+saveRDS(auto.cyto.res, "/bigdata/almogangel/xCell2_data/benchmarking_data/results/correlations/auto.cyto.res.rds")
+
+
+
+
+
+bulk_eset <- Biobase::ExpressionSet(assayData = mix.in)
+bulk.gene = rownames(bulk_eset)[rowMeans(bulk_eset) != 0]
+
+music.out <- omnideconv::deconvolute_music(single_cell_object = as.matrix(ref.in),
+                                             bulk_gene_expression = mix.in,
+                                             cell_type_annotations = labels.in,
+                                             batch_ids = ds.in
+)
+
+# MuSiC
+getMuSiCRes <- function(ref_name, ref_type, val_dataset, val_type, celltypes2use){
+
+  ref.in <- refsRDSList[[ref_type]][[ref_name]]$ref
+  mix.in <- cyto.vals$mixtures[[val_type]][[val_dataset]]
+  labels.in <- refsRDSList[[ref_type]][[ref_name]]$labels$label
+  ds.in <- refsRDSList[[ref_type]][[ref_name]]$labels$dataset
+
+  index2use <- labels.in %in% names(which(table(labels.in) == 1))
+
+  single_sample_cts_ref <- ref.in[,index2use]
+  colnames(single_sample_cts_ref) <- paste0(colnames(single_sample_cts_ref), "_2")
+  ref.in <- cbind(ref.in, single_sample_cts_ref)
+  ds.in <- c(ds.in, ds.in[index2use])
+  labels.in <- c(labels.in, labels.in[index2use])
+
+  if (length(unique(ds.in)) == 1) {
+
+    # Identify unique strings
+    unique_strings <- unique(labels.in)
+
+    # Initialize a vector to store group numbers
+    group_vec <- character(length(labels.in))
+
+    # Loop over each unique string
+    for (string in unique_strings) {
+      # Get all indices of the current string
+      indices <- which(labels.in == string)
+
+      # Shuffle the indices
+      shuffled_indices <- sample(indices)
+
+      # Split the indices into two parts
+      half_length <- ceiling(length(shuffled_indices) / 2)
+      group1_indices <- shuffled_indices[1:half_length]
+      group2_indices <- shuffled_indices[(half_length + 1):length(shuffled_indices)]
+
+      # Assign group numbers
+      group_vec[group1_indices] <- "1"
+      group_vec[group2_indices] <- "2"
+
+      # Ensure at least one representation in each group for strings with single copies
+      if (length(indices) == 1) {
+        if (runif(1) < 0.5) {
+          group_vec[indices] <- "1"
+        } else {
+          group_vec[indices] <- "2"
+        }
+      }
+    }
+
+  }
+  ds.in <- paste0(ds.in, "_", group_vec)
+
+  get_single_cell_expression_set <- function(single_cell_matrix, batch_ids, genes, cell_types) {
+    # individual.ids and cell.types should be in the same order as in sampleNames
+    sc_pheno <- data.frame(
+      check.names = FALSE, check.rows = FALSE,
+      stringsAsFactors = FALSE,
+      row.names = colnames(single_cell_matrix),
+      batchId = batch_ids,
+      cellType = cell_types
+    )
+    sc_meta <- data.frame(
+      labelDescription = c(
+        "batchId",
+        "cellType"
+      ),
+      row.names = c(
+        "batchId",
+        "cellType"
+      )
+    )
+    sc_pdata <- methods::new("AnnotatedDataFrame",
+                             data = sc_pheno,
+                             varMetadata = sc_meta
+    )
+    colnames(single_cell_matrix) <- row.names(sc_pdata)
+    rownames(single_cell_matrix) <- genes
+    return(Biobase::ExpressionSet(
+      assayData = single_cell_matrix,
+      phenoData = sc_pdata
+    ))
+  }
+  sc_eset <- get_single_cell_expression_set(as.matrix(ref.in),
+                                            ds.in, rownames(ref.in), labels.in)
+  exprs_data <- exprs(sc_eset)
+  pheno_data <- pData(sc_eset)
+  feature_data <- fData(sc_eset)
+  sce <- SingleCellExperiment::SingleCellExperiment(
+    assays = list(counts = exprs_data),
+    colData = pheno_data,
+    rowData = feature_data
+  )
+
+  library(SingleCellExperiment)
+  music.out <- MuSiC::music_prop(mix.in, sce,
+                                 markers = NULL, clusters = "cellType", samples = "batchId",
+                                 select_ct = NULL, cell_size = NULL, ct_cov = FALSE, verbose = FALSE,
+                                 iter_max = 1000, nu = 1e-04, eps = 0.01, centered = FALSE, normalize = FALSE)
+
+  music.out <- t(music.out$Est.prop.weighted)
+
+
+  return(music.out[celltypes2use,])
+}
+
+music.cyto.res <- refval.tbl %>%
+  rowwise() %>%
+  mutate(res = list(getMuSiCRes(ref_name, ref_type, val_dataset, val_type, shared_celltypes)))
+
+saveRDS(music.cyto.res, "/bigdata/almogangel/xCell2_data/benchmarking_data/results/correlations/music.cyto.res.rds")
+
+
+
+
+
+
+
 
 
 

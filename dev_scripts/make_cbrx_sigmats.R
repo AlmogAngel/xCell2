@@ -55,7 +55,7 @@ makeCIBERSORTxSigMat <- function(ref, labels, lineage_file, refName, single_cell
 
 
   # Run CIBERSORTx
-  token <- "b72da36961922443b75a1b65beef27c0"
+  token <- readLines("/bigdata/almogangel/xCell2_data/CIBERSORTx_token.txt", n = 1)
 
   # Make results directory
   results_dir <- paste0(dir, "/results")
@@ -142,3 +142,17 @@ for (ref_file in ts_refs_files) {
   makeCIBERSORTxSigMat(ref = ts_ref_in$ref, labels = ts_ref_in$labels, lineage_file = ts_ref_in$lineage_file, refName = ref_name, single_cell = TRUE, QN = FALSE)
 }
 
+# IGD references
+
+
+igd_ref <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/references/igd_ref.rds")
+makeCIBERSORTxSigMat(ref = igd_ref$ref, labels = igd_ref$labels, lineage_file = igd_ref$lineage_file, refName = "igd", single_cell = FALSE, QN = FALSE)
+print("Done")
+
+
+# MCA-Blood references
+
+
+mca_blood_ref <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/references/mca_blood_ref.rds")
+makeCIBERSORTxSigMat(ref = mca_blood_ref$ref, labels = mca_blood_ref$labels, lineage_file = mca_blood_ref$lineage_file, refName = "mca_blood", single_cell = TRUE, QN = FALSE)
+print("Done")
