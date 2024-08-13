@@ -6,21 +6,36 @@ celltype_conversion <- read_tsv("celltype_conversion_with_ontology.txt") %>%
   unnest(cols = c(all_labels))
 
 # petitprez
-load("/bigdata/almogangel/xCell2_data/mouse/dataset_petitprez.rda")
-dataset_petitprez.exp <- as.matrix(dataset_petitprez$expr_mat)
-dataset_petitprez.exp <- cbind("Gene" = rownames(dataset_petitprez.exp), dataset_petitprez.exp)
-write.table(dataset_petitprez.exp, "/bigdata/almogangel/kassandra_data/24_validation_datasets/expressions/mouse/petitprez_expressions.tsv", sep = "\t", quote = FALSE, col.names = TRUE, row.names = FALSE)
+petitprez.exp <- readRDS("/bigdata/almogangel/xCell2_data/mouse/petitprez/petitprez_tpm.rds")
+petitprez.exp <- as.matrix(petitprez.exp)
+petitprez.exp <- cbind("Gene" = rownames(petitprez.exp), petitprez.exp)
+write.table(petitprez.exp, "/bigdata/almogangel/kassandra_data/24_validation_datasets/expressions/mouse/petitprez_expressions.tsv", sep = "\t", quote = FALSE, col.names = TRUE, row.names = FALSE)
 
-dataset_petitprez.truth <- as.matrix(dataset_petitprez$ref)
-dataset_petitprez.truth <- t(dataset_petitprez.truth)
-colnames(dataset_petitprez.truth) <- dataset_petitprez.truth[1,]
-dataset_petitprez.truth <- dataset_petitprez.truth[-1,]
-celltype <- rownames(dataset_petitprez.truth)
+petitprez.truth <- readRDS("/bigdata/almogangel/xCell2_data/mouse/petitprez/petitprez_facs.rds")
+celltype <- rownames(petitprez.truth)
 celltype <- plyr::mapvalues(celltype, celltype_conversion$all_labels, celltype_conversion$xCell2_labels, warn_missing = FALSE)
-dataset_petitprez.truth <- as.matrix(apply(dataset_petitprez.truth, 2, as.numeric))
-rownames(dataset_petitprez.truth) <- celltype
-dataset_petitprez.truth <- dataset_petitprez.truth[rownames(dataset_petitprez.truth) != "Macrophage/Monocyte",]
-write.table(dataset_petitprez.truth, "//bigdata/almogangel/kassandra_data/24_validation_datasets/cell_values/mouse/petitprez.tsv", sep = "\t", quote = FALSE, col.names = TRUE, row.names = TRUE)
+celltype[celltype  == "MAST cells"] <- "mast cell"
+petitprez.truth <- as.matrix(apply(petitprez.truth, 2, as.numeric))
+rownames(petitprez.truth) <- celltype
+petitprez.truth <- petitprez.truth[!rownames(petitprez.truth) %in% c("Monocytes/Macrophages", "NK/T cells", "B derived cells", "B cells germinal"),]
+write.table(petitprez.truth, "/bigdata/almogangel/kassandra_data/24_validation_datasets/cell_values/mouse/petitprez.tsv", sep = "\t", quote = FALSE, col.names = TRUE, row.names = TRUE)
+
+
+# load("/bigdata/almogangel/xCell2_data/mouse/dataset_petitprez.rda")
+# dataset_petitprez.exp <- as.matrix(dataset_petitprez$expr_mat)
+# dataset_petitprez.exp <- cbind("Gene" = rownames(dataset_petitprez.exp), dataset_petitprez.exp)
+# write.table(dataset_petitprez.exp, "/bigdata/almogangel/kassandra_data/24_validation_datasets/expressions/mouse/petitprez_expressions.tsv", sep = "\t", quote = FALSE, col.names = TRUE, row.names = FALSE)
+
+# dataset_petitprez.truth <- as.matrix(dataset_petitprez$ref)
+# dataset_petitprez.truth <- t(dataset_petitprez.truth)
+# colnames(dataset_petitprez.truth) <- dataset_petitprez.truth[1,]
+# dataset_petitprez.truth <- dataset_petitprez.truth[-1,]
+# celltype <- rownames(dataset_petitprez.truth)
+# celltype <- plyr::mapvalues(celltype, celltype_conversion$all_labels, celltype_conversion$xCell2_labels, warn_missing = FALSE)
+# dataset_petitprez.truth <- as.matrix(apply(dataset_petitprez.truth, 2, as.numeric))
+# rownames(dataset_petitprez.truth) <- celltype
+# dataset_petitprez.truth <- dataset_petitprez.truth[rownames(dataset_petitprez.truth) != "Macrophage/Monocyte",]
+# write.table(dataset_petitprez.truth, "//bigdata/almogangel/kassandra_data/24_validation_datasets/cell_values/mouse/petitprez.tsv", sep = "\t", quote = FALSE, col.names = TRUE, row.names = TRUE)
 
 # chen
 chen.exp <- readRDS("/bigdata/almogangel/xCell2_data/mouse/chen/chen_tpm.rds")

@@ -4,6 +4,7 @@ library(BayesPrism)
 library(MCPcounter)
 library(dtangle)
 library(DeconRNASeq)
+library(omnideconv)
 
 
 getDependencies <- function(lineage_file_checked){
@@ -659,4 +660,102 @@ runDeconRNASeq <- function(mix, mixType, mixName, refName, refType, dir = "/bigd
 
 }
 
+runBisqueRes <- function(mix, refName){
 
+  ref <- readRDS(paste0("/bigdata/almogangel/xCell2_data/benchmarking_data/references/", refName, "_ref.rds"))
+
+  ref.in <- ref$ref
+  labels.in <- ref$labels$label
+  ds.in <- ref$labels$dataset
+
+  if (length(unique(ds.in)) == 1) {
+    ds.in[sample(1:length(ds.in), round(length(ds.in)/2))] <- paste0(unique(ds.in), "_2")
+  }
+
+  bisque.out <- omnideconv::deconvolute_bisque(single_cell_object = as.matrix(ref.in),
+                                               bulk_gene_expression = as.matrix(mix),
+                                               cell_type_annotations = labels.in,
+                                               batch_ids = ds.in
+  )
+  return(bisque.out$bulk.props)
+}
+
+runDWLSRes <- function(mix, refName){
+
+  dwls.sigmat <- read.csv(paste0("/bigdata/almogangel/CIBERSORTx_docker/", refName, "_sigmat.txt"), sep = "\t", header = T, check.names = F, row.names = 1)
+
+  genes <- intersect(rownames(dwls.sigmat), rownames(mix))
+  mix <- mix[genes, , drop = FALSE]
+  dwls.sigmat <- dwls.sigmat[genes, , drop = FALSE]
+
+  solutions_ols <- parallel::mclapply(1:ncol(mix), function(i){
+    mix.in_i <- mix[, i]
+    DWLS::solveSVR(as.matrix(dwls.sigmat), mix.in_i)
+
+  }, mc.cores = 20)
+  names(solutions_ols) <- colnames(mix)
+  dwls.out <- do.call(cbind, solutions_ols)
+
+  return(dwls.out)
+}
+
+runSCDCRes <- function(mix, refName){
+
+  ref <- readRDS(paste0("/bigdata/almogangel/xCell2_data/benchmarking_data/references/", refName, "_ref.rds"))
+
+  ref.in <- ref$ref
+  labels.in <- ref$labels$label
+  ds.in <- ref$labels$dataset
+
+  scdc.out <- omnideconv::deconvolute_scdc(single_cell_object = as.matrix(ref.in),
+                                           bulk_gene_expression = mix,
+                                           cell_type_annotations = labels.in,
+                                           batch_ids = ds.in
+  )
+
+
+  return(t(scdc.out$prop.est.mvw))
+}
+
+runScadenRes <- function(mix, refName){
+
+  ref <- readRDS(paste0("/bigdata/almogangel/xCell2_data/benchmarking_data/references/", refName, "_ref.rds"))
+
+  ref.in <- ref$ref
+  labels.in <- ref$labels$label
+  ds.in <- ref$labels$dataset
+
+
+  labels_tmp <- gsub("[^[:alnum:]]+", ".", labels.in)
+
+  val_dataset <- sample(1:10000, 1)
+  model_dir <- paste0("/bigdata/almogangel/scaden/icb/", refName, "_", val_dataset)
+
+  if (!dir.exists(model_dir)) {
+    dir.create(model_dir)
+  }
+  scaden.model <- omnideconv::build_model_scaden(single_cell_object = as.matrix(ref.in),
+                                                 bulk_gene_expression = mix,
+                                                 cell_type_annotations = labels_tmp,
+                                                 model_path = model_dir)
+
+
+  scaden.out <- omnideconv::deconvolute_scaden(
+    scaden.model,
+    bulk_gene_expression = as.matrix(mix),
+    temp_dir = NULL,
+    verbose = FALSE
+  )
+
+
+  find_closest_match <- function(source_vec, target_vec) {
+    dist_matrix <- stringdist::stringdistmatrix(source_vec, target_vec, method = "jw")
+    closest_match_indices <- apply(dist_matrix, 1, which.min)
+    closest_matches <- target_vec[closest_match_indices]
+    return(closest_matches)
+  }
+  colnames(scaden.out) <- find_closest_match(colnames(scaden.out), unique(labels.in))
+
+
+  return(t(scaden.out))
+}

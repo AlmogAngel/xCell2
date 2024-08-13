@@ -114,10 +114,12 @@ ts_labels.nested %>%
 
 # cytoVals - from run_validation.R
 # val_celltypes <- unique(unname(unlist(sapply(cytoVals$truth$blood, rownames))))
+cytoVals <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/ref_val_pairs/cyto.vals.rds")
+val_celltypes <- unique(unname(unlist(sapply(cytoVals$truth$blood, rownames))))
 
 
 # Subset blood related samples
-ts_labels <- ts_labels[ts_labels$tissue %in% c("blood", "lymph node", "spleen", "thymus", "bone marrow", "inguinal lymph node"),]
+ts_labels <- ts_labels[ts_labels$tissue %in% c("Blood", "Lymph_Node", "Spleen", "Thymus", "Bone_Marrow", "Lymph_Node"),]
 
 
 # Use only shared cell types
@@ -146,7 +148,18 @@ ref <- ref[Matrix::rowSums(ref) > 0,]
 
 xCell2GetLineage(labels = labels, out_file = "/bigdata/almogangel/xCell2_data/dev_data/ts_human_blood_dependencies.tsv")
 
-View(read.table("/bigdata/almogangel/xCell2_data/dev_data/ts_human_blood_dependencies.tsv", sep = "\t", header = TRUE))
+lineage.file <- read.table("/bigdata/almogangel/xCell2_data/dev_data/ts_human_blood_dependencies.tsv", sep = "\t", header = TRUE)
+View(lineage.file)
+lineage.file[lineage.file$label == "regulatory T cell",]$ancestors <- paste0(lineage.file[lineage.file$label == "regulatory T cell",]$ancestors, ";",
+                                                                             "regulatory T cell;", "CD4-positive, alpha-beta T cell;", "CD8-positive, alpha-beta T cell")
+lineage.file[lineage.file$label == "CD4-positive, alpha-beta T cell",]$descendants <- paste0(lineage.file[lineage.file$label == "CD4-positive, alpha-beta T cell",]$descendants, ";",
+                                                                                             "regulatory T cell")
+lineage.file[lineage.file$label == "CD8-positive, alpha-beta T cell",]$descendants <- paste0(lineage.file[lineage.file$label == "CD8-positive, alpha-beta T cell",]$descendants, ";",
+                                                                                             "regulatory T cell")
+
+
+# write_tsv(lineage.file, "/bigdata/almogangel/xCell2_data/dev_data/ts_human_blood_dependencies.tsv")
+
 
 ts_blood_ref <- list(ref = ref,
                        labels = labels,
@@ -203,7 +216,8 @@ labels2remove <- c("Tissue_Cell_Normal_or_Cancer", "unclassified_any_cell", "T_o
                    "unclassified_GI_epithelial_cell", "Breast/Lung/Prostate Cell", "Unclassified Soft Tissue or Neuro Cancer Cell", "Brain/Neuroblastoma Cancer Cell", "Any Cell",
                    "CD4 or CD8 T cell", "Non Stromal Cell", "Macrophage or Monocyte", "CD8 T or NK cell", "Ovarian/Endometrial/Kidney", "Normal Tissue Cell",
                    "B cell or Plasmablast", "Macrophage or Dendritic Cell", "Tfh/Th1 helper CD4+ T cells", "T or NK Cell", "Non Blood Cell",
-                   "Biliary/Hepatic Cancer Cell", "Colorectal/Esophageal/Gastric Cell", "GI Tract Cell", "Breast/Lung/Prostate")
+                   "Biliary/Hepatic Cancer Cell", "Colorectal/Esophageal/Gastric Cell", "GI Tract Cell", "Breast/Lung/Prostate", "Blood_Cell", "Billiary Cell", "MAIT cells", "Stromal Cell"
+                   )
 
 meta.10x.confident.filt <- meta.10x.confident %>%
   pivot_longer(c(layer_1:scATOMIC_pred), names_to = "layer", values_to = "label") %>%
@@ -231,6 +245,10 @@ meta.10x.confident.filt.sub <- meta.10x.confident.filt %>%
   sample_n(min(1000, n()))
 
 table(meta.10x.confident.filt.sub$label)
+
+meta.10x.confident.filt.sub <- meta.10x.confident.filt.sub[meta.10x.confident.filt.sub$label != "blood cell",]
+
+
 nrow(meta.10x.confident.filt.sub)
 length(unique(meta.10x.confident.filt.sub$cell_names))
 
@@ -267,6 +285,15 @@ lineage.file <- read.table("/bigdata/almogangel/xCell2_data/dev_data/sc_pan_canc
 lineage.file[lineage.file$label == "Exhausted CD8+ T cells",]$ancestors <- "CD8-positive, alpha-beta T cell"
 lineage.file[lineage.file$label == "CD8-positive, alpha-beta T cell",]$descendants <- paste0(lineage.file[lineage.file$label == "CD8-positive, alpha-beta T cell",]$descendants, ";",
                                                                                              "Exhausted CD8+ T cells")
+lineage.file[lineage.file$label == "Cancer Associated Fibroblasts",]$ancestors <- "fibroblast"
+lineage.file[lineage.file$label == "fibroblast",]$descendants <- "Cancer Associated Fibroblasts"
+
+lineage.file[lineage.file$label == "regulatory T cell",]$ancestors <- "CD4-positive, alpha-beta T cell;CD8-positive, alpha-beta T cell"
+lineage.file[lineage.file$label == "CD4-positive, alpha-beta T cell",]$descendants <- paste0(lineage.file[lineage.file$label == "CD4-positive, alpha-beta T cell",]$descendants, ";",
+                                                                                             "regulatory T cell")
+lineage.file[lineage.file$label == "CD8-positive, alpha-beta T cell",]$descendants <- paste0(lineage.file[lineage.file$label == "CD8-positive, alpha-beta T cell",]$descendants, ";",
+                                                                                             "regulatory T cell")
+
 write.table(lineage.file, "/bigdata/almogangel/xCell2_data/dev_data/sc_pan_cancer_dependencies.tsv", sep = "\t", quote = F, row.names = F)
 
 
@@ -407,29 +434,21 @@ mca_labels <- read_csv("/bigdata/almogangel/xCell2_data/mouse/MCDAA_cellinfo.csv
   select(barcodes, cell_type)
 colnames(mca_labels) <- c("sample", "label")
 
+# Blood cells only
 mca_blood_labels <- mca_labels[mca_labels$sample %in% rownames(data@meta.data[data@meta.data$tissue %in% c("PeripheralBlood", "Spleen", "BoneMarrow", "Thymus"),]),]
-mca_blood_ref <- data[,mca_blood_labels$sample]
-
-all(colnames(mca_blood_ref) == mca_blood_labels$sample)
-
 mca_blood_labels$dataset <- "MCA"
+
+
+mca_blood_ref <- data[,mca_blood_labels$sample]
+rm(data)
+gc()
 
 
 mca_blood_labels <- as_tibble(mca_blood_labels) %>%
   rowwise() %>%
   mutate(label = plyr::mapvalues(label, from = celltype_conversion_long$all_labels, to = celltype_conversion_long$xCell2_labels, warn_missing = FALSE))
 
-ct2use <- sort(table(mca_blood_labels$label), decreasing = T)
-ct2use <- names(ct2use[ct2use > 1000])
-
-mca_blood_labels <- mca_blood_labels %>%
-  filter(label %in% ct2use)
-
 table(mca_blood_labels$label)
-
-mca_blood_labels[mca_blood_labels$label == "Erythroblast", ]$label <- "erythroblast"
-mca_blood_labels[mca_blood_labels$label == "Erythroid cell", ]$label <- "erythrocyte"
-
 
 mca_blood_labels <- mca_blood_labels %>%
   rowwise() %>%
@@ -437,20 +456,31 @@ mca_blood_labels <- mca_blood_labels %>%
 
 
 # Remove cells with low/high counts
-n_genes <- colSums(mca_blood_ref)
+n_counts <- colSums(mca_blood_ref)
+n_genes <- colSums(mca_blood_ref@assays$RNA$counts > 0)
+
 median(n_genes)
-plot(sort(n_genes))
+median(n_counts)
+
+plot(sort(n_genes), sort(n_counts))
 plot(sort(n_genes[which(n_genes <= 3000)]))
-plot(sort(n_genes))
+plot(sort(n_counts))
 
-table(mca_blood_labels[mca_blood_labels$sample %in% names(n_genes[which(n_genes <= 2000 & n_genes >= 1000)]),]$label)
-cells2use <- names(n_genes[which(n_genes <= 2000 &  n_genes >= 1000)])
-median(n_genes[cells2use])
+cells2use1 <- names(n_counts[n_counts >= 1500])
+cells2use2 <- names(n_genes[n_genes >= 700])
 
+cells2use <- intersect(cells2use1, cells2use2)
 
-mca_blood_labels <- mca_blood_labels[mca_blood_labels$sample %in% cells2use,]
-mca_blood_ref <- mca_blood_ref[,mca_blood_labels$sample ]
-all(colnames(mca_blood_ref) == mca_blood_labels$sample)
+mca_blood_labels <- mca_blood_labels %>%
+  filter(sample %in% cells2use)
+
+ct2use <- sort(table(mca_blood_labels$label), decreasing = T)
+ct2use <- names(ct2use[ct2use > 160])
+
+mca_blood_labels <- mca_blood_labels %>%
+  filter(label %in% ct2use)
+
+table(mca_blood_labels$label)
 
 
 # Subset cells
@@ -458,23 +488,42 @@ set.seed(123)
 
 mca_blood_labels <- tibble(mca_blood_labels) %>%
   group_by(label) %>%
-  sample_n(min(500, n())) %>%
+  sample_n(min(1000, n())) %>%
   select(ont, label, sample, dataset) %>%
   ungroup()
 
 table(mca_blood_labels$label)
 
 
+
+
+mca_blood_ref <- mca_blood_ref@assays$RNA$counts[,mca_blood_labels$sample]
+all(colnames(mca_blood_ref) == mca_blood_labels$sample)
+
+
+mca_blood_labels <- mca_blood_labels[!mca_blood_labels$label %in% c("Erythroblast", "Erythroid cell"),]
+mca_blood_ref <- mca_blood_ref[,mca_blood_labels$sample]
+all(colnames(mca_blood_ref) == mca_blood_labels$sample)
+
+
 xCell2GetLineage(mca_blood_labels, out_file = "/bigdata/almogangel/xCell2_data/dev_data/mca_blood_dependencies.tsv")
 
-read_tsv("/bigdata/almogangel/xCell2_data/dev_data/mca_blood_dependencies.tsv")
+lineage.file <- read.table("/bigdata/almogangel/xCell2_data/dev_data/mca_blood_dependencies.tsv", sep = "\t", header = TRUE)
 
-mca_blood_ref <- data@assays$RNA@counts[,mca_blood_labels$sample]
+lineage.file[lineage.file$label == "B cell",]$descendants <- "plasma cell"
+lineage.file[lineage.file$label == "plasma cell",]$ancestors <- "B cell"
+
+write.table(lineage.file, "/bigdata/almogangel/xCell2_data/dev_data/mca_blood_dependencies.tsv", sep = "\t", quote = F, row.names = F)
+
+
+
 
 all(colnames(mca_blood_ref) == mca_blood_labels$sample)
 
 mca_blood_ref <- mca_blood_ref[rowSums(mca_blood_ref) != 0,]
 
+
+all(colnames(mca_blood_ref) == mca_blood_labels$sample)
 
 
 mca_blood_ref <- list(ref = mca_blood_ref,
@@ -549,6 +598,41 @@ saveRDS(mca_blood_ref, "/bigdata/almogangel/xCell2_data/dev_data/mca_blood_ref.r
 
 
 
+
+##### Tabula Muris blood ---------------
+library(TabulaMurisData)
+
+
+tm_blood <- TabulaMurisDroplet()
+
+tm_blood_ref <- tm_blood@assays@data$counts
+tissue2use <- tm_blood$tissue %in% c("Marrow", "Spleen", "Thymus")
+ct2use <- tm_blood$cell_ontology_class %in% c("B cell", "T cell", "natural killer cell", "epithelial cell", "monocyte", "macrophage", "granulocyte")
+
+
+cell2use <- tissue2use & ct2use
+table(tm_blood$cell_ontology_class[cell2use])
+
+tm_blood_ref <- tm_blood_ref[,cell2use]
+
+tm_blood_labels <- tibble(ont = tm_blood$cell_ontology_id[cell2use], label = tm_blood$cell_ontology_class[cell2use],
+                          sample = tm_blood$cell[cell2use], dataset = tm_blood$mouse_id[cell2use])
+
+all(colnames(tm_blood_ref) == tm_blood_labels$sample)
+
+xCell2GetLineage(tm_blood_labels, out_file = "/bigdata/almogangel/xCell2_data/dev_data/tm_blood_dependencies.tsv")
+
+lineage.file <- read.table("/bigdata/almogangel/xCell2_data/dev_data/tm_blood_dependencies.tsv", sep = "\t", header = TRUE)
+
+tm_blood_ref <- list(ref = tm_blood_ref,
+                      labels = as.data.frame(tm_blood_labels),
+                      lineage_file = "/bigdata/almogangel/xCell2_data/dev_data/tm_blood_dependencies.tsv")
+
+
+saveRDS(tm_blood_ref, "/bigdata/almogangel/xCell2_data/benchmarking_data/references/tm_blood_ref.rds")
+
+
+
 ########################  Bulk RNA-seq sorted cells references ---------------------------------------
 ############# Human ---------------------------------------
 # Tumor ref (Kassandra) ----
@@ -571,8 +655,35 @@ tumor_labels <- tumor_labels %>%
 
 
 ontology_file_checked <- "/bigdata/almogangel/xCell2_data/dev_data/kass_tumor_dependencies_checked.tsv"
+lineage.file <- read_tsv(ontology_file_checked)
 
-x <- read_tsv(ontology_file_checked)
+View(lineage.file)
+lineage.file[lineage.file$label == "regulatory T cell",]$ancestors <- paste0(lineage.file[lineage.file$label == "regulatory T cell",]$ancestors, ";",
+                                                                             "CD8-positive, alpha-beta T cell")
+lineage.file[lineage.file$label == "CD4-positive, alpha-beta T cell",]$descendants <- paste0("regulatory T cell")
+lineage.file[lineage.file$label == "CD8-positive, alpha-beta T cell",]$descendants <- paste0(lineage.file[lineage.file$label == "CD8-positive, alpha-beta T cell",]$descendants, ";",
+                                                                                             "regulatory T cell")
+
+lineage.file[lineage.file$label == "helper T cell",]$ancestors <- paste0(lineage.file[lineage.file$label == "helper T cell",]$ancestors, ";",
+                                                                             "CD4-positive, alpha-beta T cell")
+lineage.file[lineage.file$label == "CD4-positive, alpha-beta T cell",]$descendants <- paste0(lineage.file[lineage.file$label == "CD4-positive, alpha-beta T cell",]$descendants, ";",
+                                                                                             lineage.file[lineage.file$label == "helper T cell",]$descendants, ";",
+                                                                                             "helper T cell")
+
+lineage.file[lineage.file$label == "T follicular helper cell",]$ancestors <- paste0(lineage.file[lineage.file$label == "T follicular helper cell",]$ancestors, ";",
+                                                                         "CD4-positive, alpha-beta T cell")
+
+lineage.file[lineage.file$label == "T-helper 1 cell",]$ancestors <- paste0(lineage.file[lineage.file$label == "T-helper 1 cell",]$ancestors, ";",
+                                                                                    "CD4-positive, alpha-beta T cell")
+lineage.file[lineage.file$label == "T-helper 2 cell",]$ancestors <- paste0(lineage.file[lineage.file$label == "T-helper 2 cell",]$ancestors, ";",
+                                                                           "CD4-positive, alpha-beta T cell")
+lineage.file[lineage.file$label == "T-helper 17 cell",]$ancestors <- paste0(lineage.file[lineage.file$label == "T-helper 17 cell",]$ancestors, ";",
+                                                                           "CD4-positive, alpha-beta T cell")
+
+
+# write_tsv(lineage.file, "/bigdata/almogangel/xCell2_data/dev_data/kass_tumor_dependencies_checked.tsv")
+
+
 
 unique(tumor_labels$label[which(!tumor_labels$label %in% x$label)])
 tumor_labels[tumor_labels$label == "Non plasma B-cells",]$label <- "Non plasma B cell"
@@ -633,8 +744,30 @@ all(blood_labels$Sample == colnames(blood_ref))
 colnames(blood_labels)[3:4] <- c("sample", "dataset")
 # saveRDS(blood_labels, "Data/kass_blood_labels_with_lab.rds")
 
-x <- read_tsv("/bigdata/almogangel/xCell2_data/dev_data/kass_blood_dependencies_checked.tsv")
-View(x)
+
+
+
+# rm_ct <- blood_labels$label != "myeloid cell"
+# blood_labels <- blood_labels[rm_ct,]
+# blood_ref <- blood_ref[,blood_labels$sample]
+# all(blood_labels$sample == colnames(blood_ref))
+
+lineage.file <- read_tsv("/bigdata/almogangel/xCell2_data/dev_data/kass_blood_dependencies_checked.tsv")
+View(lineage.file)
+
+# lineage.file[lineage.file$label == "T cell",]$descendants <- paste0(lineage.file[lineage.file$label == "T cell",]$descendants, ";",
+#                                                                                              "CD8-positive, alpha-beta memory T cell")
+# lineage.file[lineage.file$label == "natural killer cell",]$descendants <- paste0(lineage.file[lineage.file$label == "natural killer cell",]$descendants, ";",
+#                                                                     "Regulatory NK cells")
+# lineage.file[lineage.file$label == "CD8-positive, alpha-beta T cell",]$descendants <- paste0(lineage.file[lineage.file$label == "CD8-positive, alpha-beta T cell",]$descendants, ";",
+#                                                                                  "CD8-positive, alpha-beta memory T cell")
+# lineage.file[lineage.file$label == "effector memory CD8-positive, alpha-beta T cell, terminally differentiated",]$ancestors <- paste0(lineage.file[lineage.file$label == "effector memory CD8-positive, alpha-beta T cell, terminally differentiated",]$ancestors, ";",
+#                                                                                              "effector memory CD8-positive, alpha-beta T cell")
+
+
+
+
+write.table(lineage.file, "/bigdata/almogangel/xCell2_data/dev_data/kass_blood_dependencies_checked.tsv", sep = "\t", quote = F, row.names = F)
 
 
 
@@ -684,8 +817,19 @@ bp_labels <- bp_labels %>%
   select(ont, label, sample, dataset)
 
 
-x <- read_tsv("/bigdata/almogangel/xCell2_data/dev_data/bp_dependencies_checked.tsv")
-x
+
+
+lineage.file <- read.table("/bigdata/almogangel/xCell2_data/dev_data/bp_dependencies_checked.tsv", sep = "\t", header = TRUE)
+View(lineage.file)
+lineage.file[lineage.file$label == "regulatory T cell",]$ancestors <- paste0("CD4-positive, alpha-beta T cell;", "CD8-positive, alpha-beta T cell")
+lineage.file[lineage.file$label == "CD4-positive, alpha-beta T cell",]$descendants <- paste0(lineage.file[lineage.file$label == "CD4-positive, alpha-beta T cell",]$descendants, ";",
+                                                                                             "regulatory T cell")
+lineage.file[lineage.file$label == "CD8-positive, alpha-beta T cell",]$descendants <- paste0(lineage.file[lineage.file$label == "CD8-positive, alpha-beta T cell",]$descendants, ";",
+                                                                                             "regulatory T cell")
+
+
+# write_tsv(lineage.file, "/bigdata/almogangel/xCell2_data/dev_data/bp_dependencies_checked.tsv")
+
 
 all(bp_labels$sample == colnames(bp_ref))
 
@@ -872,6 +1016,55 @@ saveRDS(igd_ref, "/bigdata/almogangel/xCell2_data/dev_data/igd_ref.rds")
 
 
 
+# MouseRNAseqData ----
+
+mouse_rnaseq_data <- celldex::MouseRNAseqData()
+
+mouse_rnaseq_data_ref <- as.matrix(mouse_rnaseq_data@assays@data$logcounts)
+
+# Anti log2 data
+mouse_rnaseq_data_ref <- 2^mouse_rnaseq_data_ref
+mouse_rnaseq_data_ref <- mouse_rnaseq_data_ref-1
+
+mouse_rnaseq_data_labels <- mouse_rnaseq_data@colData
+
+
+# igd_labels <- as_tibble(igd_labels) %>%
+#   rowwise() %>%
+#   mutate(ont.label = get_cell_type_name(label.ont))
+
+
+mouse_rnaseq_data_labels <- mouse_rnaseq_data_labels %>%
+  as_tibble() %>%
+  dplyr::rename("ont" = "label.ont") %>%
+  rowwise() %>%
+  mutate(label = plyr::mapvalues(label.main, from = celltype_conversion_long$all_labels, to = celltype_conversion_long$xCell2_labels, warn_missing = FALSE)) %>%
+  ungroup() %>%
+  mutate(sample = rownames(mouse_rnaseq_data_labels),
+         dataset = "MouseRNAseqData") %>%
+  select(ont, label, sample, dataset)
+
+all(colnames(mouse_rnaseq_data_ref) == mouse_rnaseq_data_labels$sample)
+
+
+
+xCell2GetLineage(mouse_rnaseq_data_labels, out_file = "/bigdata/almogangel/xCell2_data/dev_data/mouse_rnaseq_data_dependencies.tsv")
+dep_list <- getDependencies("/bigdata/almogangel/xCell2_data/dev_data/mouse_rnaseq_data_dependencies.tsv")
+
+x <- read_tsv("/bigdata/almogangel/xCell2_data/dev_data/mouse_rnaseq_data_dependencies.tsv")
+x
+
+
+mouse_rnaseq_data_ref <- list(ref = as.matrix(mouse_rnaseq_data_ref),
+                labels = as.data.frame(mouse_rnaseq_data_labels),
+                lineage_file = "/bigdata/almogangel/xCell2_data/dev_data/mouse_rnaseq_data_dependencies.tsv")
+saveRDS(mouse_rnaseq_data_ref, "/bigdata/almogangel/xCell2_data/benchmarking_data/references/mouse_rnaseq_data_ref.rds")
+
+
+
+
+
+
 ######################## Microarry sorted cells references ---------------------------------------
 ############# Human ---------------------------------------
 # LM222 -----------
@@ -920,6 +1113,11 @@ lm22.labels <- as.data.frame(lm22.labels)
 # all(lm22.labels$sample == colnames(lm22.ref))
 
 xCell2GetLineage(lm22.labels, out_file = "/bigdata/almogangel/xCell2_data/dev_data/lm22_dependencies.tsv")
+
+lineage.file <- read.table("/bigdata/almogangel/xCell2_data/dev_data/lm22_dependencies.tsv", sep = "\t", header = TRUE)
+
+
+
 
 lm22_ref <- list(ref = as.matrix(lm22.ref),
                        labels = lm22.labels,

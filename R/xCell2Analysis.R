@@ -12,7 +12,6 @@
 #' @param mix a matrix containing gene expression data
 #' @param xcell2object S4 object of `xCell2Object`
 #' @param min_shared_genes description
-#' @param ref_is_sc description
 #' @param raw_scores description
 #' @param spillover Boolean - should we use spillover correction on the transformed scores?
 #' @param spillover_alpha description
@@ -20,7 +19,7 @@
 
 #' @return A data frame containing the cell type enrichment for each sample in the input matrix, as estimated by xCell2.
 #' @export
-xCell2Analysis <- function(mix, xcell2object, ref_is_sc, min_shared_genes = 0.9, raw_scores = FALSE, spillover = TRUE, spillover_alpha = 0.2, num_threads = 1){
+xCell2Analysis <- function(mix, xcell2object, min_shared_genes = 0.9, raw_scores = FALSE, spillover = TRUE, spillover_alpha = 0.5, num_threads = 1){
 
   scoreMix <- function(ctoi, mix_ranked, signatures_ctoi){
 
@@ -89,10 +88,6 @@ xCell2Analysis <- function(mix, xcell2object, ref_is_sc, min_shared_genes = 0.9,
       return(ctoi_res)
     }))
 
-    if (ref_is_sc) {
-      warningCondition("Reference type is scRNA-Seq - Spillover correction is disabled.")
-      return(res)
-    }
   }
 
 

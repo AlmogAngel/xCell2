@@ -3,12 +3,11 @@ library(tidyverse)
 dir <- "/bigdata/almogangel/xCell2_data/benchmarking_data/references/"
 
 
-# ref_files <- list.files(dir, pattern = "*_ref.rds")
-#ref_files <- list("bulk" = c("bp_ref.rds", "kass_blood_ref.rds", "kass_tumor_ref.rds", "lm22_ref.rds"), "sc" = c("ts_blood_ref.rds", "sc_pan_cancer_ref.rds"))
-ref_files <- list("bulk" = c("igd_ref.rds"), "sc" = c("mca_blood_ref.rds"))
+ref_files <- list("bulk" = c("bp_ref.rds", "kass_blood_ref.rds", "kass_tumor_ref.rds", "lm22_ref.rds"), "sc" = c("ts_blood_ref.rds", "sc_pan_cancer_ref.rds"))
+ref_files <- list("bulk" = c("igd_ref.rds", "mouse_rnaseq_data_ref.rds"), "sc" = c("tm_blood_ref.rds"))
+# ref_files <- list("bulk" = c("kass_blood_ref.rds"))
 
-# ref_files <- list("sc" = c("ts_blood_ref.rds", "sc_pan_cancer_ref.rds"))
-# ref_files <- list("bulk" = c("bp_ref.rds"))
+
 
 
 # Make markers from bulk references using method from dtangle/ABIS  ------------

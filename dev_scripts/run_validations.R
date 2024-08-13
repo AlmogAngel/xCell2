@@ -36,21 +36,28 @@ getDependencies <- function(lineage_file_checked){
 # "/bigdata/almogangel/xCell2/dev_scripts/prep_ref_val_pairs.R"
 # Read reference-validation pairs
 refval.tbl <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/ref_val_pairs/cyto_ref_val.rds")
-# refval.tbl.nodeps <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/ref_val_pairs/cyto_ref_val_nodeps.rds")
-# sc.refval.tbl <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/ref_val_pairs/sc_ref_val.rds")
-# sc.refval.tbl.nodeps <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/ref_val_pairs/sc_ref_val_nodeps.rds")
+# refval.tbl <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/ref_val_pairs/cyto_ref_val_mouse.rds")
+
+
 # Load validation data
 cyto.vals <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/ref_val_pairs/cyto.vals.rds")
-# sc.vals <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/ref_val_pairs/sc.vals.rds")
+# cyto.vals <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/ref_val_pairs/cyto.vals.mouse.rds")
+
 
 refList <- list(rna_seq = c(blood = "kass_blood", tumor = "kass_tumor", mixed = "bp"),
                 array = c(mixed = "lm22"),
                 sc = c(blood = "ts_blood", tumor = "sc_pan_cancer"))
 
+# refList <- list(rna_seq = c(mixed = "igd"),
+#                       array = c(),
+#                       sc = c(mixed = "mca_blood"))
+
+
 celltype_conversion <- read_tsv("/bigdata/almogangel/xCell2_data/dev_data/celltype_conversion_with_ontology.txt") %>%
   rowwise() %>%
   mutate(all_labels = str_split(all_labels, ";")) %>%
   unnest(cols = c(all_labels))
+
 
 # Method functions ----------------
 
@@ -223,7 +230,7 @@ getEPICRes <- function(ref_val_table, vals, celltype_conversion){
   runEPIC <- function(vals, default_refs, valType, valName, refsRDSList, refName, refType, refTissue, celltypes2use, dir = "references", suffix = "8jan"){
 
 
-    getResults <- function(mix, cell_types, ref.in, refName, refType, dir){
+    getResults <- function(mix, cell_types, ref.in, refName, refType, dir = "references"){
 
       # Subset sigGenes from the signature matrix
       sigmat <- read.csv(paste0(dir, "/sigmats/", refName, "_sigmat.txt"), sep = "\t", header = T, check.names = F, row.names = 1)
@@ -233,6 +240,10 @@ getEPICRes <- function(ref_val_table, vals, celltype_conversion){
       gep <- read.csv(paste0(dir, "/gep/", refName, "_gep.txt"), sep = "\t", header = T, check.names = F, row.names = 1)
       gep <- gep[,cell_types]
 
+      if (min(gep) == 1) {
+        gep <- gep-1
+      }
+
       # Subset cell types from the raw reference matrix
       celltypeIndex <- ref.in$labels$label %in% cell_types
       ref.raw <- as.matrix(ref.in$ref)[,celltypeIndex]
@@ -240,7 +251,7 @@ getEPICRes <- function(ref_val_table, vals, celltype_conversion){
 
       # EPIC does not recommend log space
       if(max(gep) < 50){
-        gep <- (2^gep)+1
+        gep <- (2^gep)-1
       }
 
       if(max(ref.raw) < 50){
@@ -320,7 +331,7 @@ getEPICRes <- function(ref_val_table, vals, celltype_conversion){
 
         descendants <- dep_list[[ancestor]]$descendants
         ct2use <- c(ancestor, leaf_cell_types[!leaf_cell_types %in% descendants])
-        ancestor_out <- getResults(ct2use, ref.in, refName, refType, dir)
+        ancestor_out <- getResults(mix, ct2use, ref.in, refName, refType, dir)
         epic_out <- rbind(epic_out,  ancestor_out[ancestor,])
         rownames(epic_out)[nrow(epic_out)] <- ancestor
 
@@ -346,7 +357,7 @@ getEPICRes <- function(ref_val_table, vals, celltype_conversion){
   })
 
 
-  # i = 51
+  # i = 2
   # x = ref_val_table
   # valType = x[i,]$val_type[[1]]; valName = x[i,]$val_dataset[[1]]; refName = x[i,]$ref_name[[1]]; refType = x[i,]$ref_type[[1]]; celltypes2use = x[i,]$celltype_classes[[1]]
 
@@ -364,6 +375,7 @@ getEPICRes <- function(ref_val_table, vals, celltype_conversion){
 }
 
 # Run BayesPrism
+# Note: Do not clean genes for mouse data
 getBayesPrismRes <- function(ref_val_table, vals, celltype_conversion){
 
   runBayesPrism <- function(vals, valType, valName, refsRDSList, refName, refType, celltypes2use, CPUs = 45, suffix = "8jan"){
@@ -992,6 +1004,7 @@ saveRDS(bp.cyto.res, "/bigdata/almogangel/xCell2_data/benchmarking_data/results/
 print("Running MCPcounter")
 mcp.cyto.res <- getMCPcounterRes(ref_val_table = refval.tbl, vals = cyto.vals, celltype_conversion)
 saveRDS(mcp.cyto.res, "/bigdata/almogangel/xCell2_data/benchmarking_data/results/correlations/mcp.cyto.res.rds")
+# saveRDS(mcp.cyto.res, "/bigdata/almogangel/xCell2_data/benchmarking_data/results/correlations/mouse/mcp.cyto.res.rds")
 
 print("Running dtangle")
 dtan.cyto.res <- getdtangleRes(ref_val_table = refval.tbl, vals = cyto.vals, celltype_conversion)
@@ -1007,6 +1020,9 @@ saveRDS(decon.cyto.res, "/bigdata/almogangel/xCell2_data/benchmarking_data/resul
 
 # omnideconv ---------------------------
 library(omnideconv)
+# library(future)
+# plan(multisession, workers = 10)
+# options(future.globals.maxSize = 5 * 1024^3)
 
 
 refsRDSList <- lapply(refList, function(ref_type){
@@ -1020,17 +1036,19 @@ refsRDSList <- lapply(refList, function(ref_type){
 })
 
 
-i <- 2
-ref_name = refval.tbl$ref_name[i]
-ref_type = refval.tbl$ref_type[i]
-val_dataset = refval.tbl$val_dataset[i]
-val_type = refval.tbl$val_type[i]
-celltypes2use = refval.tbl$shared_celltypes[[i]]
+# i <- 2
+# ref_name = refval.tbl$ref_name[i]
+# ref_type = refval.tbl$ref_type[i]
+# val_dataset = refval.tbl$val_dataset[i]
+# val_type = refval.tbl$val_type[i]
+# celltypes2use = refval.tbl$shared_celltypes[[i]]
+#
+# ref.in <- refsRDSList[[ref_type]][[ref_name]]$ref
+# mix.in <- cyto.vals$mixtures[[val_type]][[val_dataset]]
+# labels.in <- refsRDSList[[ref_type]][[ref_name]]$labels$label
+# ds.in <- refsRDSList[[ref_type]][[ref_name]]$labels$dataset
 
-ref.in <- refsRDSList[[ref_type]][[ref_name]]$ref
-mix.in <- cyto.vals$mixtures[[val_type]][[val_dataset]]
-labels.in <- refsRDSList[[ref_type]][[ref_name]]$labels$label
-ds.in <- refsRDSList[[ref_type]][[ref_name]]$labels$dataset
+
 
 # Bisque
 getBisqueRes <- function(ref_name, ref_type, val_dataset, val_type, celltypes2use){
@@ -1120,6 +1138,14 @@ getScadenRes <- function(ref_name, ref_type, val_dataset, val_type, celltypes2us
   labels.in <- refsRDSList[[ref_type]][[ref_name]]$labels$label
   ds.in <- refsRDSList[[ref_type]][[ref_name]]$labels$dataset
 
+
+  results_file <- paste0("/bigdata/almogangel/xCell2_data/benchmarking_data/other_methods/scaden#", val_dataset, "#", ref_name, "#6aug.rds")
+  if (file.exists(results_file)) {
+    print(paste0(val_dataset, "_", ref_name, " exist -  skipping...."))
+    scaden_out <- readRDS(results_file)
+    return(scaden_out)
+  }
+
   labels_tmp <- gsub("[^[:alnum:]]+", ".", labels.in)
 
   model_dir <- paste0("/bigdata/almogangel/scaden/", ref_name, "_", val_dataset)
@@ -1150,8 +1176,10 @@ getScadenRes <- function(ref_name, ref_type, val_dataset, val_type, celltypes2us
   colnames(scaden.out) <- find_closest_match(colnames(scaden.out), unique(labels.in))
   scaden.out <- t(scaden.out)
 
+  res <- scaden.out[celltypes2use,]
+  saveRDS(res, results_file)
 
-  return(scaden.out[celltypes2use,])
+  return(res)
 }
 
 scaden.cyto.res <- refval.tbl %>%
@@ -1326,8 +1354,8 @@ print("Running CIBERSORTx...")
 #saveRDS(cbrx.sc.res, "/bigdata/almogangel/xCell2_data/benchmarking_data/results/correlations/cbrx.sc.res.rds")
 
 print("Running EPIC...")
-#epic.sc.res <- getEPICRes(ref_val_table = sc.refval.tbl.nodeps, vals = sc.vals, celltype_conversion)
-#saveRDS(epic.sc.res, "/bigdata/almogangel/xCell2_data/benchmarking_data/results/correlations/epic.sc.res.rds")
+epic.sc.res <- getEPICRes(ref_val_table = sc.refval.tbl.nodeps, vals = sc.vals, celltype_conversion)
+saveRDS(epic.sc.res, "/bigdata/almogangel/xCell2_data/benchmarking_data/results/correlations/epic.sc.res.rds")
 
 print("Running BayesPrism...")
 bp.sc.res <- getBayesPrismRes(ref_val_table = sc.refval.tbl.nodeps, vals = sc.vals, celltype_conversion)

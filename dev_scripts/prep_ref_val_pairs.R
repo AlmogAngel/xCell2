@@ -275,10 +275,15 @@ all_vals <- c("chen", "petitprez")
 vals_type <- c("rnaseq", "rnaseq")
 val2type <- setNames(vals_type, all_vals)
 
-refList.mouse <- list(rna_seq = c(mixed = "igd"),
+refList.mouse <- list(rna_seq = c(mixed = "igd", mixed = "mouse_rnaseq_data"),
                 array = c(),
-                sc = c(mixed = "mca_blood"))
+                sc = c(mixed = "tm_blood"))
+
 
 
 refval.tbl <- combineRefVal(vals = cyto.vals.mouse, val2type, refList = refList.mouse, splitDependencies = FALSE)
 saveRDS(refval.tbl, "/bigdata/almogangel/xCell2_data/benchmarking_data/ref_val_pairs/cyto_ref_val_mouse.rds")
+
+
+refval.tbl <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/ref_val_pairs/cyto_ref_val_mouse.rds")
+

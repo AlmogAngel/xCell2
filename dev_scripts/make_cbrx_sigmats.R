@@ -80,11 +80,13 @@ makeCIBERSORTxSigMat <- function(ref, labels, lineage_file, refName, single_cell
   # NOTE: manual fix for RNA-seq signature matrices: subtracting 1 from all expression values !!!
   # NOTE: RMA normalization for lm22 sigmat !!!
   sigmat_file <- paste0(dir, "/", refName, "_sigmat.txt")
-  file.copy(from = paste0(results_dir, "/CIBERSORTx_", refName, "_pheno.CIBERSORTx_", refName, "_ref.bm.K999.txt"), to = sigmat_file, overwrite = TRUE)
+  sigmat_output_file <- list.files(results_dir, pattern = ".bm.K999.txt", full.names = TRUE)
+  file.copy(from = sigmat_output_file, to = sigmat_file, overwrite = TRUE)
 
   # Save GEP for future use:
   gep_file <- paste0(dir, "/", refName, "_gep.txt")
-  file.copy(from = paste0(results_dir, "/CIBERSORTx_cell_type_sourceGEP.txt"), to = gep_file, overwrite = TRUE)
+  gep_output_file <- list.files(results_dir, pattern = "_sourceGEP.txt", full.names = TRUE)
+  file.copy(from = gep_output_file, to = gep_file, overwrite = TRUE)
 
 
   print("Done")
@@ -93,11 +95,10 @@ makeCIBERSORTxSigMat <- function(ref, labels, lineage_file, refName, single_cell
 }
 
 
-# RNA-seq references
-# TODO: Add Mahmoud's reference
+# Human
 print("Kassandra Blood Reference")
 kass_blood_ref <- readRDS("/bigdata/almogangel/xCell2_data/dev_data/kass_blood_ref.rds")
-makeCIBERSORTxSigMat(kass_blood_ref$ref, kass_blood_ref$labels, kass_blood_ref$lineage_file, refName = "kass_blood", single_cell = FALSE, QN = FALSE)
+makeCIBERSORTxSigMat(ref = kass_blood_ref$ref, labels = kass_blood_ref$labels, lineage_file = kass_blood_ref$lineage_file, refName = "kass_blood", single_cell = FALSE, QN = FALSE)
 print("Done")
 
 print("Kassandra Tumor Reference")
@@ -110,49 +111,33 @@ bp_ref <- readRDS("/bigdata/almogangel/xCell2_data/dev_data/bp_ref.rds")
 makeCIBERSORTxSigMat(bp_ref$ref, bp_ref$labels, bp_ref$lineage_file, refName = "bp", single_cell = FALSE, QN = FALSE)
 print("Done")
 
-
-
-# Array references
 print("LM22 Reference")
 lm22_ref <- readRDS("/bigdata/almogangel/xCell2_data/dev_data/lm22_ref.rds")
 makeCIBERSORTxSigMat(lm22_ref$ref, lm22_ref$labels, lm22_ref$lineage_file, refName = "lm22", single_cell = FALSE, QN = TRUE)
 print("Done")
 
-
-
-# scRNA-seq references
-
 print("Pan Cancer References")
-
 sc_pan_cancer_ref <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/references/sc_pan_cancer_ref.rds")
 makeCIBERSORTxSigMat(ref = sc_pan_cancer_ref$ref, labels = sc_pan_cancer_ref$labels, lineage_file = sc_pan_cancer_ref$lineage_file, refName = "sc_pan_cancer", single_cell = TRUE, QN = FALSE)
 print("Done")
 
+print("TS Blood")
+ts_blood_ref <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/references/ts_blood_ref.rds")
+makeCIBERSORTxSigMat(ref = ts_blood_ref$ref, labels = ts_blood_ref$labels, lineage_file = ts_blood_ref$lineage_file, refName = "ts_blood", single_cell = TRUE, QN = FALSE)
+print("Done")
 
 
-print("Tabula Sapiens References")
 
-ts_refs_files <- list.files("/bigdata/almogangel/xCell2_data/benchmarking_data/references/", pattern = "ts_")
-ts_refs_files <- ts_refs_files[ts_refs_files != "ts_blood_ref.rds"]
-
-for (ref_file in ts_refs_files) {
-  ref_name <- gsub("_ref.rds", "", ref_file)
-  print(ref_name)
-  ts_ref_in <- readRDS(paste0("/bigdata/almogangel/xCell2_data/benchmarking_data/references/", ref_file))
-  makeCIBERSORTxSigMat(ref = ts_ref_in$ref, labels = ts_ref_in$labels, lineage_file = ts_ref_in$lineage_file, refName = ref_name, single_cell = TRUE, QN = FALSE)
-}
-
-# IGD references
-
-
+# Mouse
 igd_ref <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/references/igd_ref.rds")
 makeCIBERSORTxSigMat(ref = igd_ref$ref, labels = igd_ref$labels, lineage_file = igd_ref$lineage_file, refName = "igd", single_cell = FALSE, QN = FALSE)
 print("Done")
 
 
-# MCA-Blood references
+tm_blood_ref <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/references/tm_blood_ref.rds")
+makeCIBERSORTxSigMat(ref = tm_blood_ref$ref, labels = tm_blood_ref$labels, lineage_file = tm_blood_ref$lineage_file, refName = "tm_blood", single_cell = TRUE, QN = FALSE)
+print("Done")
 
-
-mca_blood_ref <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/references/mca_blood_ref.rds")
-makeCIBERSORTxSigMat(ref = mca_blood_ref$ref, labels = mca_blood_ref$labels, lineage_file = mca_blood_ref$lineage_file, refName = "mca_blood", single_cell = TRUE, QN = FALSE)
+mouse_rnaseq_data_ref <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/references/mouse_rnaseq_data_ref.rds")
+makeCIBERSORTxSigMat(ref = mouse_rnaseq_data_ref$ref, labels = mouse_rnaseq_data_ref$labels, lineage_file = mouse_rnaseq_data_ref$lineage_file, refName = "mouse_rnaseq_data", single_cell = FALSE, QN = FALSE)
 print("Done")

@@ -1,7 +1,7 @@
 library(tidyverse)
 
+use_mouse <- FALSE
 
-methods2use <- c("xCell2", "BayesPrism", "CIBERSORTx", "DeconRNASeq", "EPIC", "MCPcounter", "dtangle", "Bisque", "DWLS", "SCDC", "Scaden")
 
 getDependencies <- function(lineage_file_checked){
   ont <- read_tsv(lineage_file_checked, show_col_types = FALSE) %>%
@@ -25,60 +25,155 @@ getDependencies <- function(lineage_file_checked){
 
   return(dep_list)
 }
+makeGEPMat <- function(ref, labels){
 
-refval.tbl <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/ref_val_pairs/cyto_ref_val.rds")
-cyto.vals <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/ref_val_pairs/cyto.vals.rds")
-refList <- list(rna_seq = c(blood = "kass_blood", tumor = "kass_tumor", mixed = "bp"),
-                array = c(mixed = "lm22"),
-                sc = c(blood = "ts_blood", tumor = "sc_pan_cancer"))
-refsRDSList <- lapply(refList, function(ref_type){
-  refs <- lapply(ref_type, function(ref){
-    # Load reference
-    ref.in <- readRDS(paste0("/bigdata/almogangel/xCell2_data/benchmarking_data/references/", ref, "_ref.rds"))
-    ref.in
+  celltypes <- unique(labels$label)
+
+  gep_mat <- sapply(celltypes, function(type){
+    type_samples <- labels[,2] == type
+    if (sum(type_samples) == 1) {
+      type_vec <- as.vector(ref[,type_samples])
+    }else{
+      type_vec <- Rfast::rowMedians(as.matrix(ref[,type_samples]))
+    }
   })
-  names(refs) <- ref_type
-  refs
-})
+  rownames(gep_mat) <- rownames(ref)
 
-vals.refs.res <- refval.tbl %>%
-  mutate(n_val_samples = ncol(cyto.vals$truth[[val_type]][[val_dataset]])) %>%
-  filter(n_shared_celltypes > 2) %>%
-  mutate(method = "xCell2", .before = everything())
+  return(gep_mat)
+}
+getCellTypeCorrelation <- function(gep_mat, ref_type){
 
-files <- list.files("/bigdata/almogangel/xCell2_data/benchmarking_data/results/correlations", pattern = ".cyto.res.rds", full.names = TRUE)
-cyto.Res <- lapply(files, function(f){
-  readRDS(f) %>%
-    dplyr::select(method, ref_tissue, ref_type, ref_name, val_type, val_dataset, n_val_samples, n_shared_celltypes, res) %>%
-    group_by(across(-ncol(.))) %>%
-    summarise(res = list(do.call(rbind, res)), .groups = 'drop')
-}) %>%
-  do.call(rbind, .)
+  celltypes <- colnames(gep_mat)
 
+  if (ref_type != "sc") {
 
+    # Use top 10% most variable genes
+    genes_var <- apply(gep_mat, 1, var)
+    most_var_genes_cutoff <- quantile(genes_var, 0.9, na.rm=TRUE)
+    gep_mat <- gep_mat[genes_var > most_var_genes_cutoff,]
 
-# params <- list(human2mouse = FALSE,
-#                num_threads = 40,
-#                min_pb_cells = 30,
-#                min_pb_samples = 10,
-#                min_sc_genes = 1e4,
-#                use_ontology = TRUE,
-#                probs = c(0.01, 0.05, 0.1, 0.15, 0.2, 0.333),
-#                diff_vals = round(c(log(1), log2(1.5), log2(2), log2(2.5), log2(3), log2(4), log2(5), log2(10), log2(20)), 3),
-#                min_genes = 10,
-#                max_genes = 300,
-#                min_frac_ct_passed = 0.75,
-#                return_signatures = FALSE,
-#                return_analysis = FALSE,
-#                use_sillover = TRUE,
-#                spillover_alpha = 0.75,
-#                top_spill_value = 0.5,
-#                sc_spill_relaxing_factor = 0.5
-#                )
+  }else{
+
+    # Use top 1% most variable genes
+    genes_var <- apply(gep_mat, 1, var)
+    most_var_genes_cutoff <- quantile(genes_var, 0.99, na.rm=TRUE)
+    gep_mat <- gep_mat[genes_var > most_var_genes_cutoff,]
+
+  }
 
 
+  # Make correlation matrix
+  cor_mat <- matrix(1, ncol = length(celltypes), nrow = length(celltypes), dimnames = list(celltypes, celltypes))
+  lower_tri_coord <- which(lower.tri(cor_mat), arr.ind = TRUE)
 
-get_xcell2_benchmark_results <- function(benchmark_table = vals.refs.res, vals2remove, save_object = TRUE, dir = NULL, params, ncores, output_name){
+  # TODO: Change for loop to apply function to measure time
+  for (i in 1:nrow(lower_tri_coord)) {
+    celltype_i <- rownames(cor_mat)[lower_tri_coord[i, 1]]
+    celltype_j <- colnames(cor_mat)[lower_tri_coord[i, 2]]
+    cor_mat[lower_tri_coord[i, 1], lower_tri_coord[i, 2]] <- cor(gep_mat[,celltype_i], gep_mat[,celltype_j], method = "spearman")
+    cor_mat[lower_tri_coord[i, 2], lower_tri_coord[i, 1]] <- cor(gep_mat[,celltype_i], gep_mat[,celltype_j], method = "spearman")
+  }
+
+  return(cor_mat)
+}
+
+if (use_mouse) {
+  methods2use <- c("xCell2", "BayesPrism", "CIBERSORTx", "EPIC", "MCPcounter", "dtangle", "Bisque", "DWLS", "SCDC", "DeconRNASeq", "Scaden")
+  refval.tbl <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/ref_val_pairs/cyto_ref_val_mouse.rds")
+  cyto.vals <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/ref_val_pairs/cyto.vals.mouse.rds")
+
+  refList <- list(rna_seq = c(mixed = "igd", mixed = "mouse_rnaseq_data"),
+                  array = c(),
+                  sc = c(mixed = "tm_blood"))
+
+  refsRDSList <- lapply(refList, function(ref_type){
+    refs <- lapply(ref_type, function(ref){
+      # Load reference
+      ref.in <- readRDS(paste0("/bigdata/almogangel/xCell2_data/benchmarking_data/references/", ref, "_ref.rds"))
+      ref.in
+    })
+    names(refs) <- ref_type
+    refs
+  })
+
+  vals.refs.res <- refval.tbl %>%
+    mutate(n_val_samples = ncol(cyto.vals$truth[[val_type]][[val_dataset]])) %>%
+    filter(n_shared_celltypes > 2) %>%
+    mutate(method = "xCell2", .before = everything())
+
+  files <- list.files("/bigdata/almogangel/xCell2_data/benchmarking_data/results/correlations/mouse/", pattern = ".cyto.res.rds", full.names = TRUE)
+  cyto.Res <- lapply(files, function(f){
+
+    f.in <- readRDS(f)
+
+    if (colnames(f.in)[1] != "method") {
+      m <- gsub(".cyto.res.rds", "", basename(f))
+      f.in <- as_tibble(cbind(method = m, f.in))
+    }
+
+
+    f.in %>%
+      dplyr::select(method, ref_tissue, ref_type, ref_name, val_type, val_dataset, n_val_samples, n_shared_celltypes, res) %>%
+      group_by(across(-ncol(.))) %>%
+      summarise(res = list(do.call(rbind, res)), .groups = 'drop')
+  }) %>%
+    do.call(rbind, .)
+
+  cyto.Res[cyto.Res$method == "dwlr", ]$method <- "DWLR"
+  cyto.Res[cyto.Res$method == "scdc", ]$method <- "SCDC"
+  cyto.Res[cyto.Res$method == "bisque", ]$method <- "Bisque"
+
+}else{
+  methods2use <- c("xCell2", "BayesPrism", "CIBERSORTx", "DeconRNASeq", "EPIC", "MCPcounter", "dtangle", "Bisque", "DWLS", "SCDC", "Scaden")
+  refval.tbl <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/ref_val_pairs/cyto_ref_val.rds")
+  cyto.vals <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/ref_val_pairs/cyto.vals.rds")
+
+  refList <- list(rna_seq = c(blood = "kass_blood", tumor = "kass_tumor", mixed = "bp"),
+                  array = c(mixed = "lm22"),
+                  sc = c(blood = "ts_blood", tumor = "sc_pan_cancer"))
+
+  refsRDSList <- lapply(refList, function(ref_type){
+    refs <- lapply(ref_type, function(ref){
+      # Load reference
+      ref.in <- readRDS(paste0("/bigdata/almogangel/xCell2_data/benchmarking_data/references/", ref, "_ref.rds"))
+      ref.in
+    })
+    names(refs) <- ref_type
+    refs
+  })
+
+  vals.refs.res <- refval.tbl %>%
+    mutate(n_val_samples = ncol(cyto.vals$truth[[val_type]][[val_dataset]])) %>%
+    filter(n_shared_celltypes > 2) %>%
+    mutate(method = "xCell2", .before = everything())
+
+  files <- list.files("/bigdata/almogangel/xCell2_data/benchmarking_data/results/correlations", pattern = ".cyto.res.rds", full.names = TRUE)
+  cyto.Res <- lapply(files, function(f){
+
+    f.in <- readRDS(f)
+
+    if (colnames(f.in)[1] != "method") {
+      m <- gsub(".cyto.res.rds", "", basename(f))
+      f.in <- as_tibble(cbind(method = m, f.in))
+    }
+
+
+    f.in %>%
+      dplyr::select(method, ref_tissue, ref_type, ref_name, val_type, val_dataset, n_val_samples, n_shared_celltypes, res) %>%
+      group_by(across(-ncol(.))) %>%
+      summarise(res = list(do.call(rbind, res)), .groups = 'drop')
+  }) %>%
+    do.call(rbind, .)
+
+  cyto.Res[cyto.Res$method == "dwlr", ]$method <- "DWLR"
+  cyto.Res[cyto.Res$method == "scdc", ]$method <- "SCDC"
+  cyto.Res[cyto.Res$method == "bisque", ]$method <- "Bisque"
+}
+
+
+
+
+get_xcell2_benchmark_results <- function(benchmark_table = vals.refs.res, vals2remove = c(), save_object = TRUE, dir = NULL, params, ncores, output_name){
 
 
 
@@ -170,7 +265,7 @@ get_xcell2_benchmark_results <- function(benchmark_table = vals.refs.res, vals2r
 }
 
 
-get_xcell2_correlations <- function(benchmark_table = vals.refs.res, vals2remove, xCell2results, round_results = 3, weight_rhos = TRUE,
+get_xcell2_correlations <- function(benchmark_table = vals.refs.res, vals2remove = c(), xCell2results, round_results = 3, weight_rhos = TRUE,
                                     by_val = FALSE, ref2use = NULL, spillcors = FALSE, cMethod = "spearman"){
 
   getCors <- function(ref, res, truth, shared_cts, shared_samp, get_spill_cors, cor_method){
@@ -379,6 +474,52 @@ get_xcell2_correlations <- function(benchmark_table = vals.refs.res, vals2remove
     mutate(res = list(round(res, round_results)))
 
 
+  if (spillcors) {
+
+    spill_res <- parallel::mclapply(1:nrow(cyto.Res), function(i){
+
+
+      valType <- cyto.Res[i,]$val_type
+      valDataset <- cyto.Res[i,]$val_dataset
+      refName <- cyto.Res[i,]$ref_name
+      ref.in <- readRDS(paste0("/bigdata/almogangel/xCell2_data/benchmarking_data/references/", refName, "_ref.rds"))
+      dep_list <- getDependencies(ref.in$lineage_file)
+      gep_mat <- makeGEPMat(ref.in$ref, ref.in$labels)
+      ref_type <- ifelse(refName %in% c("ts_blood", "sc_pan_cancer"), "sc", "rnaseq")
+      cor_mat <- getCellTypeCorrelation(gep_mat, ref_type)
+      truth <- cyto.vals$truth[[valType]][[valDataset]]
+      truth <- round(truth, roundResults)
+      res <- cyto.Res[i,]$res[[1]]
+
+      celltypes <- intersect(rownames(res), rownames(truth))
+      samples <- intersect(colnames(res), colnames(truth))
+
+      ct2most_simillar <- sapply(celltypes, function(ct){
+        celltypes2use <-  celltypes[!celltypes %in% c(ct, unlist(dep_list[ct]))]
+        names(sort(cor_mat[ct, celltypes2use], decreasing = TRUE))[1]
+      })
+
+      y <- cyto.Res[i,] %>%
+        select(method:n_shared_celltypes)
+
+      spill_cor_res <- tibble(sig_ct = celltypes, most_sim_truth_ct = ct2most_simillar)
+      spill_cor_res <- cbind(y, spill_cor_res)
+
+      spill_cor_res %>%
+        rowwise() %>%
+        mutate(spill_cor = cor(res[sig_ct, samples], truth[most_sim_truth_ct, samples], method = "pearson", use = "pairwise.complete.obs")) %>%
+        mutate(direct_cor = cor(res[sig_ct, samples], truth[sig_ct, samples], method = "pearson", use = "pairwise.complete.obs")) %>%
+        ungroup() %>%
+        return(.)
+
+
+    }, mc.cores = 20) %>%
+      bind_rows()
+
+      return(spill_res)
+
+  }
+
   benchmark_table <- benchmark_table %>%
     filter(!val_dataset %in% vals2remove)
 
@@ -389,12 +530,14 @@ get_xcell2_correlations <- function(benchmark_table = vals.refs.res, vals2remove
   cyto.Res <- cyto.Res %>%
     filter(!val_dataset %in% vals2remove)
 
+
   ref_val_pairs <- cyto.Res %>%
     group_by(ref_tissue, ref_name, val_type, val_dataset) %>%
     summarise(n = n()) %>%
     filter(n == length(methods2use)-1) %>%
     dplyr::select(-n) %>%
     ungroup()
+
 
   benchmark_table$res <- xCell2results
 
@@ -497,13 +640,13 @@ get_xcell2_correlations <- function(benchmark_table = vals.refs.res, vals2remove
              ref = factor(ref)) %>%
       dplyr::select(-c(cors_list, n_ct_samples))
 
+    return(data_combined)
 
   }
 
 
 
 
-  return(data_combined)
 
 }
 

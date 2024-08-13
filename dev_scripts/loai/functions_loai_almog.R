@@ -9,10 +9,12 @@ clean_names = function(names) {
 
 dummy_metadata <- function(metadata, cancers, label, remove_sd) {
 
+  #  Remove SD?
   if (remove_sd) {
     metadata <- metadata[metadata$RECIST != "SD",]
   }
 
+  # Use only specific cancer?
   metadata <- metadata[metadata$Cancer_Type %in% cancers,]
 
   label_column <- ifelse(label %in% c("PD", "SD", "PR", "CR"), "RECIST", "Response")
@@ -129,15 +131,13 @@ predict_response_lightgbm <- function(data,
   test_x = data.matrix(test_set[, -label_idx])
   test_y = test_set[, label_idx]
 
-
   train_y <- ifelse(train_y == 0, 0, 1)
   test_y <- ifelse(test_y == 0, 0, 1)
 
+  # >>> Tune learning rate:
+  dtrain <- lightgbm::lgb.Dataset(data = train_x, label = train_y)
 
-    # >>> Tune learning rate:
-  dtrain = lightgbm::lgb.Dataset(data = train_x, label = train_y)
-
-  initial_learning_rates <- c(0.001, 0.01, 0.1, 0.3, 0.5, 1, 2, 3, 5, 10)
+  initial_learning_rates <- c(0.01, 0.1, 0.2, 0.25, 0.3, 0.5, 1, 2, 3)
 
   cv_results <-  parallel::mclapply(initial_learning_rates, function(lr) {
     params <- list(objective = "binary",
@@ -353,25 +353,6 @@ predict_response_lightgbm <- function(data,
 
 
 
-
-  # --------> Almog review Loai's code so far
-
-  # SHAP
-  # new_labels <- list()
-  # shap_long_for_train <- SHAPforxgboost::shap.prep(xgb_model = best_model, X_train = train_x)
-  # shap_long_for_test <- SHAPforxgboost::shap.prep(xgb_model = best_model, X_train = test_x)
-
-  # shap_imp <- SHAPforxgboost::shap.importance(shap_values_long, top_n = 20)
-  # shapplot_for_train <- SHAPforxgboost::shap.plot.summary.wrap1(best_model, train_x, top_n = 20)
-  # shapplot_for_test <- SHAPforxgboost::shap.plot.summary.wrap1(best_model, test_x, top_n = 20)
-
-
-  # train_pred = predict(best_model, train_x)
-  # train_roc = pROC::roc(train_y, train_pred)
-  # train_auc = pROC::auc(train_roc)
-  # cat("Train AUC:", train_auc, "\n")
-
-
   if (return_shap) {
     shap_values <- shapviz::shapviz(best_model, X_pred = as.matrix(test_x))
 
@@ -383,19 +364,9 @@ predict_response_lightgbm <- function(data,
   }
 
 
-
   test_pred = predict(best_model, test_x)
   test_roc = pROC::roc(test_y, test_pred)
   test_auc = pROC::auc(test_roc)
-  # cat("Test AUC:", test_auc, "\n")
-  #
-  # train_df = data.frame(row.names = rownames(train_x), pred = train_pred)
-  # test_df = data.frame(row.names = rownames(test_x), pred = test_pred)
-  #
-  # print(' - - - - - - - - - - - - - - - - - - - - - RUN ENDED - - - - - - - - - - - - - - - - - - - - - ')
-  # return(list(test_df = test_df, train_df = train_df, best_model = best_model, best_params = best_params,
-  #             test_auc = test_auc, train_auc = train_auc, algorithm = algo,
-  #             shap_long_for_train = shap_long_for_train, shap_long_for_test = shap_long_for_test))
 
   auc <- as.numeric(gsub("Area under the curve: ", "", test_auc))
   return(auc)

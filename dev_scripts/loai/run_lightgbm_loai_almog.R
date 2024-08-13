@@ -15,14 +15,14 @@ if (FALSE) {
   ref.in <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/references/kass_tumor_ref.rds")
   xcell2_object <- xCell2::xCell2Train(mix = TPMs, ref = ref.in$ref, labels = ref.in$labels, lineage_file = ref.in$lineage_file, num_threads = 40, ref_type = "rnaseq",
                                        use_sillover = TRUE, return_analysis = FALSE)
-  xcell2_res <- xCell2::xCell2Analysis(mix = TPMs, xcell2object = xcell2_object, spillover = TRUE, spillover_alpha = 0.5, raw_scores = FALSE, num_threads = 40)
+  xcell2_res <- xCell2::xCell2Analysis(mix = TPMs, xcell2object = xcell2_object, spillover = TRUE, spillover_alpha = 0.25, raw_scores = FALSE, num_threads = 40, ref_is_sc = FALSE)
   saveRDS(xcell2_res, paste0(training_data_dir, "icb_kass_tumor.xcell2.rds"))
 
   # sc_pan_cancer
   ref.in <- readRDS("/bigdata/almogangel/xCell2_data/benchmarking_data/references/sc_pan_cancer_ref.rds")
   xcell2_object <- xCell2::xCell2Train(mix = TPMs, ref = ref.in$ref, labels = ref.in$labels, lineage_file = ref.in$lineage_file, num_threads = 40, ref_type = "sc",
                                        use_sillover = TRUE, return_analysis = FALSE)
-  xcell2_res <- xCell2::xCell2Analysis(mix = TPMs, xcell2object = xcell2_object, spillover = FALSE, spillover_alpha = 0, raw_scores = TRUE, num_threads = 40)
+  xcell2_res <- xCell2::xCell2Analysis(mix = TPMs, xcell2object = xcell2_object, spillover = TRUE, spillover_alpha = 0.25, raw_scores = TRUE, num_threads = 40, ref_is_sc = TRUE)
   saveRDS(xcell2_res, paste0(training_data_dir, "icb_sc_pan_cancer.xcell2.rds"))
 }
 
@@ -33,16 +33,18 @@ n_models <- 100
 n_cores <- 10
 add_genes <- FALSE
 return_shap <- FALSE
-label2use <- c("PD", "CR", "Response") # labels: For RECIST: "PD" "SD" "PR" "CR" or "NoResponse"/"Response"
+round_xcell2_res <- 3
+
+# label2use <- c("PD", "CR", "Response") # labels: For RECIST: "PD" "SD" "PR" "CR" or "NoResponse"/"Response"
 cancers <- c("Melanoma", "Renal Cell Carcinoma", "Urothelial Carcinoma", "NSCLC")
-cancers2use <- unlist(lapply(1:length(cancers), function(x) combn(cancers, x, simplify = FALSE)), recursive = FALSE)
+# cancers2use <- unlist(lapply(1:length(cancers), function(x) combn(cancers, x, simplify = FALSE)), recursive = FALSE)
 refs <- c("kass_tumor", "sc_pan_cancer")
-refs2use <- unlist(lapply(1:length(refs), function(x) combn(refs, x, simplify = FALSE)), recursive = FALSE)
-remove_sd <- c(TRUE, FALSE)
-params_grid <- expand.grid(label2use = label2use, cancers2use = cancers2use, refs2use = refs2use, remove_sd = remove_sd)
+# refs2use <- unlist(lapply(1:length(refs), function(x) combn(refs, x, simplify = FALSE)), recursive = FALSE)
+# remove_sd <- c(TRUE, FALSE)
+# params_grid <- expand.grid(label2use = label2use, cancers2use = cancers2use, refs2use = refs2use, remove_sd = remove_sd)
 
 
-# params_grid <- expand.grid(label2use = "PD", cancers2use = list(cancers), refs2use = list(refs), remove_sd = TRUE)
+params_grid <- expand.grid(label2use = "PD", cancers2use = list(cancers), refs2use = list(refs), remove_sd = FALSE)
 
 
 grid_res <- lapply(1:nrow(params_grid), function(i){
@@ -52,7 +54,6 @@ grid_res <- lapply(1:nrow(params_grid), function(i){
   metadata <- dummy_metadata(metadata, cancers = params_grid$cancers2use[i][[1]], label = params_grid$label2use[i], remove_sd = params_grid$remove_sd[i])
 
   # ----- Prepare training datasets ----
-
   # Get data
   method2use <- c("xcell2", "bayesprism", "cbrx", "decon", "epic", "mcpcounter", "dtangle")
 
@@ -89,6 +90,11 @@ grid_res <- lapply(1:nrow(params_grid), function(i){
 
   }
 
+  # Round xCell2 results?
+  if (!is.null(round_xcell2_res)) {
+    methods_data$xcell2 <- round(methods_data$xcell2, round_xcell2_res)
+  }
+
   tide = read.csv('/bigdata/loainaom/newRuns_0708/dataFILES/dataTIDE.csv', header = TRUE) %>% as.data.frame()
   rownames(tide) <- tide[,1]
   tide <- tide[,-1]
@@ -101,7 +107,6 @@ grid_res <- lapply(1:nrow(params_grid), function(i){
   rownames(a) <- rownames(impers)
   methods_data[["impers"]] <- a
 
-
   if (add_genes) {
     genes = readxl::read_xlsx('/bigdata/almogangel/xCell2/dev_scripts/loai/genes_to_use_for_ml.xlsx') # Genes as features
     wanted_genes = genes$genes
@@ -109,7 +114,6 @@ grid_res <- lapply(1:nrow(params_grid), function(i){
     colnames(genes) = paste0("gene_", colnames(genes))
     metadata <- cbind(genes, metadata)
   }
-
 
 
   # Combine metadata with methods data
@@ -166,9 +170,8 @@ grid_res <- lapply(1:nrow(params_grid), function(i){
       methods_auc <- sapply(method2use, function(m){
         data <- methods_data[[m]]
         auc <- predict_response_lightgbm(data = data,
-                                         num_threads = 1,
+                                         num_threads = 1, # Do not change
                                          return_shap = return_shap)
-
       })
       methods_auc
 
