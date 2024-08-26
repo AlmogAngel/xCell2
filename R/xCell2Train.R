@@ -141,11 +141,12 @@ prepRefMix <- function(ref, mix, ref_type, min_sc_genes, human2mouse){
   ref <- log2(ref)
 
 
-  if(max(mix) >= 50 & !is.null(mix)){
-    mix <- log2(mix+1)
-  }
-
   if (!is.null(mix)) {
+
+    if(max(mix) >= 50){
+      mix <- log2(mix+1)
+    }
+
     # Select shared genes
     shared_genes <- intersect(rownames(ref), rownames(mix))
     message(paste0(length(shared_genes), " genes are shared between reference and mixture."))
@@ -357,7 +358,8 @@ createSignatures <- function(labels, dep_list, quantiles_matrix, probs, diff_val
       # Relax prob-diff-min_genes parameters
       probs2use <- c(probs, max(probs)*1.25, max(probs)*1.5, max(probs)*2)
       probs2use <- probs2use[probs2use < 0.5]
-      diff_vals2use <- c(min(diff_vals)*0, min(diff_vals)*0.5, min(diff_vals)*0.75, diff_vals)
+      min_diff <- min(diff_vals[diff_vals != 0])
+      diff_vals2use <- unique(c(min_diff*0, min_diff*0.5, min_diff*0.75, diff_vals))
       min_genes2use <- round(min_genes*0.5)
       min_genes2use <- ifelse(min_genes2use < 3, 3, min_genes2use)
 
