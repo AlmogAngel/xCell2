@@ -23,4 +23,4 @@ Imports:
     tibble,
     dplyr,
     plyr
-RoxygenNote: 7.3.0
+RoxygenNote: 7.3.2
