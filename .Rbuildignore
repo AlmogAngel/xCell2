@@ -1,4 +1,6 @@
 ^.*\.Rproj$
 ^\.Rproj\.user$
 ^LICENSE\.md$
-^dev_scripts/run_sig_gen_tuning\.R$
+^dev_scripts/
+^figures/
+^dev_scripts/
