@@ -1,6 +1,5 @@
 ^.*\.Rproj$
 ^\.Rproj\.user$
 ^LICENSE\.md$
-^dev_scripts/
-^figures/
-^dev_scripts/
+^/bigdata/almogangel/xCell2/dev_scripts$
+^/bigdata/almogangel/xCell2/backup$
