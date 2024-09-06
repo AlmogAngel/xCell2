@@ -29,8 +29,7 @@ Detailed usage guides are under development.
 
 ## Contributors
 
-xCell 2.0 is developed by the Aran lab at the Technion - Israel Institute of Technology.
-Contact: Almog Angel (almog.angel at campus.technion.ac.il) Dvir Aran (dvir.aran at technion.ac.il)
+xCell 2.0 is developed by the Aran lab at the Technion - Israel Institute of Technology. Contact: Almog Angel (almog.angel at campus.technion.ac.il) Dvir Aran (dvir.aran at technion.ac.il)
 
 ## Citation
 
