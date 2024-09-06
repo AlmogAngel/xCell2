@@ -21,8 +21,8 @@ Reference curated by Zaitsev A (2022) and trained by Angel A, et al (2024).
 TMECompendium.xCell2Ref
 }
 \description{
-Platform: RNA-Seq\n
-Organism: Human\n
+Platform: RNA-Seq
+Organism: Human
 Tissue: Tumor
 }
 \details{
