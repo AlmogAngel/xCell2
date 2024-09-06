@@ -32,8 +32,8 @@ xCell2Train(
 \item{labels}{A data frame in which the rows correspond to samples in the ref. The data frame must have four columns:
 "ont": the cell type ontology as a character (i.e., "CL:0000545" or NA if there is no ontology).
 "label": the cell type name as a character (i.e., "T-helper 1 cell").
-"sample": the cell type sample that match the column name in ref.
-"dataset": sample's source dataset or subject (can be the same for all sample if no such information).}
+"sample": the cell type sample/cell that match the column name in ref.
+"dataset": sample's source dataset or subject (can be the same for all samples if no such information).}
 
 \item{refType}{Gene expression data type: "rnaseq" for bulk RNA-Seq, "array" for micro-array, or "sc" for scRNA-Seq.}
 
