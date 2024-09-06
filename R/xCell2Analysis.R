@@ -1,112 +1,100 @@
 #' xCell2Analysis function
 #'
-#' This function takes a matrix of mix gene expression data and a `xCell2Signatures` object containing a set of signatures as input. It performs downstream analysis to identify enriched cell types in the mix sample.
+#' This function performs cell type enrichment analysis to identify proportions of cell types in a bulk gene expression mixture.
 #'
 #' @importFrom singscore rankGenes simpleScore
-#' @importFrom randomForestSRC predict.rfsrc
-#' @import dplyr
-#' @import tibble
-#' @import purrr
-#' @importFrom  pracma lsqlincon
-#' @importFrom xgboost xgb.DMatrix
-#' @param mix a matrix containing gene expression data
-#' @param xcell2object S4 object of `xCell2Object`
-#' @param min_shared_genes description
-#' @param raw_scores description
-#' @param spillover Boolean - should we use spillover correction on the transformed scores?
-#' @param spillover_alpha description
-#' @param num_threads description
-
+#' @importFrom BiocParallel MulticoreParam bplapply
+#' @importFrom pracma lsqlincon
+#' @param mix A bulk mixture of gene expression data (genes in rows, samples in columns).
+#' @param xcell2object An S4 object of class `xCell2Object` generated using `xCell2Train`.
+#' @param minSharedGenes Minimum fraction of shared genes required between the mix and the reference (default: 0.9).
+#' @param rawScores Boolean to indicate whether to return raw enrichment scores (default: FALSE).
+#' @param spillover Boolean - use spillover correction on the transformed enrichment scores? (default: TRUE).
+#' @param spilloverAlpha A numeric for spillover alpha value (default: 0.5).
+#' @param numThreads Number of threads for parallel processing (default: 1).
+#'
 #' @return A data frame containing the cell type enrichment for each sample in the input matrix, as estimated by xCell2.
 #' @export
-xCell2Analysis <- function(mix, xcell2object, min_shared_genes = 0.9, raw_scores = FALSE, spillover = TRUE, spillover_alpha = 0.5, num_threads = 1){
+xCell2Analysis <- function(mix,
+                           xcell2object,
+                           minSharedGenes = 0.9,
+                           rawScores = FALSE,
+                           spillover = TRUE,
+                           spilloverAlpha = 0.5,
+                           numThreads = 1) {
 
-  scoreMix <- function(ctoi, mix_ranked, signatures_ctoi){
-
-    scores <- sapply(signatures_ctoi, simplify = TRUE, function(sig){
-      suppressWarnings(singscore::simpleScore(mix_ranked, upSet = sig, centerScore = FALSE)$TotalScore)
+  scoreMix <- function(cellType, mixRanked, signaturesCellType) {
+    scores <- sapply(signaturesCellType, simplify = TRUE, function(sig) {
+      suppressWarnings(singscore::simpleScore(mixRanked, upSet = sig, centerScore = FALSE)$TotalScore)
     })
-
-    rownames(scores) <- colnames(mix_ranked)
-
+    rownames(scores) <- colnames(mixRanked)
     return(scores)
   }
 
-
-  param <- BiocParallel::MulticoreParam(workers = num_threads)
-
+  param <- BiocParallel::MulticoreParam(workers = numThreads)
 
   # Check reference/mixture genes intersection
-  genes_intersect_frac <- length(intersect(rownames(mix), xcell2object@genes_used)) / length(xcell2object@genes_used)
-  if (genes_intersect_frac < min_shared_genes) {
-    stop("This xCell2 reference shares ", genes_intersect_frac, " genes with the mixtures and min_shared_genes = ", min_shared_genes, ".",
-         "\n", "Consider training a new xCell2 reference or adjusting min_shared_genes.")
+  genesIntersectFrac <- length(intersect(rownames(mix), xcell2object@genesUsed)) / length(xcell2object@genesUsed)
+  if (genesIntersectFrac < minSharedGenes) {
+    stop("This xCell2 reference shares ", genesIntersectFrac, " genes with the mixtures and minSharedGenes = ", minSharedGenes, ".",
+         "\n", "Consider training a new xCell2 reference or adjusting minSharedGenes.")
   }
-
 
   # Rank mix gene expression matrix
-  mix_ranked <- singscore::rankGenes(mix[xcell2object@genes_used,])
+  mixRanked <- singscore::rankGenes(mix[xcell2object@genesUsed, ])
 
   # Score and predict
-  sigs_celltypes <- unique(unlist(lapply(names(xcell2object@signatures), function(x){strsplit(x, "#")[[1]][1]})))
+  sigsCellTypes <- unique(unlist(lapply(names(xcell2object@signatures), function(x) { strsplit(x, "#")[[1]][1] })))
 
   # Get raw enrichment scores
-  res_raw <- BiocParallel::bplapply(sigs_celltypes, function(ctoi){
-
-    signatures_ctoi <- xcell2object@signatures[startsWith(names(xcell2object@signatures), paste0(ctoi, "#"))]
-    scores <- scoreMix(ctoi, mix_ranked, signatures_ctoi)
+  resRaw <- BiocParallel::bplapply(sigsCellTypes, function(cellType) {
+    signaturesCellType <- xcell2object@signatures[startsWith(names(xcell2object@signatures), paste0(cellType, "#"))]
+    scores <- scoreMix(cellType, mixRanked, signaturesCellType)
     return(scores)
-
   }, BPPARAM = param)
-  names(res_raw) <- sigs_celltypes
 
-  res <- t(sapply(res_raw, function(ctoi){
-    rowMeans(ctoi)
+  names(resRaw) <- sigsCellTypes
+
+  res <- t(sapply(resRaw, function(cellTypeScores) {
+    rowMeans(cellTypeScores)
   }))
 
-
-  if (raw_scores) {
+  if (rawScores) {
     return(res)
-  }else{
-
-    # linear transformation
-    res <- t(sapply(rownames(res), function(ctoi){
-
-      ctoi_res <- res[ctoi,]
+  } else {
+    # Linear transformation
+    res <- t(sapply(rownames(res), function(cellType) {
+      cellTypeRes <- res[cellType, ]
 
       # Linear transformation
-      a <- pull(filter(xcell2object@params, celltype == ctoi), a)
-      b <- pull(filter(xcell2object@params, celltype == ctoi), b)
-      m <- pull(filter(xcell2object@params, celltype == ctoi), m)
-      ctoi_res <- (ctoi_res^(1/b)) / a
-      ctoi_res <- ctoi_res*m
+      a <- xcell2object@params[xcell2object@params$celltype == cellType,]$a
+      b <- xcell2object@params[xcell2object@params$celltype == cellType,]$b
+      m <- xcell2object@params[xcell2object@params$celltype == cellType,]$m
+
+      cellTypeRes <- (cellTypeRes^(1/b)) / a
+      cellTypeRes <- cellTypeRes * m
 
       # Shift values
-      ctoi_res <- ctoi_res - min(ctoi_res)
-      ctoi_res <- round(ctoi_res, 5)
+      cellTypeRes <- cellTypeRes - min(cellTypeRes)
+      cellTypeRes <- round(cellTypeRes, 5)
 
-      return(ctoi_res)
+      return(cellTypeRes)
     }))
-
   }
-
 
   if (spillover) {
-
     # Spillover correction
-    spill_mat <- xcell2object@spill_mat * spillover_alpha
-    diag(spill_mat) <- 1
+    spillMat <- xcell2object@spillMat * spilloverAlpha
+    diag(spillMat) <- 1
 
-    rows <- intersect(rownames(res), rownames(spill_mat))
+    rows <- intersect(rownames(res), rownames(spillMat))
 
-    scores_corrected <- apply(res[rows, ], 2, function(x) pracma::lsqlincon(spill_mat[rows, rows], x, lb = 0))
-    scores_corrected[scores_corrected < 0] <- 0
-    rownames(scores_corrected) <- rows
+    scoresCorrected <- apply(res[rows, ], 2, function(x) pracma::lsqlincon(spillMat[rows, rows], x, lb = 0))
+    scoresCorrected[scoresCorrected < 0] <- 0
+    rownames(scoresCorrected) <- rows
 
-    return(scores_corrected)
-  }else{
+    return(scoresCorrected)
+  } else {
     return(res)
   }
-
 }
-

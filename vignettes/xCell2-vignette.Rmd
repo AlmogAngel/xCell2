@@ -1,0 +1,128 @@
+---
+title: "Introduction to xCell 2.0"
+author: "Almog Angel"
+date: "`r Sys.Date()`"
+output:
+  BiocStyle::html_document:
+    toc: true
+    toc_depth: 2
+vignette: >
+  %\VignetteIndexEntry{Introduction to xCell2}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+# Introduction
+
+`xCell2` is an R package for performing cell type enrichment analysis of bulk gene expression data. It builds upon the functionality of the original `xCell` package, providing improved algorithms and enhanced performance. More importantly, xCell2 is generic, namely you can use any reference (including scRNA-Seq) to train an xCell2 reference object for the analysis.
+
+This vignette provides an overview of the package's functionality, including how to prepare input data, use the main functions, and perform basic cell type enrichment analysis.
+
+# Installation
+
+To install the `xCell2` package from Bioconductor, use:
+
+```r
+if (!requireNamespace("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+BiocManager::install("xCell2")
+```
+
+To install the `xCell2` package source code, use:
+
+```r
+devtools::install_github("AlmogAngel/xCell2")
+```
+
+# Generating custom xCell2 reference object using xCell2Train
+
+This section contain two parts.
+In the first part we will prepare all the require inputs for `xCell2Train`.
+In the second part we learn use the `xCell2Train` to generate a new xCell2 reference object.
+
+## Preparing required inputs
+
+In this example we will use 1561 bulk RNA-seq samples of sorted cell populations from the Database of Immune Cell Expression (DICE) by Schmiedel B et al. (2018).
+
+You can access the reference data using the `celldex` package:
+
+```r
+dice <- celldex::DatabaseImmuneCellExpressionData()
+```
+
+The `xCell2Train` function requires a reference cell type gene expression matrix and a data.frame with different labels the correspond to the samples/cells in the reference.
+
+*Reference gene expression matrix:*
+- The reference gene expression matrix can be generated from any sequencing platform - Micro-array, bulk RNA-Seq and single-cell RNA-Seq.
+- xCell2 rely on enrichment scores of gene-sets, therefore reference can be in raw counts or any normalization and xCell2 can handle data in either linear or logarithmic space.
+
+*Labels data frame:*
+- In addition to the reference, xCell2 requires a corresponding data frame with different labels for the samples/cells in the reference.
+- The rows in the data frame should correspond to columns in the ref.
+- The data frame must have four columns:
+    1. "ont": the cell type ontology as a character (i.e., "CL:0000545" or NA if there is no ontology).
+    2. "label": the cell type name as a character (i.e., "T-helper 1 cell").
+    3. "sample": the cell type sample/cell that match the column name in ref.
+    4. "dataset": sample's source dataset or subject (can be the same for all samples if no such information).
+
+
+```r
+# Extract reference metadata
+dice_metadata <- as.data.frame(dice@colData)
+
+# Extract reference matrix
+dice_ref <- as.matrix(dice@assays@data$logcounts)   
+
+# Deal with duplicated column names
+sum(duplicated(colnames(dice_ref))) == 0
+colnames(dice_ref) <- make.unique(colnames(dice_ref))
+sum(duplicated(colnames(dice_ref))) == 0
+```
+
+dice_ref should look like this:
+```r
+dice_ref[1:5, 1:5]
+#>              TPM_1     TPM_2     TPM_3     TPM_4     TPM_5
+#> 5S_rRNA  4.0282020 3.3285754 3.1117177 2.9578796 2.9567111
+#> 7SK      7.7380178 7.7224444 7.6986431 7.6570310 7.6438196
+#> A1BG     0.9248442 0.9070792 0.8775981 0.8415798 0.8028413
+#> A1BG-AS1 2.4189491 2.2751703 2.2495744 2.2409612 2.2215416
+#> A1CF     0.8792085 0.7225164 0.7173336 0.6921259 0.6921011
+```
+
+
+
+* You can skip this if:*
+  * a) You don't want to use ontology to avoid cell type dependencies (not recommended)*
+  * b) You are sure that there is no cell type dependencies in your reference*
+  
+```r
+# Find cell types dependencies using ontology
+dice_labels_fine <- dice_metadata$label.fine    # We will use the "fine" annotation for those cell type
+
+# Note: In this example the cell type ontology exist as it was curated by the authors of the celldex package.
+# However, here we will show you two method to find cell type ontologies.
+
+# Method one: use the ontoProc and stringdist packages
+
+cl <- ontoProc::getOnto(ontoname = "cellOnto", year_added = "2023")   # Fetch ontology data
+celltype2ontology <- cl$name[startsWith(names(cl$name), "CL:")]
+
+# This function will help you match your cell types annotation to those in the cell type ontology data
+find_top_similar_celltypes <- function(your_ct_lables, onto_ct_labels = cl$name, top_n = 5) {
+  # Compute Levenshtein distances
+  distances <- stringdist::stringdist(your_ct_lables, string_list, method = "lv")
+  
+  # Get the indices of the top N smallest distances
+  top_indices <- order(distances)[1:top_n]
+  
+  # Return the top N similar strings
+  return(string_list[top_indices])
+}
+
+
+
+# Build labels data frame
+data.frame("ont" = , "label" = , "sample" = , "dataset" = )
+
+```

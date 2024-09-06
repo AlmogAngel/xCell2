@@ -4,3 +4,6 @@
 .Ruserdata
 dev_data
 .Rproj.user.backup
+inst/doc
+/doc/
+/Meta/

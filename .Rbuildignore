@@ -1,5 +1,9 @@
 ^.*\.Rproj$
 ^\.Rproj\.user$
+^\.RData$
+^\.Rhistory$
+^\.git$
+^\.gitignore$
 ^LICENSE\.md$
-^/bigdata/almogangel/xCell2/dev_scripts$
-^/bigdata/almogangel/xCell2/backup$
+^doc$
+^Meta$

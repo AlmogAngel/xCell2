@@ -1,26 +1,37 @@
 Package: xCell2
 Type: Package
-Title: What the Package Does (Title Case)
-Version: 0.1.0
-Author: Who wrote it
-Maintainer: The package maintainer <yourself@somewhere.net>
-Description: More about what it does (maybe more than one line)
-    Use four spaces when indenting paragraphs within the Description.
-License: MIT + file LICENSE
+Title: A Tool for Generic Cell Type Enrichment Analysis
+Version: 0.99.0
+Author: Almog Angel
+Maintainer: Almog Angel <almog.angel@campus.technion.ac.il>
+Description: xCell2 provides methods for cell type enrichment analysis using cell type signatures.
+    It includes three main functions - 
+    1. xCell2Train for training custom references objects from bulk or single-cell RNA-seq datasets.
+    2. xCell2Analysis for conducting the cell type enrichment analysis using the custom reference.
+    3. xCell2GetLineage for identifying dependencies between different cell types using ontology.
+License: GPL (>= 3)
 Encoding: UTF-8
 LazyData: true
 Depends: 
-    R (>= 2.10)
-biocViews:
+    R (>= 4.0)
+biocViews: GeneExpression, CellType, RNASeq, SingleCell, Deconvolution, ImmunoOncology
 Imports: 
     Rfast,
-    Seurat,
-    sparseMatrixStats,
-    GSEABase,
     singscore,
     ontoProc,
     ontologyIndex,
     tibble,
     dplyr,
-    plyr
+    BiocParallel,
+    Matrix,
+    minpack.lm,
+    pracma,
+    methods,
+    readr,
+    tidyr
+Suggests:
+    knitr,
+    rmarkdown,
+    testthat
 RoxygenNote: 7.3.2
+VignetteBuilder: knitr

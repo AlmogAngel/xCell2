@@ -6,25 +6,32 @@
 \usage{
 xCell2Analysis(
   mix,
-  xcell2sigs,
-  min_intersect = 0.9,
-  tranform,
-  spillover,
-  spillover_alpha = 0.2
+  xcell2object,
+  minSharedGenes = 0.9,
+  rawScores = FALSE,
+  spillover = TRUE,
+  spilloverAlpha = 0.5,
+  numThreads = 1
 )
 }
 \arguments{
-\item{mix}{a matrix containing gene expression data}
+\item{mix}{A bulk mixture of gene expression data (genes in rows, samples in columns).}
 
-\item{xcell2sigs}{S4 object of `xCell2Signatures`}
+\item{xcell2object}{An S4 object of class `xCell2Object` generated using `xCell2Train`.}
 
-\item{tranform}{Boolean - should scores transformed to fraction?}
+\item{minSharedGenes}{Minimum fraction of shared genes required between the mix and the reference (default: 0.9).}
 
-\item{spillover}{Boolean - should we use spillover corretion on the transformed scores?}
+\item{rawScores}{Boolean to indicate whether to return raw enrichment scores (default: FALSE).}
+
+\item{spillover}{Boolean - use spillover correction on the transformed enrichment scores? (default: TRUE).}
+
+\item{spilloverAlpha}{A numeric for spillover alpha value (default: 0.5).}
+
+\item{numThreads}{Number of threads for parallel processing (default: 1).}
 }
 \value{
 A data frame containing the cell type enrichment for each sample in the input matrix, as estimated by xCell2.
 }
 \description{
-This function takes a matrix of mix gene expression data and a `xCell2Signatures` object containing a set of signatures as input. It performs downstream analysis to identify enriched cell types in the mix sample.
+This function performs cell type enrichment analysis to identify proportions of cell types in a bulk gene expression mixture.
 }

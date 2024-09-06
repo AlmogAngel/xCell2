@@ -4,16 +4,22 @@
 \alias{xCell2GetLineage}
 \title{xCell2GetLineage function}
 \usage{
-xCell2GetLineage(labels, out_file)
+xCell2GetLineage(labels, outFile = NULL)
 }
 \arguments{
-\item{labels}{A data frame containing two columns: first column named "ont" for cell type onthology (character) and second column named "label" for cell type labels (character)}
+\item{labels}{A data frame with four columns:
+"ont": the cell type ontology as a character (i.e., "CL:0000545" or NA if there is no ontology).
+"label": the cell type name as a character (i.e., "T-helper 1 cell").
+"sample": the cell type sample that match the column name in ref.
+"dataset": sample's source dataset or subject (can be the same for all sample if no such information).}
 
-\item{out_file}{An optional output file name to write the cell type dependencies to.}
+\item{outFile}{An optional output file name to write the cell type dependencies.}
 }
 \value{
 A list of cell type dependencies, or a TSV file containing the cell type dependencies if an output file is specified.
 }
 \description{
-This function uses the `ontoProc` and `ontologyIndex` packages to identify the descendants and ancestors of each cell type based on the cell ontology tree. If no output file is specified, the function returns a list of cell type dependencies as a list. If an output file is specified, the function writes the cell type dependencies to a TSV file.
+This function identify the descendants and ancestors of each cell type based on the cell ontology tree.
+If no output file is specified, the function returns a list of cell type dependencies.
+If an output file is specified, the function writes the cell type dependencies to a TSV file.
 }

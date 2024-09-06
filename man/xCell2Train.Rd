@@ -6,86 +6,66 @@
 \usage{
 xCell2Train(
   ref,
-  labels,
   mix = NULL,
-  ref_type,
-  filtering_data = NULL,
-  lineage_file = NULL,
-  top_genes_frac = 1,
-  medianGEP = TRUE,
+  labels,
+  refType,
+  humanToMouse = FALSE,
+  lineageFile = NULL,
   seed = 123,
-  probs = c(0.01, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.4),
-  sim_fracs = c(0, seq(0.01, 0.25, 0.01), seq(0.3, 1, 0.05)),
-  diff_vals = round(c(log2(1), log2(1.5), log2(2), log2(2.5), log2(3), log2(4), log2(5),
-    log2(10), log2(20)), 3),
-  min_genes = 3,
-  max_genes = 150,
-  return_sigs = FALSE,
-  return_sigs_filt = FALSE,
-  sigsFile = NULL,
-  minPBcells = 30,
-  minPBsamples = 10,
-  ct_sims = 50,
-  samples_frac = 0.1,
-  simMethod = "ref_multi",
-  nCores = 1,
-  top_sigs_frac = 0.05
+  numThreads = 1,
+  useOntology = TRUE,
+  returnSignatures = FALSE,
+  returnAnalysis = FALSE,
+  useSpillover = TRUE,
+  spilloverAlpha = 0.5,
+  minPbCells = 30,
+  minPbSamples = 10,
+  minScGenes = 10000,
+  topSpillValue = 0.5
 )
 }
 \arguments{
-\item{ref}{A reference gene expression matrix.}
+\item{ref}{A reference gene expression matrix (genes in rows, samples/cells in columns).}
+
+\item{mix}{A bulk mixture of gene expression data (genes in rows, samples in columns) (optional).}
 
 \item{labels}{A data frame in which the rows correspond to samples in the ref. The data frame must have four columns:
 "ont": the cell type ontology as a character (i.e., "CL:0000545" or NA if there is no ontology).
 "label": the cell type name as a character (i.e., "T-helper 1 cell").
-"sample": the cell type sample should match the column name in ref.
-"dataset": the cell type sample dataset or subject (for single-cell) as a character.}
+"sample": the cell type sample that match the column name in ref.
+"dataset": sample's source dataset or subject (can be the same for all sample if no such information).}
 
-\item{mix}{description}
+\item{refType}{Gene expression data type: "rnaseq" for bulk RNA-Seq, "array" for micro-array, or "sc" for scRNA-Seq.}
 
-\item{ref_type}{Gene expression data type: "rnaseq", "array", or "sc".}
+\item{humanToMouse}{A Boolean for converting human genes to mouse genes (default: FALSE).}
 
-\item{filtering_data}{description}
+\item{lineageFile}{Path to the cell type lineage file generated with `xCell2GetLineage` function and reviewed manually (optional).}
 
-\item{lineage_file}{Path to the cell type lineage file generated with `xCell2GetLineage` function (optional).}
+\item{seed}{Set seed for reproducible results (default: 123).}
 
-\item{top_genes_frac}{description}
+\item{numThreads}{Number of threads for parallel processing (default: 1).}
 
-\item{probs}{A vector of probability thresholds to be used for generating signatures (optional).}
+\item{useOntology}{A Boolean for considering cell type dependencies by using ontological integration (default: TRUE).}
 
-\item{sim_fracs}{A vector of mixture fractions to be used in signature filtering (optional).}
+\item{returnSignatures}{A Boolean to return just the signatures (default: FALSE).}
 
-\item{diff_vals}{A vector of delta values to be used for generating signatures (optional).}
+\item{returnAnalysis}{A Boolean to return the xCell2Analysis results (do not return reference object) (default: FALSE).}
 
-\item{min_genes}{The minimum number of genes to include in the signature (optional).}
+\item{useSpillover}{A Boolean to use spillover correction in xCell2Analysis (returnAnalysis must be TRUE) (default: TRUE).}
 
-\item{max_genes}{The maximum number of genes to include in the signature (optional).}
+\item{spilloverAlpha}{A numeric for spillover alpha value in xCell2Analysis (returnAnalysis must be TRUE) (default: 0.5).}
 
-\item{return_sigs}{description}
+\item{minPbCells}{For scRNA-Seq reference only - minimum number of cells in the pseudo-bulk (optional, default: 30).}
 
-\item{return_sigs_filt}{description}
+\item{minPbSamples}{For scRNA-Seq reference only - minimum number of pseudo-bulk samples (optional, default: 10).}
 
-\item{sigsFile}{description}
+\item{minScGenes}{For scRNA-Seq reference only - minimum number of genes for pseudo-bulk samples (default: 10000).}
 
-\item{minPBcells}{description}
-
-\item{ct_sims}{description}
-
-\item{samples_frac}{description}
-
-\item{simMethod}{description}
-
-\item{nCores}{description}
-
-\item{top_sigs_frac}{description}
-
-\item{mix_type}{Gene expression data type: "rnaseq", "array", or "sc".}
-
-\item{minPBgroups}{description}
+\item{topSpillValue}{Maximum spillover compensation correction value (default: 0.5).}
 }
 \value{
-An S4 object containing the signatures, cell type labels, and cell type dependencies.
+An S4 object containing cell types' signatures, linear transformation parameters, spillover matrix and dependencies.
 }
 \description{
-This function generates signatures for each cell type.
+This function generates a custom xCell2 reference object for cell type enrichment analysis.
 }
