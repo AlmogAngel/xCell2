@@ -1,3 +1,11 @@
+#' A subset SummarizedExperiment object of the DICE reference for xCell 2.0 vignette
+#'
+#' This is a demo reference object to learn how to use 'xCell2Train'
+#'
+#' @source Schmiedel B et al. (2018)
+
+"dice_demo_ref"
+
 #' An xCell2 object trained from the Tumor Microenvironment Compendium reference
 #'
 #' Platform: RNA-Seq

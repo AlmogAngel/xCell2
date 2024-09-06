@@ -14,7 +14,7 @@ vignette: >
 
 # Introduction
 
-`xCell2` is an R package for performing cell type enrichment analysis of bulk gene expression data. It builds upon the functionality of the original `xCell` package, providing improved algorithms and enhanced performance. More importantly, xCell2 is generic, namely you can use any reference (including scRNA-Seq) to train an xCell2 reference object for the analysis.
+`xCell2` is an R package for performing cell type enrichment analysis of bulk gene expression data. It builds upon the methodology of the original `xCell` package, providing improved algorithms and enhanced performance. More importantly, xCell2 is generic, namely you can use any reference (including scRNA-Seq) to train an xCell2 reference object for the analysis.
 
 This vignette provides an overview of the package's functionality, including how to prepare input data, use the main functions, and perform basic cell type enrichment analysis.
 
@@ -44,10 +44,14 @@ In the second part we learn use the `xCell2Train` to generate a new xCell2 refer
 
 In this example we will use 1561 bulk RNA-seq samples of sorted cell populations from the Database of Immune Cell Expression (DICE) by Schmiedel B et al. (2018).
 
-You can access the reference data using the `celldex` package:
+You can access the full reference data using the `celldex` package.
+However, here we will use a sub-set of the DICE reference just for learning purpose.
 
 ```r
-dice <- celldex::DatabaseImmuneCellExpressionData()
+# Access the full DICE referece:
+# dice <- celldex::DatabaseImmuneCellExpressionData() 
+
+
 ```
 
 The `xCell2Train` function requires a reference cell type gene expression matrix and a data.frame with different labels the correspond to the samples/cells in the reference.
