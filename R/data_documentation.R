@@ -1,7 +1,7 @@
 #' An xCell2 object trained from the Tumor Microenvironment Compendium reference
 #'
-#' Platform: RNA-Seq
-#' Organism: Human
+#' Platform: RNA-Seq\n
+#' Organism: Human\n
 #' Tissue: Tumor
 #'
 #' You can use this reference object as in input for `xCell2Analysis` or create a new reference object using `xCell2Train`.
@@ -23,8 +23,8 @@
 
 #' An xCell2 object trained from the Tabula Muris reference
 #'
-#' Platform: single-cell RNA-Seq
-#' Organism: Mouse
+#' Platform: single-cell RNA-Seq\n
+#' Organism: Mouse\n
 #' Tissue: Immune/Blood
 #'
 #' You can use this reference object as in input for `xCell2Analysis` or create a new reference object using `xCell2Train`.
@@ -46,8 +46,8 @@
 
 #' An xCell2 object trained from the Tabula Sapiens reference
 #'
-#' Platform: single-cell RNA-Seq
-#' Organism: Human
+#' Platform: single-cell RNA-Seq\n
+#' Organism: Human\n
 #' Tissue: Immune/Blood
 #' You can use this reference object as in input for `xCell2Analysis` or create a new reference object using `xCell2Train`.
 #'
@@ -68,8 +68,8 @@
 
 #' An xCell2 object trained from the MouseRNAseqData reference
 #'
-#' Platform: RNA-Seq
-#' Organism: Mouse
+#' Platform: RNA-Seq\n
+#' Organism: Mouse\n
 #' Tissue: General
 #'
 #' You can use this reference object as in input for `xCell2Analysis` or create a new reference object using `xCell2Train`.
@@ -91,8 +91,8 @@
 
 #' An xCell2 object trained from the PanCancer reference
 #'
-#' Platform: single-cell RNA-Seq
-#' Organism: Human
+#' Platform: single-cell RNA-Seq\n
+#' Organism: Human\n
 #' Tissue: Tumor
 #'
 #' You can use this reference object as in input for `xCell2Analysis` or create a new reference object using `xCell2Train`.
@@ -114,8 +114,8 @@
 
 #' An xCell2 object trained from the LM22 reference
 #'
-#' Platform: Micro-array
-#' Organism: Human
+#' Platform: Micro-array\n
+#' Organism: Human\n
 #' Tissue: General
 #'
 #' You can use this reference object as in input for `xCell2Analysis` or create a new reference object using `xCell2Train`.
@@ -137,8 +137,8 @@
 
 #' An xCell2 object trained from the Immune Compendium reference
 #'
-#' Platform: RNA-Seq
-#' Organism: Human
+#' Platform: RNA-Seq\n
+#' Organism: Human\n
 #' Tissue: Immune/Blood
 #'
 #' You can use this reference object as in input for `xCell2Analysis` or create a new reference object using `xCell2Train`.
@@ -160,8 +160,8 @@
 
 #' An xCell2 object trained from the Immunologic Genome Project reference
 #'
-#' Platform: Micro-array
-#' Organism: Mouse
+#' Platform: Micro-array\n
+#' Organism: Mouse\n
 #' Tissue: Immune/Blood
 #'
 #' You can use this reference object as in input for `xCell2Analysis` or create a new reference object using `xCell2Train`.
@@ -183,8 +183,8 @@
 
 #' An xCell2 object trained from the Blueprint and ENCODE Projects reference
 #'
-#' Platform: RNA-Seq
-#' Organism: Human
+#' Platform: RNA-Seq\n
+#' Organism: Human\n
 #' Tissue: General
 #'
 #' You can use this reference object as in input for `xCell2Analysis` or create a new reference object using `xCell2Train`.
