@@ -1,5 +1,12 @@
 # Function to validate input parameters for xCell2 training
 ValidateInputs <- function(ref, labels, refType) {
+  
+  if (all(colnames(labels) %in% c("ont", "label", "sample", "dataset"))) {
+    labels <- labels[,c("ont", "label", "sample", "dataset")]
+  }else{
+    stop("labels must have at 4 columns: 'ont'', 'label'', 'sample'' and 'dataset'")
+  }
+  
   if (length(unique(labels$label)) < 3) {
     stop("Reference must have at least 3 cell types!")
   }
@@ -72,6 +79,8 @@ ScToPseudoBulk <- function(ref, labels, minPbCells, minPbSamples) {
 
 # Function to prepare reference and mixture data
 PrepRefMix <- function(ref, mix, refType, minScGenes, humanToMouse) {
+  
+  
   if (humanToMouse) {
     message("Converting reference genes from human to mouse...")
     human_mouse_gene_symbols <- xCell2::human_mouse_gene_symbols
