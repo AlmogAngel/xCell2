@@ -1,4 +1,4 @@
-<img src="xcell2logo.jpg" width="50%">
+<img src="xcell2logo.png" width="50%">
 
 # xCell 2.0: Robust Cell Type Enrichment Analysis
 
