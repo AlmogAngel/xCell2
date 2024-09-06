@@ -520,7 +520,7 @@ LearnParams <- function(gepMat, corMat, signatures, depList, topSpillValue, numT
 #' @slot dependencies List of cell type dependencies
 #' @slot params Data frame of cell type linear transformation parameters
 #' @slot spill_mat Matrix of cell types spillover
-#' @slot genesUsed Character vector of gene names used to train the signatures
+#' @slot genes_used Character vector of gene names used to train the signatures
 #' @importFrom methods new
 # Create S4 object for the new reference
 setClass("xCell2Object", slots = list(
@@ -528,7 +528,7 @@ setClass("xCell2Object", slots = list(
   dependencies = "list",
   params = "data.frame",
   spill_mat = "matrix",
-  genesUsed = "character"
+  genes_used = "character"
 ))
 
 #' xCell2Train function
@@ -638,7 +638,7 @@ xCell2Train <- function(ref,
                     dependencies = list(),
                     params = data.frame(),
                     spill_mat = matrix(),
-                    genesUsed = sharedGenes)
+                    genes_used = sharedGenes)
     return(xCell2S4)
   }
 
@@ -657,7 +657,7 @@ xCell2Train <- function(ref,
                   dependencies = depList,
                   params = params$params,
                   spill_mat = params$spillmat,
-                  genesUsed = sharedGenes)
+                  genes_used = sharedGenes)
 
   message("Your custom xCell2 reference object is ready!")
   message("> Please consider sharing with others here: https://dviraran.github.io/xCell2ref")

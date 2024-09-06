@@ -34,7 +34,7 @@ xCell2Analysis <- function(mix,
   param <- BiocParallel::MulticoreParam(workers = numThreads)
 
   # Check reference/mixture genes intersection
-  genesIntersectFrac <- length(intersect(rownames(mix), xcell2object@genesUsed)) / length(xcell2object@genesUsed)
+  genesIntersectFrac <- length(intersect(rownames(mix), xcell2object@genes_used)) / length(xcell2object@genes_used)
   if (genesIntersectFrac < minSharedGenes) {
     stop("This xCell2 reference shares ", genesIntersectFrac, " genes with the mixtures and minSharedGenes = ", minSharedGenes, ".",
          "\n", "Consider training a new xCell2 reference or adjusting minSharedGenes.")
