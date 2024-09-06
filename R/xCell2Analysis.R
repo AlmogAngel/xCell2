@@ -84,7 +84,7 @@ xCell2Analysis <- function(mix,
 
   if (spillover) {
     # Spillover correction
-    spillMat <- xcell2object@spillMat * spilloverAlpha
+    spillMat <- xcell2object@spill_mat * spilloverAlpha
     diag(spillMat) <- 1
 
     rows <- intersect(rownames(res), rownames(spillMat))
