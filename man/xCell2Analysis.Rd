@@ -17,7 +17,7 @@ xCell2Analysis(
 \arguments{
 \item{mix}{A bulk mixture of gene expression data (genes in rows, samples in columns).}
 
-\item{xcell2object}{An S4 object of class `xCell2Object` generated using `xCell2Train`.}
+\item{xcell2object}{An S4 object of class `xCell2Object`.}
 
 \item{minSharedGenes}{Minimum fraction of shared genes required between the mix and the reference (default: 0.9).}
 

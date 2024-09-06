@@ -561,7 +561,7 @@ setClass("xCell2Object", slots = list(
 #'   "label": the cell type name as a character (i.e., "T-helper 1 cell").
 #'   "sample": the cell type sample/cell that match the column name in ref.
 #'   "dataset": sample's source dataset or subject (can be the same for all samples if no such information).
-#' @param refType Gene expression data type: "rnaseq" for bulk RNA-Seq, "array" for micro-array, or "sc" for scRNA-Seq.
+#' @param refType The reference gene expression data type: "rnaseq" for bulk RNA-Seq, "array" for micro-array, or "sc" for scRNA-Seq.
 #' @param seed Set seed for reproducible results (default: 123).
 #' @param minPbCells For scRNA-Seq reference only - minimum number of cells in the pseudo-bulk (optional, default: 30).
 #' @param minPbSamples For scRNA-Seq reference only - minimum number of pseudo-bulk samples (optional, default: 10).

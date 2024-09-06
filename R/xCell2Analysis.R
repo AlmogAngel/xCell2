@@ -6,7 +6,7 @@
 #' @importFrom BiocParallel MulticoreParam bplapply
 #' @importFrom pracma lsqlincon
 #' @param mix A bulk mixture of gene expression data (genes in rows, samples in columns).
-#' @param xcell2object An S4 object of class `xCell2Object` generated using `xCell2Train`.
+#' @param xcell2object An S4 object of class `xCell2Object`.
 #' @param minSharedGenes Minimum fraction of shared genes required between the mix and the reference (default: 0.9).
 #' @param rawScores Boolean to indicate whether to return raw enrichment scores (default: FALSE).
 #' @param spillover Boolean - use spillover correction on the transformed enrichment scores? (default: TRUE).

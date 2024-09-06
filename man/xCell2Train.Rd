@@ -35,7 +35,7 @@ xCell2Train(
 "sample": the cell type sample/cell that match the column name in ref.
 "dataset": sample's source dataset or subject (can be the same for all samples if no such information).}
 
-\item{refType}{Gene expression data type: "rnaseq" for bulk RNA-Seq, "array" for micro-array, or "sc" for scRNA-Seq.}
+\item{refType}{The reference gene expression data type: "rnaseq" for bulk RNA-Seq, "array" for micro-array, or "sc" for scRNA-Seq.}
 
 \item{humanToMouse}{A Boolean for converting human genes to mouse genes (default: FALSE).}
 

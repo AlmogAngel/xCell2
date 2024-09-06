@@ -42,7 +42,7 @@ In the second part we learn use the `xCell2Train` to generate a new xCell2 refer
 
 ## Preparing required inputs
 
-In this example we will use 1561 bulk RNA-seq samples of sorted cell populations from the Database of Immune Cell Expression (DICE) by Schmiedel B et al. (2018).
+In this example we will use a sub-set of 1561 bulk RNA-seq samples from sorted cell populations from the Database of Immune Cell Expression (DICE) by Schmiedel B et al. (2018).
 
 You can access the full reference data using the `celldex` package.
 However, here we will use a sub-set of the DICE reference just for learning purpose.
@@ -51,7 +51,8 @@ However, here we will use a sub-set of the DICE reference just for learning purp
 # Access the full DICE referece:
 # dice <- celldex::DatabaseImmuneCellExpressionData() 
 
-
+# Load a small sub-set of the DICE referece:
+dice <- xCell2::dice_demo_ref
 ```
 
 The `xCell2Train` function requires a reference cell type gene expression matrix and a data.frame with different labels the correspond to the samples/cells in the reference.
@@ -71,62 +72,123 @@ The `xCell2Train` function requires a reference cell type gene expression matrix
 
 
 ```r
-# Extract reference metadata
-dice_metadata <- as.data.frame(dice@colData)
-
 # Extract reference matrix
-dice_ref <- as.matrix(dice@assays@data$logcounts)   
+dice_ref <- as.matrix(dice@assays@data$logcounts)
+colnames(dice_ref) <- make.unique(colnames(dice_ref)) # Make samples samples unique
 
-# Deal with duplicated column names
-sum(duplicated(colnames(dice_ref))) == 0
-colnames(dice_ref) <- make.unique(colnames(dice_ref))
-sum(duplicated(colnames(dice_ref))) == 0
+# Extract reference metadata
+dice_labels <- as.data.frame(dice@colData)
+
+# Prepare labels data frame
+dice_labels$ont <- NA
+dice_labels$sample <- colnames(dice_ref)
+dice_labels$dataset <- "DICE"
 ```
 
-dice_ref should look like this:
+### Assing cell type ontology
+
+*You can skip the following step if:*
+  *a) You don't want to use ontology to avoid cell type dependencies (not recommended)*
+  *b) You are sure that there are no cell type dependencies in your reference*
+
+Find the cell type ontology here: https://www.ebi.ac.uk/ols4/ontologies/cl
+For example, search "T cells, CD4+, memory" and look for the best match ("CD4-positive, alpha-beta memory T cell" - "CL:0000897")
 ```r
-dice_ref[1:5, 1:5]
-#>              TPM_1     TPM_2     TPM_3     TPM_4     TPM_5
-#> 5S_rRNA  4.0282020 3.3285754 3.1117177 2.9578796 2.9567111
-#> 7SK      7.7380178 7.7224444 7.6986431 7.6570310 7.6438196
-#> A1BG     0.9248442 0.9070792 0.8775981 0.8415798 0.8028413
-#> A1BG-AS1 2.4189491 2.2751703 2.2495744 2.2409612 2.2215416
-#> A1CF     0.8792085 0.7225164 0.7173336 0.6921259 0.6921011
+dice_labels[dice_labels$label == "B cells",]$ont <- "CL:0000236"
+dice_labels[dice_labels$label == "Monocytes",]$ont <- "CL:0000576"
+dice_labels[dice_labels$label == "NK cells",]$ont <- "CL:0000623"
+dice_labels[dice_labels$label == "T cells, CD8+",]$ont <- "CL:0000625"
+dice_labels[dice_labels$label == "T cells, CD4+",]$ont <- "CL:0000624"
+dice_labels[dice_labels$label == "T cells, CD4+, memory",]$ont <- "CL:0000897"
 ```
 
 
-
-* You can skip this if:*
-  * a) You don't want to use ontology to avoid cell type dependencies (not recommended)*
-  * b) You are sure that there is no cell type dependencies in your reference*
-  
+You can manually check cell type dependencies using the xCell2GetLineage function:
 ```r
-# Find cell types dependencies using ontology
-dice_labels_fine <- dice_metadata$label.fine    # We will use the "fine" annotation for those cell type
-
-# Note: In this example the cell type ontology exist as it was curated by the authors of the celldex package.
-# However, here we will show you two method to find cell type ontologies.
-
-# Method one: use the ontoProc and stringdist packages
-
-cl <- ontoProc::getOnto(ontoname = "cellOnto", year_added = "2023")   # Fetch ontology data
-celltype2ontology <- cl$name[startsWith(names(cl$name), "CL:")]
-
-# This function will help you match your cell types annotation to those in the cell type ontology data
-find_top_similar_celltypes <- function(your_ct_lables, onto_ct_labels = cl$name, top_n = 5) {
-  # Compute Levenshtein distances
-  distances <- stringdist::stringdist(your_ct_lables, string_list, method = "lv")
-  
-  # Get the indices of the top N smallest distances
-  top_indices <- order(distances)[1:top_n]
-  
-  # Return the top N similar strings
-  return(string_list[top_indices])
-}
-
-
-
-# Build labels data frame
-data.frame("ont" = , "label" = , "sample" = , "dataset" = )
-
+xCell2::xCell2GetLineage(labels = dice_labels, outFile = "demo_dice_dep.tsv") 
 ```
+Open `demo_dice_dep.tsv` and check if the lineage assigned to each cell type makes sense.
+Note that "T cells, CD4+, memory" assigned as a descendant of "T cells, CD4+"
+
+## Generate custom xCell2 reference object
+
+Now when dice_ref and dice_labels are ready, we can generate a new xCell2 object!
+
+Simply run the following command:
+```r
+DICE.xCell2Ref <- xCell2::xCell2Train(ref = dice_ref, labels = dice_labels, refType = "rnaseq")
+```
+
+*xCell2Train Parameters:*
+
+*ref* A reference gene expression matrix (genes in rows, samples/cells in columns)
+*mix* A bulk mixture of gene expression data (genes in rows, samples in columns) (optional) - if you provide the mixture, xCell2Train will learn cell type signatures using only the shared genes between the reference and mixture and might results a reference that is better suit to your mixture.
+*labels* A data frame in which the rows correspond to samples in the ref. The data frame must have four columns:
+    1. "ont": the cell type ontology as a character (i.e., "CL:0000545" or NA if there is no ontology).
+    2. "label": the cell type name as a character (i.e., "T-helper 1 cell").
+    3. "sample": the cell type sample/cell that match the column name in ref.
+    4. "dataset": sample's source dataset or subject (can be the same for all samples if no such information).
+*refType* The reference gene expression data type: "rnaseq" for bulk RNA-Seq, "array" for micro-array, or "sc" for scRNA-Seq.
+*seed* Set seed for reproducible results (default: 123).
+*minPbCells* For scRNA-Seq reference only - minimum number of cells in the pseudo-bulk (optional, default: 30).
+*minPbSamples* For scRNA-Seq reference only - minimum number of pseudo-bulk samples (optional, default: 10).
+*minScGenes* For scRNA-Seq reference only - minimum number of genes for pseudo-bulk samples (default: 10000).
+*useOntology* A Boolean for considering cell type dependencies by using ontological integration (default: TRUE).
+*lineageFile* Path to the cell type lineage file generated with `xCell2GetLineage` function and reviewed manually (optional) - In our example: "demo_dice_dep.tsv".
+*numThreads* Number of threads for parallel processing (default: 1).
+*humanToMouse* A Boolean for converting human genes to mouse genes (default: FALSE).
+*topSpillValue* Maximum spillover compensation correction value (default: 0.5).
+*returnSignatures* A Boolean to return just the signatures (default: FALSE).
+*returnAnalysis* A Boolean to return the xCell2Analysis results (do not return reference object) (default: FALSE).
+*useSpillover* A Boolean to use spillover correction in xCell2Analysis (returnAnalysis must be TRUE) (default: TRUE).
+*spilloverAlpha* A numeric for spillover alpha value in xCell2Analysis (returnAnalysis must be TRUE) (default: 0.5).
+
+### Share your custom xCell2 reference object with the scientific community!
+
+Once generated a new custom xCell2 reference, you can share this object with the so other can use it.
+
+1. Save your reference object
+```r
+save(DICE.xCell2Ref, file = "DICE.xCell2Ref.rda")
+```
+
+2. Go to: https://github.com/dviraran/xCell2refs/
+
+3. Go to the "references" directory
+
+4. Click "Add file" > "Upload files" and upload your reference
+
+5. Go back to  https://github.com/dviraran/xCell2refs/ and to "README.md"
+
+6. Click on the pencil icon ("Edit this file") on the top right corner
+
+7. Modify this table with information about your reference
+
+# Running xCell2Analysis
+
+To run cell type enrichment analysis using xCell 2.0 you need an xCell2 reference object
+
+You can generate a custom reference (see the section above) or load "ready to use" references make by the scientific community.
+Information about the references avialable for xCell 2.0 can be found here: https://github.com/dviraran/xCell2refs/
+
+In this example we will load the human PanCancer reference made from scRNA-Seq data.
+```
+?xCell2::PanCancer.xCell2Ref
+PanCancer.xCell2Ref <- xCell2::PanCancer.xCell2Ref
+```
+
+Now you can run `xCell2Analysis`:
+```r
+xcell2_res <- xCell2::xCell2Analysis(mix, xcell2object = PanCancer.xCell2Ref)
+```
+
+*xCell2Analysis Parameters:*
+
+*mix* A bulk mixture of gene expression data (genes in rows, samples in columns).
+NOTE: mix and xcell2object must have the same genes annotations.
+*xcell2object* An S4 object of class `xCell2Object`.
+*minSharedGenes* Minimum fraction of shared genes required between the mix and the reference (default: 0.9).
+*rawScores* Boolean to indicate whether to return raw enrichment scores (default: FALSE).
+*spillover* Boolean - use spillover correction on the transformed enrichment scores? (default: TRUE).
+*spilloverAlpha* A numeric for spillover alpha value (default: 0.5).
+*numThreads* Number of threads for parallel processing (default: 1).
