@@ -10,7 +10,7 @@ An xCell2Object (S4) that contain:
   \item{\code{params}}{A tibble of parameters for linear transformation.}
   \item{\code{signatures}}{A list containing cell-type signatures.}
   \item{\code{dependencies}}{An list specifying cell types dependencies.}
-  \item{\code{spill_mat}}{A matrix representing spillover correction factors.}
+  \item{\code{spillMat}}{A matrix representing spillover correction factors.}
   \item{\code{genes_used}}{A character vector of genes used to generate the reference.}
 }
 }
