@@ -21,8 +21,8 @@ Reference curated by Zaitsev A (2022) and trained by Angel A, et al (2024).
 ImmuneCompendium.xCell2Ref
 }
 \description{
-Platform: RNA-Seq
-Organism: Human
+Platform: RNA-Seq\n
+Organism: Human\n
 Tissue: Immune/Blood
 }
 \details{
