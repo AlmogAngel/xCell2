@@ -34,10 +34,10 @@ xCell2GetLineage <- function(labels, outFile = NULL) {
     lineageOut <- labelsUniq %>%
       dplyr::rowwise() %>%
       dplyr::mutate(
-        descendants = list(ontologyIndex::get_descendants(cl, roots = "ont", exclude_roots = TRUE)),
-        ancestors = list(ontologyIndex::get_ancestors(cl, terms = "ont"))
+        descendants = list(ontologyIndex::get_descendants(cl, roots = ont, exclude_roots = TRUE)),
+        ancestors = list(ontologyIndex::get_ancestors(cl, terms = ont))
       ) %>%
-      dplyr::mutate(ancestors = list(ancestors[ancestors != "ont"])) %>%
+      dplyr::mutate(ancestors = list(ancestors[ancestors != ont])) %>%
       dplyr::mutate(
         descendants = paste(dplyr::pull(labelsUniq[dplyr::pull(labelsUniq[, 1]) %in% descendants, 2]), collapse = ";"),
         ancestors = paste(dplyr::pull(labelsUniq[dplyr::pull(labelsUniq[, 1]) %in% ancestors, 2]), collapse = ";")
