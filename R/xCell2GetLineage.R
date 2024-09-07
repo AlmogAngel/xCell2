@@ -30,18 +30,19 @@ xCell2GetLineage <- function(labels, outFile = NULL) {
       dplyr::mutate(descendants = "", ancestors = "")
   } else {
     cl <- ontoProc::getOnto(ontoname = "cellOnto", year_added = "2023")
-
-    lineageOut <- labelsUniq %>%
-      dplyr::rowwise() %>%
-      dplyr::mutate(
-        descendants = list(ontologyIndex::get_descendants(cl, roots = ont, exclude_roots = TRUE)),
-        ancestors = list(ontologyIndex::get_ancestors(cl, terms = ont))
-      ) %>%
-      dplyr::mutate(ancestors = list(ancestors[ancestors != ont])) %>%
-      dplyr::mutate(
-        descendants = paste(dplyr::pull(labelsUniq[dplyr::pull(labelsUniq[, 1]) %in% descendants, 2]), collapse = ";"),
-        ancestors = paste(dplyr::pull(labelsUniq[dplyr::pull(labelsUniq[, 1]) %in% ancestors, 2]), collapse = ";")
-      )
+    labelsUniq$descendants <- NA
+    labelsUniq$ancestors <- NA
+    for (i in 1:nrow(labelsUniq)) {
+      ont <- labelsUniq$ont[i]
+      descendants <- ontologyIndex::get_descendants(cl, roots = ont, exclude_roots = TRUE)
+      ancestors <- ontologyIndex::get_ancestors(cl, terms = ont)
+      ancestors <- ancestors[ancestors != ont]
+      descendants <- paste(dplyr::pull(labelsUniq[dplyr::pull(labelsUniq[, 1]) %in% descendants, 2]), collapse = ";")
+      ancestors <- paste(dplyr::pull(labelsUniq[dplyr::pull(labelsUniq[, 1]) %in% ancestors, 2]), collapse = ";")
+      labelsUniq$descendants[i] <- descendants
+      labelsUniq$ancestors[i] <- ancestors
+    }
+    lineageOut <- labelsUniq
   }
 
   # If no output is provided, xCell2GetLineage will return dependencies right away
@@ -63,6 +64,6 @@ xCell2GetLineage <- function(labels, outFile = NULL) {
     return(depList)
   } else {
     readr::write_tsv(lineageOut, outFile)
-    warning("It is recommended that you manually check the cell-type ontology file: ", outFile)
+    warning("It is recommended that you manually check the cell type lineage file: ", outFile)
   }
 }
