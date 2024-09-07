@@ -8,3 +8,6 @@ inst/doc
 /doc/
 /Meta/
 xCell2.Rproj
+.DS_Store
+.project
+.git

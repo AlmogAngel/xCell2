@@ -12,6 +12,7 @@ Description: xCell2 provides methods for cell type enrichment analysis using cel
 License: GPL (>= 3)
 Encoding: UTF-8
 LazyData: true
+LazyDataCompression: xz
 Depends: 
     R (>= 4.0)
 biocViews: GeneExpression, CellType, RNASeq, SingleCell, Deconvolution, ImmunoOncology
