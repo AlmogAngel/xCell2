@@ -19,7 +19,7 @@ biocViews: GeneExpression, CellType, RNASeq, SingleCell, Deconvolution, ImmunoOn
 Imports: 
     Rfast,
     singscore,
-    ontoProc,
+    ontoProc (>= 1.27.4),
     ontologyIndex,
     tibble,
     dplyr,

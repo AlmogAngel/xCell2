@@ -36,7 +36,6 @@
 #'
 #' @examples
 #' xCell2Ref <- xCell2::TMECompendium.xCell2Ref
-#' results.xcell2 <- xCell2Analysis(mix, xcell2object = xCell2Ref)
 "TMECompendium.xCell2Ref"
 
 #' An xCell2 object trained from the Tabula Muris reference
@@ -59,7 +58,6 @@
 #'
 #' @examples
 #' xCell2Ref <- xCell2::TabulaMurisBlood.xCell2Ref
-#' results.xcell2 <- xCell2Analysis(mix, xcell2object = xCell2Ref)
 "TabulaMurisBlood.xCell2Ref"
 
 #' An xCell2 object trained from the Tabula Sapiens reference
@@ -81,7 +79,6 @@
 #'
 #' @examples
 #' xCell2Ref <- xCell2::TabulaSapiensBlood.xCell2Ref
-#' results.xcell2 <- xCell2Analysis(mix, xcell2object = xCell2Ref)
 "TabulaSapiensBlood.xCell2Ref"
 
 #' An xCell2 object trained from the MouseRNAseqData reference
@@ -104,7 +101,6 @@
 #'
 #' @examples
 #' xCell2Ref <- xCell2::MouseRNAseqData.xCell2Ref
-#' results.xcell2 <- xCell2Analysis(mix, xcell2object = xCell2Ref)
 "MouseRNAseqData.xCell2Ref"
 
 #' An xCell2 object trained from the PanCancer reference
@@ -127,7 +123,6 @@
 #'
 #' @examples
 #' xCell2Ref <- xCell2::PanCancer.xCell2Ref
-#' results.xcell2 <- xCell2Analysis(mix, xcell2object = xCell2Ref)
 "PanCancer.xCell2Ref"
 
 #' An xCell2 object trained from the LM22 reference
@@ -150,7 +145,6 @@
 #'
 #' @examples
 #' xCell2Ref <- xCell2::LM22.xCell2Ref
-#' results.xcell2 <- xCell2Analysis(mix, xcell2object = xCell2Ref)
 "LM22.xCell2Ref"
 
 #' An xCell2 object trained from the Immune Compendium reference
@@ -173,7 +167,6 @@
 #'
 #' @examples
 #' xCell2Ref <- xCell2::ImmuneCompendium.xCell2Ref
-#' results.xcell2 <- xCell2Analysis(mix, xcell2object = xCell2Ref)
 "ImmuneCompendium.xCell2Ref"
 
 #' An xCell2 object trained from the Immunologic Genome Project reference
@@ -196,7 +189,6 @@
 #'
 #' @examples
 #' xCell2Ref <- xCell2::ImmGenData.xCell2Ref
-#' results.xcell2 <- xCell2Analysis(mix, xcell2object = xCell2Ref)
 "ImmGenData.xCell2Ref"
 
 #' An xCell2 object trained from the Blueprint and ENCODE Projects reference
@@ -219,5 +211,4 @@
 #'
 #' @examples
 #' xCell2Ref <- xCell2::BlueprintEncode.xCell2Ref
-#' results.xcell2 <- xCell2Analysis(mix, xcell2object = xCell2Ref)
 "BlueprintEncode.xCell2Ref"

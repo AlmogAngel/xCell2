@@ -30,6 +30,5 @@ You can use this reference object as in input for `xCell2Analysis` or create a n
 }
 \examples{
 xCell2Ref <- xCell2::MouseRNAseqData.xCell2Ref
-results.xcell2 <- xCell2Analysis(mix, xcell2object = xCell2Ref)
 }
 \keyword{datasets}
