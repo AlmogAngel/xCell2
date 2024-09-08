@@ -18,7 +18,7 @@ An `xCell2Object` (S4) containing:
 The Tabula Sapiens Consortium (2022); trained by Angel A, et al. (2024).
 }
 \usage{
-xCell2::TabulaSapiensBlood.xCell2Ref
+TabulaSapiensBlood.xCell2Ref
 }
 \description{
 A reference object for use in `xCell2Analysis` or to create a new reference using `xCell2Train`.
@@ -29,6 +29,6 @@ xCell2 Object Trained from the Tabula Sapiens Reference
 An xCell2 reference object created from the Tabula Sapiens reference.
 }
 \examples{
-xCell2Ref <- xCell2::TabulaSapiensBlood.xCell2Ref
+xCell2Ref <- TabulaSapiensBlood.xCell2Ref
 }
 \keyword{datasets}

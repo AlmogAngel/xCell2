@@ -11,7 +11,7 @@ A `SummarizedExperiment` object.
 Schmiedel B et al. (2018)
 }
 \usage{
-xCell2::dice_demo_ref
+dice_demo_ref
 }
 \description{
 A demo reference object derived from the DICE reference for use in the xCell 2.0 vignette.

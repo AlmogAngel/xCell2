@@ -18,7 +18,7 @@ An `xCell2Object` (S4) containing:
 Curated by Zaitsev A (2022) and trained by Angel A, et al. (2024).
 }
 \usage{
-xCell2::TMECompendium.xCell2Ref
+TMECompendium.xCell2Ref
 }
 \description{
 A reference object for use in `xCell2Analysis` or to create a new reference using `xCell2Train`.
@@ -29,6 +29,6 @@ xCell2 Object Trained from the Tumor Microenvironment Compendium Reference
 An xCell2 reference object created from the Tumor Microenvironment Compendium reference.
 }
 \examples{
-xCell2Ref <- xCell2::TMECompendium.xCell2Ref
+xCell2Ref <- TMECompendium.xCell2Ref
 }
 \keyword{datasets}

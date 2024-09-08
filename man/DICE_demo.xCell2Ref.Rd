@@ -18,7 +18,7 @@ An `xCell2Object` (S4) containing:
 Schmiedel B et al. (2018)
 }
 \usage{
-xCell2::DICE_demo.xCell2Ref
+DICE_demo.xCell2Ref
 }
 \description{
 This object can be used to learn and demonstrate the functionality of the `xCell2Analysis` function.

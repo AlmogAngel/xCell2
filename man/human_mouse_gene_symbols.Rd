@@ -12,7 +12,7 @@ A data frame with 2 columns:
 }
 }
 \usage{
-xCell2::human_mouse_gene_symbols
+human_mouse_gene_symbols
 }
 \description{
 A table that provides a mapping of human gene symbols to mouse gene symbols.

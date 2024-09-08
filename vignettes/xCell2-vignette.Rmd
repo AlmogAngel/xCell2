@@ -52,7 +52,7 @@ However, here we will use a sub-set of the DICE reference just for learning purp
 # dice <- celldex::DatabaseImmuneCellExpressionData() 
 
 # Load a small sub-set of the DICE referece:
-dice <- xCell2::dice_demo_ref
+data(dice_demo_ref, package = "xCell2")
 ```
 
 The `xCell2Train` function requires a reference cell type gene expression matrix and a data.frame with different labels the correspond to the samples/cells in the reference.
@@ -73,11 +73,11 @@ The `xCell2Train` function requires a reference cell type gene expression matrix
 
 ```{r, eval = TRUE}
 # Extract reference matrix
-dice_ref <- as.matrix(dice@assays@data$logcounts)
+dice_ref <- as.matrix(dice_demo_ref@assays@data$logcounts)
 colnames(dice_ref) <- make.unique(colnames(dice_ref)) # Make samples samples unique
 
 # Extract reference metadata
-dice_labels <- as.data.frame(dice@colData)
+dice_labels <- as.data.frame(dice_demo_ref@colData)
 
 # Prepare labels data frame
 dice_labels$ont <- NA
@@ -174,12 +174,13 @@ Information about the references avialable for xCell 2.0 can be found here: http
 In this example we will load a demo xCell2 reference object DICE_demo.xCell2Ref (made above).
 ```{r, eval = TRUE}
 ?xCell2::DICE_demo.xCell2Ref
-DICE_demo.xCell2Ref <- xCell2::DICE_demo.xCell2Ref
+data(DICE_demo.xCell2Ref, package = "xCell2")
 ```
 
 Now you can run `xCell2Analysis`:
 ```{r, eval = TRUE}
-xcell2_res <- xCell2::xCell2Analysis(mix, xcell2object = DICE_demo.xCell2Ref)
+data(mix_demo, package = "xCell2")
+xcell2_res <- xCell2::xCell2Analysis(mix = mix_demo, xcell2object = DICE_demo.xCell2Ref)
 ```
 
 *xCell2Analysis Parameters:*
