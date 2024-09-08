@@ -5,7 +5,7 @@
 \alias{dice_demo_ref}
 \title{A subset SummarizedExperiment object of the DICE reference for xCell 2.0 vignette}
 \format{
-An object of class \code{SummarizedExperiment} with 48043 rows and 60 columns.
+An object of class \code{SummarizedExperiment} with 48043 rows and 30 columns.
 }
 \source{
 Schmiedel B et al. (2018)
