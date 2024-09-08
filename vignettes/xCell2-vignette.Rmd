@@ -22,7 +22,7 @@ This vignette provides an overview of the package's functionality, including how
 
 To install the `xCell2` package from Bioconductor, use:
 
-```r
+```{r, eval = TRUE}
 if (!requireNamespace("BiocManager", quietly = TRUE))
     install.packages("BiocManager")
 BiocManager::install("xCell2")
@@ -30,7 +30,7 @@ BiocManager::install("xCell2")
 
 To install the `xCell2` package source code, use:
 
-```r
+```{r, eval = TRUE}
 devtools::install_github("AlmogAngel/xCell2")
 ```
 
@@ -47,7 +47,7 @@ In this example we will use a sub-set of 1561 bulk RNA-seq samples from sorted c
 You can access the full reference data using the `celldex` package.
 However, here we will use a sub-set of the DICE reference just for learning purpose.
 
-```r
+```{r, eval = TRUE}
 # Access the full DICE referece:
 # dice <- celldex::DatabaseImmuneCellExpressionData() 
 
@@ -71,7 +71,7 @@ The `xCell2Train` function requires a reference cell type gene expression matrix
     4. "dataset": sample's source dataset or subject (can be the same for all samples if no such information).
 
 
-```r
+```{r, eval = TRUE}
 # Extract reference matrix
 dice_ref <- as.matrix(dice@assays@data$logcounts)
 colnames(dice_ref) <- make.unique(colnames(dice_ref)) # Make samples samples unique
@@ -93,7 +93,7 @@ dice_labels$dataset <- "DICE"
 
 Find the cell type ontology here: https://www.ebi.ac.uk/ols4/ontologies/cl
 For example, search "T cells, CD4+, memory" and look for the best match ("CD4-positive, alpha-beta memory T cell" - "CL:0000897")
-```r
+```{r, eval = TRUE}
 dice_labels[dice_labels$label == "B cells",]$ont <- "CL:0000236"
 dice_labels[dice_labels$label == "Monocytes",]$ont <- "CL:0000576"
 dice_labels[dice_labels$label == "NK cells",]$ont <- "CL:0000623"
@@ -104,7 +104,7 @@ dice_labels[dice_labels$label == "T cells, CD4+, memory",]$ont <- "CL:0000897"
 
 
 You can manually check cell type dependencies using the xCell2GetLineage function:
-```r
+```{r, eval = TRUE}
 xCell2::xCell2GetLineage(labels = dice_labels, outFile = "demo_dice_dep.tsv") 
 ```
 Open `demo_dice_dep.tsv` and check if the lineage assigned to each cell type makes sense.
@@ -115,7 +115,7 @@ Note that "T cells, CD4+, memory" assigned as a descendant of "T cells, CD4+"
 Now when dice_ref and dice_labels are ready, we can generate a new xCell2 object!
 
 Simply run the following command:
-```r
+```{r, eval = TRUE}
 DICE.xCell2Ref <- xCell2::xCell2Train(ref = dice_ref, labels = dice_labels, refType = "rnaseq")
 ```
 
@@ -129,7 +129,7 @@ DICE.xCell2Ref <- xCell2::xCell2Train(ref = dice_ref, labels = dice_labels, refT
     3. "sample": the cell type sample/cell that match the column name in ref.
     4. "dataset": sample's source dataset or subject (can be the same for all samples if no such information).
 *refType* The reference gene expression data type: "rnaseq" for bulk RNA-Seq, "array" for micro-array, or "sc" for scRNA-Seq.
-*seed* Set seed for reproducible results (default: 123).
+*seed* Set seed for reproducible results (default: NULL).
 *minPbCells* For scRNA-Seq reference only - minimum number of cells in the pseudo-bulk (optional, default: 30).
 *minPbSamples* For scRNA-Seq reference only - minimum number of pseudo-bulk samples (optional, default: 10).
 *minScGenes* For scRNA-Seq reference only - minimum number of genes for pseudo-bulk samples (default: 10000).
@@ -148,7 +148,7 @@ DICE.xCell2Ref <- xCell2::xCell2Train(ref = dice_ref, labels = dice_labels, refT
 Once generated a new custom xCell2 reference, you can share this object with the so other can use it.
 
 1. Save your reference object
-```r
+```{r, eval = TRUE}
 save(DICE.xCell2Ref, file = "DICE.xCell2Ref.rda")
 ```
 
@@ -172,13 +172,13 @@ You can generate a custom reference (see the section above) or load "ready to us
 Information about the references avialable for xCell 2.0 can be found here: https://github.com/dviraran/xCell2refs/
 
 In this example we will load the human PanCancer reference made from scRNA-Seq data.
-```
+```{r, eval = TRUE}
 ?xCell2::PanCancer.xCell2Ref
 PanCancer.xCell2Ref <- xCell2::PanCancer.xCell2Ref
 ```
 
 Now you can run `xCell2Analysis`:
-```r
+```{r, eval = TRUE}
 xcell2_res <- xCell2::xCell2Analysis(mix, xcell2object = PanCancer.xCell2Ref)
 ```
 
@@ -192,3 +192,8 @@ NOTE: mix and xcell2object must have the same genes annotations.
 *spillover* Boolean - use spillover correction on the transformed enrichment scores? (default: TRUE).
 *spilloverAlpha* A numeric for spillover alpha value (default: 0.5).
 *numThreads* Number of threads for parallel processing (default: 1).
+
+
+```{r, eval = TRUE}
+sessionInfo()
+```

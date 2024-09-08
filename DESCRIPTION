@@ -4,7 +4,8 @@ Title: A Tool for Generic Cell Type Enrichment Analysis
 Version: 0.99.0
 Authors@R: 
     c(person(given = "Almog", family = "Angel", role = c("aut", "cre"),
-           email = "almog.angel@campus.technion.ac.il"))
+           email = "almogangel@gmail.com"),
+           comment = c(Academic email = "almog.angel@campus.technion.ac.il"))
 Description: xCell2 provides methods for cell type enrichment analysis using cell type signatures.
     It includes three main functions - 
     1. xCell2Train for training custom references objects from bulk or single-cell RNA-seq datasets.
@@ -12,11 +13,10 @@ Description: xCell2 provides methods for cell type enrichment analysis using cel
     3. xCell2GetLineage for identifying dependencies between different cell types using ontology.
 License: GPL (>= 3)
 Encoding: UTF-8
-LazyData: true
-LazyDataCompression: xz
+LazyData: false
 Depends: 
-    R (>= 4.0)
-biocViews: GeneExpression, CellType, RNASeq, SingleCell, Deconvolution, ImmunoOncology
+    R (>= 4.4.0)
+biocViews: GeneExpression, Transcriptomics, Microarray, RNASeq, SingleCell, DifferentialExpression, ImmunoOncology, GeneSetEnrichment
 Imports: 
     Rfast,
     singscore,
@@ -37,3 +37,5 @@ Suggests:
     testthat
 RoxygenNote: 7.3.2
 VignetteBuilder: knitr
+URL: https://github.com/AlmogAngel/xCell2
+BugReports: https://github.com/AlmogAngel/xCell2/issues

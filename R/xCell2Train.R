@@ -562,7 +562,7 @@ setClass("xCell2Object", slots = list(
 #'   "sample": the cell type sample/cell that match the column name in ref.
 #'   "dataset": sample's source dataset or subject (can be the same for all samples if no such information).
 #' @param refType The reference gene expression data type: "rnaseq" for bulk RNA-Seq, "array" for micro-array, or "sc" for scRNA-Seq.
-#' @param seed Set seed for reproducible results (default: 123).
+#' @param seed Set seed for reproducible results (default: NULL).
 #' @param minPbCells For scRNA-Seq reference only - minimum number of cells in the pseudo-bulk (optional, default: 30).
 #' @param minPbSamples For scRNA-Seq reference only - minimum number of pseudo-bulk samples (optional, default: 10).
 #' @param minScGenes For scRNA-Seq reference only - minimum number of genes for pseudo-bulk samples (default: 10000).
@@ -610,7 +610,7 @@ xCell2Train <- function(ref,
                         refType,
                         humanToMouse = FALSE,
                         lineageFile = NULL,
-                        seed = 123,
+                        seed = NULL,
                         numThreads = 1,
                         useOntology = TRUE,
                         returnSignatures = FALSE,
@@ -622,7 +622,7 @@ xCell2Train <- function(ref,
                         minScGenes = 1e4,
                         topSpillValue = 0.5) {
 
-  set.seed(seed)
+  if (!is.null(seed)) set.seed(seed)
 
   # Validate inputs
   inputsValidated <- ValidateInputs(ref, labels, refType)
