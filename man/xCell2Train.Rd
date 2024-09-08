@@ -11,7 +11,7 @@ xCell2Train(
   refType,
   humanToMouse = FALSE,
   lineageFile = NULL,
-  seed = 123,
+  seed = NULL,
   numThreads = 1,
   useOntology = TRUE,
   returnSignatures = FALSE,
@@ -41,7 +41,7 @@ xCell2Train(
 
 \item{lineageFile}{Path to the cell type lineage file generated with `xCell2GetLineage` function and reviewed manually (optional).}
 
-\item{seed}{Set seed for reproducible results (default: 123).}
+\item{seed}{Set seed for reproducible results (default: NULL).}
 
 \item{numThreads}{Number of threads for parallel processing (default: 1).}
 
