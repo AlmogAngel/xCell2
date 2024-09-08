@@ -69,3 +69,31 @@ An S4 object containing cell types' signatures, linear transformation parameters
 \description{
 This function generates a custom xCell2 reference object for cell type enrichment analysis.
 }
+\examples{
+# For detailed example read xCell2 vignette.
+
+# Extract reference matrix
+dice <- xCell2::dice_demo_ref
+dice_ref <- as.matrix(dice@assays@data$logcounts)
+colnames(dice_ref) <- make.unique(colnames(dice_ref)) # Make samples samples unique
+
+# Extract reference metadata
+dice_labels <- as.data.frame(dice@colData)
+
+# Prepare labels data frame
+dice_labels$ont <- NA
+dice_labels$sample <- colnames(dice_ref)
+dice_labels$dataset <- "DICE"
+
+# Assign cell type ontology (optional but recommended)
+dice_labels[dice_labels$label == "B cells",]$ont <- "CL:0000236"
+dice_labels[dice_labels$label == "Monocytes",]$ont <- "CL:0000576"
+dice_labels[dice_labels$label == "NK cells",]$ont <- "CL:0000623"
+dice_labels[dice_labels$label == "T cells, CD8+",]$ont <- "CL:0000625"
+dice_labels[dice_labels$label == "T cells, CD4+",]$ont <- "CL:0000624"
+dice_labels[dice_labels$label == "T cells, CD4+, memory",]$ont <- "CL:0000897"
+
+# Generate custom xCell2 reference object
+DICE.xCell2Ref <- xCell2::xCell2Train(ref = dice_ref, labels = dice_labels, refType = "rnaseq")
+
+}

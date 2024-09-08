@@ -23,3 +23,33 @@ This function identify the descendants and ancestors of each cell type based on 
 If no output file is specified, the function returns a list of cell type dependencies.
 If an output file is specified, the function writes the cell type dependencies to a TSV file.
 }
+\examples{
+# For detailed example read xCell2 vignette.
+
+# Extract reference matrix
+dice <- xCell2::dice_demo_ref
+dice_ref <- as.matrix(dice@assays@data$logcounts)
+colnames(dice_ref) <- make.unique(colnames(dice_ref)) # Make samples samples unique
+
+# Extract reference metadata
+dice_labels <- as.data.frame(dice@colData)
+
+# Prepare labels data frame
+dice_labels$ont <- NA
+dice_labels$sample <- colnames(dice_ref)
+dice_labels$dataset <- "DICE"
+
+# Assign cell type ontology (optional but recommended)
+dice_labels[dice_labels$label == "B cells",]$ont <- "CL:0000236"
+dice_labels[dice_labels$label == "Monocytes",]$ont <- "CL:0000576"
+dice_labels[dice_labels$label == "NK cells",]$ont <- "CL:0000623"
+dice_labels[dice_labels$label == "T cells, CD8+",]$ont <- "CL:0000625"
+dice_labels[dice_labels$label == "T cells, CD4+",]$ont <- "CL:0000624"
+dice_labels[dice_labels$label == "T cells, CD4+, memory",]$ont <- "CL:0000897"
+
+# Identify cell type lineage (dependencies)
+xCell2::xCell2GetLineage(labels = dice_labels, outFile = "demo_dice_dep.tsv") 
+# Open `demo_dice_dep.tsv` and check if the lineage assigned to each cell type makes sense.
+# Note that "T cells, CD4+, memory" assigned as a descendant of "T cells, CD4+"
+
+}
