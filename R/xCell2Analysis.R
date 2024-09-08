@@ -36,7 +36,7 @@ xCell2Analysis <- function(mix,
 
   scoreMix <- function(cellType, mixRanked, signaturesCellType) {
     scores <- vapply(signaturesCellType, function(sig) {
-      suppressWarnings(singscore::simpleScore(mixRanked, upSet = sig, centerScore = FALSE)$TotalScore)
+      singscore::simpleScore(mixRanked, upSet = sig, centerScore = FALSE)$TotalScore
     }, FUN.VALUE = double(ncol(mixRanked)))
     rownames(scores) <- colnames(mixRanked)
     return(scores)
@@ -45,30 +45,30 @@ xCell2Analysis <- function(mix,
   param <- BiocParallel::MulticoreParam(workers = numThreads)
 
   # Check reference/mixture genes intersection
-  genesIntersectFrac <- length(intersect(rownames(mix), xcell2object@genes_used)) / length(xcell2object@genes_used)
+  genesIntersectFrac <- length(intersect(rownames(mix), getGenesUsed(xcell2object))) / length(getGenesUsed(xcell2object))
   if (genesIntersectFrac < minSharedGenes) {
     stop("This xCell2 reference shares ", genesIntersectFrac, " genes with the mixtures and minSharedGenes = ", minSharedGenes, ".",
          "\n", "Consider training a new xCell2 reference or adjusting minSharedGenes.")
   }
 
   # Rank mix gene expression matrix
-  mixRanked <- singscore::rankGenes(mix[xcell2object@genes_used, ])
+  mixRanked <- singscore::rankGenes(mix[getGenesUsed(xcell2object), ])
 
   # Score and predict
-  sigsCellTypes <- unique(unlist(lapply(names(xcell2object@signatures), function(x) { strsplit(x, "#")[[1]][1] })))
+  sigsCellTypes <- unique(unlist(lapply(names(getSignatures(xcell2object)), function(x) { strsplit(x, "#")[[1]][1] })))
 
   # Get raw enrichment scores
   resRaw <- BiocParallel::bplapply(sigsCellTypes, function(cellType) {
-    signaturesCellType <- xcell2object@signatures[startsWith(names(xcell2object@signatures), paste0(cellType, "#"))]
+    signaturesCellType <- getSignatures(xcell2object)[startsWith(names(getSignatures(xcell2object)), paste0(cellType, "#"))]
     scores <- scoreMix(cellType, mixRanked, signaturesCellType)
     return(scores)
   }, BPPARAM = param)
 
   names(resRaw) <- sigsCellTypes
 
-  res <- t(sapply(resRaw, function(cellTypeScores) {
+  res <- t(vapply(resRaw, function(cellTypeScores) {
     rowMeans(cellTypeScores)
-  }))
+  }, FUN.VALUE = double(nrow(resRaw[[1]]))))
 
   if (rawScores) {
     return(res)
@@ -78,9 +78,9 @@ xCell2Analysis <- function(mix,
       cellTypeRes <- res[cellType, ]
 
       # Linear transformation
-      a <- xcell2object@params[xcell2object@params$celltype == cellType,]$a
-      b <- xcell2object@params[xcell2object@params$celltype == cellType,]$b
-      m <- xcell2object@params[xcell2object@params$celltype == cellType,]$m
+      a <- getParams(xcell2object)[xcell2object@params$celltype == cellType,]$a
+      b <- getParams(xcell2object)[xcell2object@params$celltype == cellType,]$b
+      m <- getParams(xcell2object)[xcell2object@params$celltype == cellType,]$m
 
       cellTypeRes <- (cellTypeRes^(1/b)) / a
       cellTypeRes <- cellTypeRes * m
@@ -95,7 +95,7 @@ xCell2Analysis <- function(mix,
 
   if (spillover) {
     # Spillover correction
-    spillMat <- xcell2object@spill_mat * spilloverAlpha
+    spillMat <- getSpillMat(xcell2object) * spilloverAlpha
     diag(spillMat) <- 1
 
     rows <- intersect(rownames(res), rownames(spillMat))

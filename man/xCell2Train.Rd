@@ -11,7 +11,6 @@ xCell2Train(
   refType,
   humanToMouse = FALSE,
   lineageFile = NULL,
-  seed = NULL,
   numThreads = 1,
   useOntology = TRUE,
   returnSignatures = FALSE,
@@ -40,8 +39,6 @@ xCell2Train(
 \item{humanToMouse}{A Boolean for converting human genes to mouse genes (default: FALSE).}
 
 \item{lineageFile}{Path to the cell type lineage file generated with `xCell2GetLineage` function and reviewed manually (optional).}
-
-\item{seed}{Set seed for reproducible results (default: NULL).}
 
 \item{numThreads}{Number of threads for parallel processing (default: 1).}
 
@@ -94,6 +91,7 @@ dice_labels[dice_labels$label == "T cells, CD4+",]$ont <- "CL:0000624"
 dice_labels[dice_labels$label == "T cells, CD4+, memory",]$ont <- "CL:0000897"
 
 # Generate custom xCell2 reference object
+set.seed(123) # (optional) As generating pseudo-bulk samples from scRNA-Seq reference based on random sampling of cells
 DICE.xCell2Ref <- xCell2::xCell2Train(ref = dice_ref, labels = dice_labels, refType = "rnaseq")
 
 }

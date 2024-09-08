@@ -59,7 +59,7 @@ ScToPseudoBulk <- function(ref, labels, minPbCells, minPbSamples) {
       }, FUN.VALUE = double(nrow(ref)))
     } else {
       tmp <- ref[, cellTypeSamples]
-      colnames(tmp) <- as.character(1:ncol(tmp))
+      colnames(tmp) <- as.character(seq_len(tmp))
       tmp
     }
   })
@@ -104,7 +104,7 @@ PrepRefMix <- function(ref, mix, refType, minScGenes, humanToMouse) {
     varCutoff <- c(1.5, 1, 0.8, 0.5, 0.3, 0.1, 0)
     for (co in varCutoff) {
       if (co == 0) {
-        varGenesToUse <- names(genesVar)[1:round(length(genesVar) * 0.5)]
+        varGenesToUse <- names(genesVar)[seq_len(round(length(genesVar) * 0.5))]
       } else {
         varGenesToUse <- names(genesVar[genesVar >= co])
       }
@@ -154,7 +154,7 @@ PrepRefMix <- function(ref, mix, refType, minScGenes, humanToMouse) {
 }
 
 # Function to get cell type dependencies from a lineage file
-GetDependencies <- function(lineageFileChecked) {
+LoadDependenciesFromFile <- function(lineageFileChecked) {
   ont <- readr::read_tsv(lineageFileChecked, show_col_types = FALSE) %>%
     dplyr::mutate_all(as.character)
 
@@ -532,20 +532,6 @@ LearnParams <- function(gepMat, corMat, signatures, depList, topSpillValue, numT
   return(list(params = linearParams, spillmat = spillMat))
 }
 
-#' @slot signatures List of xCell2 signatures
-#' @slot dependencies List of cell type dependencies
-#' @slot params Data frame of cell type linear transformation parameters
-#' @slot spill_mat Matrix of cell types spillover
-#' @slot genes_used Character vector of gene names used to train the signatures
-#' @importFrom methods new
-# Create S4 object for the new reference
-setClass("xCell2Object", slots = list(
-  signatures = "list",
-  dependencies = "list",
-  params = "data.frame",
-  spill_mat = "matrix",
-  genes_used = "character"
-))
 
 #' xCell2Train function
 #'
@@ -570,7 +556,6 @@ setClass("xCell2Object", slots = list(
 #'   "sample": the cell type sample/cell that match the column name in ref.
 #'   "dataset": sample's source dataset or subject (can be the same for all samples if no such information).
 #' @param refType The reference gene expression data type: "rnaseq" for bulk RNA-Seq, "array" for micro-array, or "sc" for scRNA-Seq.
-#' @param seed Set seed for reproducible results (default: NULL).
 #' @param minPbCells For scRNA-Seq reference only - minimum number of cells in the pseudo-bulk (optional, default: 30).
 #' @param minPbSamples For scRNA-Seq reference only - minimum number of pseudo-bulk samples (optional, default: 10).
 #' @param minScGenes For scRNA-Seq reference only - minimum number of genes for pseudo-bulk samples (default: 10000).
@@ -609,6 +594,7 @@ setClass("xCell2Object", slots = list(
 #' dice_labels[dice_labels$label == "T cells, CD4+, memory",]$ont <- "CL:0000897"
 #' 
 #' # Generate custom xCell2 reference object
+#' set.seed(123) # (optional) As generating pseudo-bulk samples from scRNA-Seq reference based on random sampling of cells
 #' DICE.xCell2Ref <- xCell2::xCell2Train(ref = dice_ref, labels = dice_labels, refType = "rnaseq")
 #' 
 #' @export
@@ -618,7 +604,6 @@ xCell2Train <- function(ref,
                         refType,
                         humanToMouse = FALSE,
                         lineageFile = NULL,
-                        seed = NULL,
                         numThreads = 1,
                         useOntology = TRUE,
                         returnSignatures = FALSE,
@@ -630,7 +615,6 @@ xCell2Train <- function(ref,
                         minScGenes = 1e4,
                         topSpillValue = 0.5) {
 
-  if (!is.null(seed)) set.seed(seed)
 
   # Validate inputs
   inputsValidated <- ValidateInputs(ref, labels, refType)
@@ -658,7 +642,7 @@ xCell2Train <- function(ref,
       depList <- xCell2::xCell2GetLineage(labels, outFile = NULL)
     } else {
       message("Loading cell type dependencies...")
-      depList <- GetDependencies(lineageFile)
+      depList <- LoadDependenciesFromFile(lineageFile)
     }
   } else {
     message("Skipping ontological integration!")
