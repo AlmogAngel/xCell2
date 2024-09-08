@@ -149,7 +149,7 @@ Once generated a new custom xCell2 reference, you can share this object with the
 
 1. Save your reference object
 ```{r, eval = TRUE}
-save(DICE.xCell2Ref, file = "DICE.xCell2Ref.rda")
+save(DICE_demo.xCell2Ref, file = "DICE_demo.xCell2Ref.rda")
 ```
 
 2. Go to: https://github.com/dviraran/xCell2refs/
@@ -171,15 +171,15 @@ To run cell type enrichment analysis using xCell 2.0 you need an xCell2 referenc
 You can generate a custom reference (see the section above) or load "ready to use" references make by the scientific community.
 Information about the references avialable for xCell 2.0 can be found here: https://github.com/dviraran/xCell2refs/
 
-In this example we will load the human PanCancer reference made from scRNA-Seq data.
+In this example we will load a demo xCell2 reference object DICE_demo.xCell2Ref (made above).
 ```{r, eval = TRUE}
-?xCell2::PanCancer.xCell2Ref
-PanCancer.xCell2Ref <- xCell2::PanCancer.xCell2Ref
+?xCell2::DICE_demo.xCell2Ref
+DICE_demo.xCell2Ref <- xCell2::DICE_demo.xCell2Ref
 ```
 
 Now you can run `xCell2Analysis`:
 ```{r, eval = TRUE}
-xcell2_res <- xCell2::xCell2Analysis(mix, xcell2object = PanCancer.xCell2Ref)
+xcell2_res <- xCell2::xCell2Analysis(mix, xcell2object = DICE_demo.xCell2Ref)
 ```
 
 *xCell2Analysis Parameters:*
