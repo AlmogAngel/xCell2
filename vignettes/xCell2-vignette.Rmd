@@ -20,12 +20,12 @@ This vignette provides an overview of the package's functionality, including how
 
 # Installation
 
-To install the `xCell2` package from Bioconductor, use:
+(Soon) To install the `xCell2` package from Bioconductor, use:
 
 ```{r, eval = TRUE}
-if (!requireNamespace("BiocManager", quietly = TRUE))
-    install.packages("BiocManager")
-BiocManager::install("xCell2")
+#if (!requireNamespace("BiocManager", quietly = TRUE))
+#    install.packages("BiocManager")
+#BiocManager::install("xCell2")
 ```
 
 To install the `xCell2` package source code, use:
@@ -116,7 +116,7 @@ Now when dice_ref and dice_labels are ready, we can generate a new xCell2 object
 
 Simply run the following command:
 ```{r, eval = TRUE}
-DICE.xCell2Ref <- xCell2::xCell2Train(ref = dice_ref, labels = dice_labels, refType = "rnaseq")
+DICE_demo.xCell2Ref <- xCell2::xCell2Train(ref = dice_ref, labels = dice_labels, refType = "rnaseq")
 ```
 
 *xCell2Train Parameters:*

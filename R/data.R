@@ -17,8 +17,13 @@
 
 #' @name mix_demo
 #' @title A demo for a bulk gene expression data (RNA-Seq)
-#' @description AThis is a demo mixture matrix to learn how to use 'xCell2Train'
+#' @description This is a demo mixture matrix to learn how to use 'xCell2Train'
 "mix_demo"
+
+#' @name DICE_demo.xCell2Ref
+#' @title A demo xCell2 reference from a sub-set of the DICE reference
+#' @description This is a demo xCell2 reference object to learn how to use 'xCell2Analysis'
+"DICE_demo.xCell2Ref"
 
 #' An xCell2 object trained from the Tumor Microenvironment Compendium reference
 #'

@@ -11,6 +11,6 @@ An object of class \code{matrix} (inherits from \code{array}) with 1000 rows and
 mix_demo
 }
 \description{
-AThis is a demo mixture matrix to learn how to use 'xCell2Train'
+This is a demo mixture matrix to learn how to use 'xCell2Train'
 }
 \keyword{datasets}
