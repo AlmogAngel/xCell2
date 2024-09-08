@@ -3,18 +3,23 @@
 \docType{data}
 \name{human_mouse_gene_symbols}
 \alias{human_mouse_gene_symbols}
-\title{Human to mouse (symbol)}
+\title{Human to Mouse Gene Symbols}
 \format{
 A data frame with 2 columns:
 \describe{
-  \item{human}{gene human}
-  \item{mouse}{mouse}
+  \item{human}{Character. Human gene symbols.}
+  \item{mouse}{Character. Corresponding mouse gene symbols.}
 }
 }
 \usage{
-human_mouse_gene_symbols
+xCell2::human_mouse_gene_symbols
 }
 \description{
-A table for converting human to mouse gene symbols
+A table that provides a mapping of human gene symbols to mouse gene symbols.
+}
+\details{
+Human to Mouse Gene Symbol Conversion Table
+
+A data frame for converting human gene symbols to mouse gene symbols.
 }
 \keyword{datasets}

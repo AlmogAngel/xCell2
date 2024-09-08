@@ -3,30 +3,30 @@
 \docType{data}
 \name{ImmuneCompendium.xCell2Ref}
 \alias{ImmuneCompendium.xCell2Ref}
-\title{An xCell2 object trained from the Immune Compendium reference}
+\title{Immune Compendium Reference}
 \format{
-An xCell2Object (S4) that contain:
+An `xCell2Object` (S4) containing:
 \describe{
   \item{\code{params}}{A tibble of parameters for linear transformation.}
   \item{\code{signatures}}{A list containing cell-type signatures.}
-  \item{\code{dependencies}}{An list specifying cell types dependencies.}
+  \item{\code{dependencies}}{A list specifying cell type dependencies.}
   \item{\code{spill_mat}}{A matrix representing spillover correction factors.}
   \item{\code{genes_used}}{A character vector of genes used to generate the reference.}
 }
 }
 \source{
-Reference curated by Zaitsev A (2022) and trained by Angel A, et al (2024).
+Curated by Zaitsev A (2022); trained by Angel A, et al. (2024).
 }
 \usage{
-ImmuneCompendium.xCell2Ref
+xCell2::ImmuneCompendium.xCell2Ref
 }
 \description{
-Platform: RNA-Seq
-Organism: Human
-Tissue: Immune/Blood
+A reference object for use in `xCell2Analysis` or to create a new reference using `xCell2Train`.
 }
 \details{
-You can use this reference object as in input for `xCell2Analysis` or create a new reference object using `xCell2Train`.
+xCell2 Object Trained from the Immune Compendium Reference
+
+An xCell2 reference object created from the Immune Compendium reference.
 }
 \examples{
 xCell2Ref <- xCell2::ImmuneCompendium.xCell2Ref

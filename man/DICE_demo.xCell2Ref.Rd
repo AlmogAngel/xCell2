@@ -3,14 +3,29 @@
 \docType{data}
 \name{DICE_demo.xCell2Ref}
 \alias{DICE_demo.xCell2Ref}
-\title{A demo xCell2 reference from a sub-set of the DICE reference}
+\title{Demo xCell2 Reference Object}
 \format{
-An object of class \code{xCell2Object} of length 1.
+An `xCell2Object` (S4) containing:
+\describe{
+  \item{\code{params}}{A tibble of parameters for linear transformation.}
+  \item{\code{signatures}}{A list containing cell-type signatures.}
+  \item{\code{dependencies}}{A list specifying cell type dependencies.}
+  \item{\code{spill_mat}}{A matrix representing spillover correction factors.}
+  \item{\code{genes_used}}{A character vector of genes used to generate the reference.}
+}
+}
+\source{
+Schmiedel B et al. (2018)
 }
 \usage{
-DICE_demo.xCell2Ref
+xCell2::DICE_demo.xCell2Ref
 }
 \description{
-This is a demo xCell2 reference object to learn how to use 'xCell2Analysis'
+This object can be used to learn and demonstrate the functionality of the `xCell2Analysis` function.
+}
+\details{
+Demo xCell2 Reference Object from a Subset of the DICE Reference
+
+A demo xCell2 reference object derived from a subset of the DICE reference dataset.
 }
 \keyword{datasets}

@@ -3,14 +3,19 @@
 \docType{data}
 \name{mix_demo}
 \alias{mix_demo}
-\title{A demo for a bulk gene expression data (RNA-Seq)}
+\title{Demo Bulk Gene Expression Data}
 \format{
-An object of class \code{matrix} (inherits from \code{array}) with 1000 rows and 3 columns.
+A matrix with rows representing genes and columns representing samples.
 }
 \usage{
-mix_demo
+xCell2::mix_demo
 }
 \description{
-This is a demo mixture matrix to learn how to use 'xCell2Train'
+A demo mixture matrix for bulk RNA-Seq gene expression data. This dataset can be used to learn how to use the `xCell2Train` function.
+}
+\details{
+Demo Bulk Gene Expression Data (RNA-Seq)
+
+A demo mixture matrix for bulk RNA-Seq gene expression data, used to demonstrate how to use the `xCell2Train` function.
 }
 \keyword{datasets}
