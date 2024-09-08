@@ -61,7 +61,7 @@ xCell2GetLineage <- function(labels, outFile = NULL) {
     cl <- ontoProc::getOnto(ontoname = "cellOnto", year_added = "2023")
     labelsUniq$descendants <- NA
     labelsUniq$ancestors <- NA
-    for (i in 1:nrow(labelsUniq)) {
+    for (i in seq_len(nrow(labelsUniq))) {
       ont <- labelsUniq$ont[i]
       descendants <- ontologyIndex::get_descendants(cl, roots = ont, exclude_roots = TRUE)
       ancestors <- ontologyIndex::get_ancestors(cl, terms = ont)

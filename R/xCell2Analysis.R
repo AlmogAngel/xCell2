@@ -35,9 +35,9 @@ xCell2Analysis <- function(mix,
                            numThreads = 1) {
 
   scoreMix <- function(cellType, mixRanked, signaturesCellType) {
-    scores <- sapply(signaturesCellType, simplify = TRUE, function(sig) {
+    scores <- vapply(signaturesCellType, function(sig) {
       suppressWarnings(singscore::simpleScore(mixRanked, upSet = sig, centerScore = FALSE)$TotalScore)
-    })
+    }, FUN.VALUE = double(ncol(mixRanked)))
     rownames(scores) <- colnames(mixRanked)
     return(scores)
   }
@@ -52,7 +52,7 @@ xCell2Analysis <- function(mix,
   }
 
   # Rank mix gene expression matrix
-  mixRanked <- singscore::rankGenes(mix[xcell2object@genesUsed, ])
+  mixRanked <- singscore::rankGenes(mix[xcell2object@genes_used, ])
 
   # Score and predict
   sigsCellTypes <- unique(unlist(lapply(names(xcell2object@signatures), function(x) { strsplit(x, "#")[[1]][1] })))
@@ -74,7 +74,7 @@ xCell2Analysis <- function(mix,
     return(res)
   } else {
     # Linear transformation
-    res <- t(sapply(rownames(res), function(cellType) {
+    res <- t(vapply(rownames(res), function(cellType) {
       cellTypeRes <- res[cellType, ]
 
       # Linear transformation
@@ -90,7 +90,7 @@ xCell2Analysis <- function(mix,
       cellTypeRes <- round(cellTypeRes, 5)
 
       return(cellTypeRes)
-    }))
+    }, FUN.VALUE = double(ncol(res))))
   }
 
   if (spillover) {

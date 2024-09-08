@@ -50,13 +50,13 @@ ScToPseudoBulk <- function(ref, labels, minPbCells, minPbSamples) {
       cellTypeSamplesShuffled <- sample(cellTypeSamples, length(cellTypeSamples))
       listOfShuffledSamples <- split(cellTypeSamplesShuffled, ceiling(seq_along(cellTypeSamplesShuffled) / (length(cellTypeSamplesShuffled) / numGroups)))
 
-      sapply(listOfShuffledSamples, function(group) {
+      vapply(listOfShuffledSamples, function(group) {
         if (length(group) == 1) {
           ref[, group]
         } else {
           if ("matrix" %in% class(ref)) Rfast::rowsums(ref[, group]) else Matrix::rowSums(ref[, group])
         }
-      })
+      }, FUN.VALUE = double(nrow(ref)))
     } else {
       tmp <- ref[, cellTypeSamples]
       colnames(tmp) <- as.character(1:ncol(tmp))
@@ -141,7 +141,8 @@ PrepRefMix <- function(ref, mix, refType, minScGenes, humanToMouse) {
     }
 
     sharedGenes <- intersect(rownames(ref), rownames(mix))
-    message(paste0(length(sharedGenes), " genes are shared between reference and mixture."))
+    wm <- paste0(length(sharedGenes), " genes are shared between reference and mixture.")
+    message(sprintf(wm))
     ref <- ref[sharedGenes, ]
     mix <- mix[sharedGenes, ]
   }
@@ -159,7 +160,7 @@ GetDependencies <- function(lineageFileChecked) {
   depList <- vector(mode = "list", length = length(cellTypes))
   names(depList) <- cellTypes
 
-  for (i in 1:nrow(ont)) {
+  for (i in seq_len(nrow(ont))) {
     descendants <- gsub("_", "-", strsplit(dplyr::pull(ont[i, 3]), ";")[[1]])
     descendants <- descendants[!is.na(descendants)]
 
@@ -212,16 +213,16 @@ CreateSignatures <- function(labels, depList, quantilesMatrix, probs, diffVals, 
     while (length(typeSignatures) < 3 & minFracCtPassed >= 0) {
 
       maxGenesProblem <- c()
-      for (i in 1:nrow(paramDf)) {
+      for (i in seq_len(nrow(paramDf))) {
 
         # Get Boolean matrices with genes that pass the quantiles criteria
         diff <- paramDf[i, ]$diffVals
         lowerProb <- which(as.character(as.numeric(gsub("%", "", rownames(quantilesMatrix[[1]]))) / 100) == as.character(paramDf[i, ]$probs))
         upperProb <- which(as.character(as.numeric(gsub("%", "", rownames(quantilesMatrix[[1]]))) / 100) == as.character(1 - paramDf[i, ]$probs))
 
-        upperProbMatrix <- sapply(notDepCellTypes, function(x) {
+        upperProbMatrix <- vapply(notDepCellTypes, function(x) {
           get(x, quantilesMatrix)[upperProb, ]
-        })
+        }, FUN.VALUE = double(ncol(quantilesMatrix[[1]])))
 
         # Check diff-prob criteria
         diffGenesMatrix <- apply(upperProbMatrix, 2, function(x) {
@@ -246,6 +247,8 @@ CreateSignatures <- function(labels, depList, quantilesMatrix, probs, diffVals, 
           if (nGenes > maxGenes) {
             maxGenesProblem <- c(maxGenesProblem, TRUE)
             break
+          }else{
+            maxGenesProblem <- c(maxGenesProblem, FALSE)
           }
 
           sigName <- paste(paste0(type, "#"), paramDf[i, ]$probs, diff, nGenes, fracCtPassed, sep = "_")
@@ -258,13 +261,14 @@ CreateSignatures <- function(labels, depList, quantilesMatrix, probs, diffVals, 
         diffValsStrict <- c(diffVals, log2(2^max(diffVals) * 2), log2(2^max(diffVals) * 4), log2(2^max(diffVals) * 8), log2(2^max(diffVals) * 16), log2(2^max(diffVals) * 32))
         paramDf <- expand.grid("diffVals" = diffValsStrict, "probs" = probs)
 
-        for (i in 1:nrow(paramDf)) {
+        for (i in seq_len(nrow(paramDf))) {
           lowerProb <- which(as.character(as.numeric(gsub("%", "", rownames(quantilesMatrix[[1]]))) / 100) == as.character(paramDf[i, ]$probs))
           upperProb <- which(as.character(as.numeric(gsub("%", "", rownames(quantilesMatrix[[1]]))) / 100) == as.character(1 - paramDf[i, ]$probs))
 
-          upperProbMatrix <- sapply(notDepCellTypes, function(x) {
+          upperProbMatrix <- vapply(notDepCellTypes, function(x) {
             get(x, quantilesMatrix)[upperProb, ]
-          })
+          }, FUN.VALUE = double(ncol(quantilesMatrix[[1]])))
+          
 
           diffGenesMatrix <- apply(upperProbMatrix, 2, function(x) {
             get(type, quantilesMatrix)[lowerProb, ] > x + diff
@@ -298,7 +302,7 @@ CreateSignatures <- function(labels, depList, quantilesMatrix, probs, diffVals, 
 
       # Remove duplicate signatures
       typeSignaturesSorted <- lapply(typeSignatures, function(x) sort(x))
-      typeSignaturesCollapsed <- sapply(typeSignaturesSorted, paste, collapse = ",")
+      typeSignaturesCollapsed <- vapply(typeSignaturesSorted, paste, collapse = ",", FUN.VALUE = character(1))
       duplicatedSignatures <- duplicated(typeSignaturesCollapsed)
       typeSignatures <- typeSignatures[!duplicatedSignatures]
 
@@ -343,14 +347,14 @@ CreateSignatures <- function(labels, depList, quantilesMatrix, probs, diffVals, 
 MakeGEPMat <- function(ref, labels) {
   cellTypes <- unique(labels$label)
 
-  gepMat <- sapply(cellTypes, function(type) {
+  gepMat <- vapply(cellTypes, function(type) {
     typeSamples <- labels[, 2] == type
     if (sum(typeSamples) == 1) {
       typeVec <- as.vector(ref[, typeSamples])
     } else {
       typeVec <- Rfast::rowMedians(as.matrix(ref[, typeSamples]))
     }
-  })
+  }, FUN.VALUE = double(nrow(ref)))
   rownames(gepMat) <- rownames(ref)
 
   return(gepMat)
@@ -377,7 +381,7 @@ GetCellTypeCorrelation <- function(gepMat, refType) {
   lowerTriCoord <- which(lower.tri(corMat), arr.ind = TRUE)
 
   # Calculate correlations
-  for (i in 1:nrow(lowerTriCoord)) {
+  for (i in seq_len(nrow(lowerTriCoord))) {
     celltypeI <- rownames(corMat)[lowerTriCoord[i, 1]]
     celltypeJ <- colnames(corMat)[lowerTriCoord[i, 2]]
     corMat[lowerTriCoord[i, 1], lowerTriCoord[i, 2]] <- cor(gepMat[, celltypeI], gepMat[, celltypeJ], method = "spearman")
@@ -427,9 +431,9 @@ LearnParams <- function(gepMat, corMat, signatures, depList, topSpillValue, numT
     # Get scores
     mixMatRanked <- singscore::rankGenes(mixList[[cellType]])
     signaturesCellType <- signatures[gsub("#.*", "", names(signatures)) %in% cellType]
-    scores <- rowMeans(sapply(signaturesCellType, simplify = TRUE, function(sig) {
+    scores <- rowMeans(vapply(signaturesCellType, function(sig) {
       singscore::simpleScore(mixMatRanked, upSet = sig, centerScore = FALSE)$TotalScore
-    }))
+    }, FUN.VALUE = double(ncol(mixMatRanked))))
 
     # Get transformation parameters
     tp <- try(minpack.lm::nlsLM(scores ~ a * simFracs^b, start = list(a = 1, b = 1), control = list(maxiter = 500)), silent = TRUE)
@@ -466,9 +470,9 @@ LearnParams <- function(gepMat, corMat, signatures, depList, topSpillValue, numT
       controls <- cellTypes[cellTypes != cellType]
     }
 
-    controls <- sapply(colnames(ctsMatFrac), function(ct) {
+    controls <- vapply(colnames(ctsMatFrac), function(ct) {
       names(sort(corMat[controls, ct])[1])
-    })
+    }, FUN.VALUE = character(1))
     controlsMatFrac <- gepMatLinear[, controls] * (1 - fracToUse)
 
     # Combine
@@ -476,9 +480,9 @@ LearnParams <- function(gepMat, corMat, signatures, depList, topSpillValue, numT
 
     # Get results for all cell type mixtures
     mixCtsMatRanked <- singscore::rankGenes(mixture)
-    mixCtsMatScores <- sapply(signaturesCellType, simplify = TRUE, function(sig) {
+    mixCtsMatScores <- vapply(signaturesCellType, function(sig) {
       singscore::simpleScore(mixCtsMatRanked, upSet = sig, centerScore = FALSE)$TotalScore
-    })
+    }, FUN.VALUE = double(ncol(mixCtsMatRanked)))
     mixCtsMatScores <- Rfast::rowmeans(mixCtsMatScores)
     mixCtsMatScores <- (mixCtsMatScores^(1 / b)) / a
     mixCtsMatScores <- mixCtsMatScores * m + n
@@ -487,9 +491,9 @@ LearnParams <- function(gepMat, corMat, signatures, depList, topSpillValue, numT
     # Get results for all cell type controls
     controlsCtsMatRanked <- singscore::rankGenes(controlsMatFrac)
     colnames(controlsCtsMatRanked) <- make.unique(colnames(controlsCtsMatRanked))
-    controlsCtsMatScores <- sapply(signaturesCellType, simplify = TRUE, function(sig) {
+    controlsCtsMatScores <- vapply(signaturesCellType, function(sig) {
       singscore::simpleScore(controlsCtsMatRanked, upSet = sig, centerScore = FALSE)$TotalScore
-    })
+    }, FUN.VALUE = double(ncol(controlsCtsMatRanked)))
     controlsCtsMatScores[controlsCtsMatScores < 0] <- 0
     controlsCtsMatScores <- Rfast::rowmeans(controlsCtsMatScores)
     controlsCtsMatScores <- (controlsCtsMatScores^(1 / b)) / a
