@@ -22,10 +22,10 @@ This vignette provides an overview of the package's functionality, including how
 
 (Soon) To install the `xCell2` package from Bioconductor, use:
 
-```{r, eval = TRUE}
-#if (!requireNamespace("BiocManager", quietly = TRUE))
-#    install.packages("BiocManager")
-#BiocManager::install("xCell2")
+```{r, eval = FALSE}
+if (!requireNamespace("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+BiocManager::install("xCell2")
 ```
 
 To install the `xCell2` package source code, use:
@@ -104,7 +104,7 @@ dice_labels[dice_labels$label == "T cells, CD4+, memory",]$ont <- "CL:0000897"
 
 
 You can manually check cell type dependencies using the xCell2GetLineage function:
-```{r, eval = TRUE}
+```{r, eval = FALSE}
 xCell2::xCell2GetLineage(labels = dice_labels, outFile = "demo_dice_dep.tsv") 
 ```
 Open `demo_dice_dep.tsv` and check if the lineage assigned to each cell type makes sense.
@@ -148,7 +148,7 @@ DICE_demo.xCell2Ref <- xCell2::xCell2Train(ref = dice_ref, labels = dice_labels,
 Once generated a new custom xCell2 reference, you can share this object with the so other can use it.
 
 1. Save your reference object
-```{r, eval = TRUE}
+```{r, eval = FALSE}
 save(DICE_demo.xCell2Ref, file = "DICE_demo.xCell2Ref.rda")
 ```
 

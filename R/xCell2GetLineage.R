@@ -20,12 +20,12 @@
 #' # For detailed example read xCell2 vignette.
 #' 
 #' # Extract reference matrix
-#' dice <- xCell2::dice_demo_ref
-#' dice_ref <- as.matrix(dice@assays@data$logcounts)
+#' data(dice_demo_ref, package = "xCell2")
+#' dice_ref <- as.matrix(dice_demo_ref@assays@data$logcounts)
 #' colnames(dice_ref) <- make.unique(colnames(dice_ref)) # Make samples samples unique
 #' 
 #' # Extract reference metadata
-#' dice_labels <- as.data.frame(dice@colData)
+#' dice_labels <- as.data.frame(dice_demo_ref@colData)
 #' 
 #' # Prepare labels data frame
 #' dice_labels$ont <- NA

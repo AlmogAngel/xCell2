@@ -83,7 +83,10 @@ PrepRefMix <- function(ref, mix, refType, minScGenes, humanToMouse) {
   
   if (humanToMouse) {
     message("Converting reference genes from human to mouse...")
-    human_mouse_gene_symbols <- xCell2::human_mouse_gene_symbols
+    local_env <- new.env()
+    data(human_mouse_gene_symbols, package = "xCell2", envir = local_env)
+    human_mouse_gene_symbols <- local_env$human_mouse_gene_symbols
+    rownames(human_mouse_gene_symbols) <- human_mouse_gene_symbols$human
     humanGenes <- intersect(rownames(ref), human_mouse_gene_symbols$human)
     ref <- ref[humanGenes, ]
     rownames(ref) <- human_mouse_gene_symbols[humanGenes, ]$mouse
@@ -553,6 +556,7 @@ setClass("xCell2Object", slots = list(
 #' @import tidyr
 #' @import readr
 #' @import BiocParallel
+#' @importFrom utils data
 #' @importFrom minpack.lm nlsLM
 #' @importFrom Rfast rowMedians rowmeans rowsums Sort
 #' @importFrom Matrix rowMeans rowSums colSums Diagonal
@@ -584,12 +588,12 @@ setClass("xCell2Object", slots = list(
 #' # For detailed example read xCell2 vignette.
 #' 
 #' # Extract reference matrix
-#' dice <- xCell2::dice_demo_ref
-#' dice_ref <- as.matrix(dice@assays@data$logcounts)
+#' data(dice_demo_ref, package = "xCell2")
+#' dice_ref <- as.matrix(dice_demo_ref@assays@data$logcounts)
 #' colnames(dice_ref) <- make.unique(colnames(dice_ref)) # Make samples samples unique
 #' 
 #' # Extract reference metadata
-#' dice_labels <- as.data.frame(dice@colData)
+#' dice_labels <- as.data.frame(dice_demo_ref@colData)
 #' 
 #' # Prepare labels data frame
 #' dice_labels$ont <- NA

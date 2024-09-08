@@ -31,6 +31,7 @@ Imports:
     readr,
     tidyr
 Suggests:
+    devtools,
     knitr,
     rmarkdown,
     testthat

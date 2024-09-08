@@ -18,7 +18,7 @@ An `xCell2Object` (S4) containing:
 The Tabula Muris Consortium (2018); trained by Angel A, et al. (2024).
 }
 \usage{
-TabulaMurisBlood.xCell2Ref
+data(TabulaMurisBlood.xCell2Ref, package = "xCell2")
 }
 \description{
 A reference object for use in `xCell2Analysis` or to create a new reference using `xCell2Train`.
@@ -27,8 +27,5 @@ A reference object for use in `xCell2Analysis` or to create a new reference usin
 xCell2 Object Trained from the Tabula Muris Reference
 
 An xCell2 reference object created from the Tabula Muris reference.
-}
-\examples{
-xCell2Ref <- TabulaMurisBlood.xCell2Ref
 }
 \keyword{datasets}

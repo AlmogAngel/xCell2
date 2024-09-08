@@ -16,13 +16,13 @@
 #' # For detailed example read xCell2 vignette.
 #' 
 #' # Load "ready to use" xCell2 reference object or generate a new one using `xCell2Train`
-#' PanCancer.xCell2Ref <- xCell2::PanCancer.xCell2Ref
+#' data(DICE_demo.xCell2Ref, package = "xCell2")
 #' 
 #' # Load bulk RNA-Seq gene expression mixture
-#' mix_demo <- xCell2::mix_demo
+#' data(mix_demo, package = "xCell2")
 #' 
 #' # Run xCell2 cell type enrichment analysis
-#' xcell2_res <- xCell2::xCell2Analysis(mix = mix_demo, xcell2object = PanCancer.xCell2Ref)
+#' xcell2_res <- xCell2::xCell2Analysis(mix = mix_demo, xcell2object = DICE_demo.xCell2Ref)
 #' 
 #' @return A data frame containing the cell type enrichment for each sample in the input matrix, as estimated by xCell2.
 #' @export

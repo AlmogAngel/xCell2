@@ -8,7 +8,7 @@
 A matrix with rows representing genes and columns representing samples.
 }
 \usage{
-mix_demo
+data(mix_demo, package = "xCell2")
 }
 \description{
 A demo mixture matrix for bulk RNA-Seq gene expression data. This dataset can be used to learn how to use the `xCell2Train` function.
