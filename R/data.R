@@ -8,12 +8,17 @@
 #' }
 "human_mouse_gene_symbols"
 
-#' A subset SummarizedExperiment object of the DICE reference for xCell 2.0 vignette
-#'
+#' @name dice_demo_ref
+#' @title Sub-set of the DICE reference
+#' @description A subset SummarizedExperiment object of the DICE reference for xCell 2.0 vignette
 #' This is a demo reference object to learn how to use 'xCell2Train'
-#'
 #' @source Schmiedel B et al. (2018)
 "dice_demo_ref"
+
+#' @name mix_demo
+#' @title A demo for a bulk gene expression data (RNA-Seq)
+#' @description AThis is a demo mixture matrix to learn how to use 'xCell2Train'
+"mix_demo"
 
 #' An xCell2 object trained from the Tumor Microenvironment Compendium reference
 #'

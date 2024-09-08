@@ -3,7 +3,7 @@
 \docType{data}
 \name{dice_demo_ref}
 \alias{dice_demo_ref}
-\title{A subset SummarizedExperiment object of the DICE reference for xCell 2.0 vignette}
+\title{Sub-set of the DICE reference}
 \format{
 An object of class \code{SummarizedExperiment} with 48043 rows and 30 columns.
 }
@@ -14,6 +14,7 @@ Schmiedel B et al. (2018)
 dice_demo_ref
 }
 \description{
+A subset SummarizedExperiment object of the DICE reference for xCell 2.0 vignette
 This is a demo reference object to learn how to use 'xCell2Train'
 }
 \keyword{datasets}
