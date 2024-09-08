@@ -4,8 +4,7 @@ Title: A Tool for Generic Cell Type Enrichment Analysis
 Version: 0.99.0
 Authors@R: 
     c(person(given = "Almog", family = "Angel", role = c("aut", "cre"),
-           email = "almogangel@gmail.com"),
-           comment = c(Academic email = "almog.angel@campus.technion.ac.il"))
+           email = "almogangel@gmail.com")
 Description: xCell2 provides methods for cell type enrichment analysis using cell type signatures.
     It includes three main functions - 
     1. xCell2Train for training custom references objects from bulk or single-cell RNA-seq datasets.
