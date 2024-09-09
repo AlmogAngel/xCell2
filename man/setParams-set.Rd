@@ -18,5 +18,7 @@ The modified \code{xCell2Object}.
 Set the \code{params} slot in an \code{xCell2Object}.
 }
 \examples{
-setParams(myObject) <- tibble(celltype = "B cells", a = 0.856, b = 0.197, m = 1.85, n = 0.00185)
+data("DICE_demo.xCell2Ref")
+setParams(DICE_demo.xCell2Ref) <-
+ data.frame(celltype = "B cells", a = 0.856, b = 0.197, m = 1.85, n = 0.00185)
 }

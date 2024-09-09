@@ -16,5 +16,6 @@ A matrix representing the spillover correction factors.
 Access the \code{spill_mat} slot from an \code{xCell2Object}.
 }
 \examples{
-getSpillMat(myObject)
+data("DICE_demo.xCell2Ref")
+getSpillMat(DICE_demo.xCell2Ref)
 }

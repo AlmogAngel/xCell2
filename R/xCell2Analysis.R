@@ -45,9 +45,12 @@ xCell2Analysis <- function(mix,
   param <- BiocParallel::MulticoreParam(workers = numThreads)
 
   # Check reference/mixture genes intersection
-  genesIntersectFrac <- length(intersect(rownames(mix), getGenesUsed(xcell2object))) / length(getGenesUsed(xcell2object))
+  genesIntersectFrac <- length(intersect(rownames(mix), getGenesUsed(xcell2object))) /
+    length(getGenesUsed(xcell2object))
   if (genesIntersectFrac < minSharedGenes) {
-    stop("This xCell2 reference shares ", genesIntersectFrac, " genes with the mixtures and minSharedGenes = ", minSharedGenes, ".",
+    stop("This xCell2 reference shares ",
+         genesIntersectFrac, " genes with the mixtures and minSharedGenes = ",
+         minSharedGenes, ".",
          "\n", "Consider training a new xCell2 reference or adjusting minSharedGenes.")
   }
 
@@ -55,11 +58,13 @@ xCell2Analysis <- function(mix,
   mixRanked <- singscore::rankGenes(mix[getGenesUsed(xcell2object), ])
 
   # Score and predict
-  sigsCellTypes <- unique(unlist(lapply(names(getSignatures(xcell2object)), function(x) { strsplit(x, "#")[[1]][1] })))
+  sigsCellTypes <- unique(unlist(lapply(names(getSignatures(xcell2object)),
+                                        function(x) { strsplit(x, "#")[[1]][1] })))
 
   # Get raw enrichment scores
   resRaw <- BiocParallel::bplapply(sigsCellTypes, function(cellType) {
-    signaturesCellType <- getSignatures(xcell2object)[startsWith(names(getSignatures(xcell2object)), paste0(cellType, "#"))]
+    signaturesCellType <- getSignatures(xcell2object)[startsWith(names(
+      getSignatures(xcell2object)), paste0(cellType, "#"))]
     scores <- scoreMix(cellType, mixRanked, signaturesCellType)
     return(scores)
   }, BPPARAM = param)
@@ -100,7 +105,8 @@ xCell2Analysis <- function(mix,
 
     rows <- intersect(rownames(res), rownames(spillMat))
 
-    scoresCorrected <- apply(res[rows, ], 2, function(x) pracma::lsqlincon(spillMat[rows, rows], x, lb = 0))
+    scoresCorrected <- apply(res[rows, ], 2, function(x) pracma::lsqlincon(spillMat[rows, rows],
+                                                                           x, lb = 0))
     scoresCorrected[scoresCorrected < 0] <- 0
     rownames(scoresCorrected) <- rows
 

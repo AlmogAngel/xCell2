@@ -16,5 +16,6 @@ A character vector of gene names used to train the xCell2 reference object
 Access the \code{genes_used} slot from an \code{xCell2Object}.
 }
 \examples{
-getGenesUsed(myObject)
+data("DICE_demo.xCell2Ref")
+getGenesUsed(DICE_demo.xCell2Ref)
 }

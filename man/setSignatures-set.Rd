@@ -18,5 +18,6 @@ The modified \code{xCell2Object}.
 Set the \code{signatures} slot in an \code{xCell2Object}.
 }
 \examples{
-setSignatures(myObject) <- list("B cell" = c("MS4A1", "IGHM", "FCRL1", "IGHD"))
+data("DICE_demo.xCell2Ref")
+setSignatures(DICE_demo.xCell2Ref) <- list("B cell" = c("MS4A1", "IGHM", "FCRL1", "IGHD"))
 }

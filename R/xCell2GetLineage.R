@@ -66,8 +66,10 @@ xCell2GetLineage <- function(labels, outFile = NULL) {
       descendants <- ontologyIndex::get_descendants(cl, roots = ont, exclude_roots = TRUE)
       ancestors <- ontologyIndex::get_ancestors(cl, terms = ont)
       ancestors <- ancestors[ancestors != ont]
-      descendants <- paste(dplyr::pull(labelsUniq[dplyr::pull(labelsUniq[, 1]) %in% descendants, 2]), collapse = ";")
-      ancestors <- paste(dplyr::pull(labelsUniq[dplyr::pull(labelsUniq[, 1]) %in% ancestors, 2]), collapse = ";")
+      descendants <- paste(dplyr::pull(labelsUniq[dplyr::pull(
+        labelsUniq[, 1]) %in% descendants, 2]), collapse = ";")
+      ancestors <- paste(dplyr::pull(labelsUniq[dplyr::pull(
+        labelsUniq[, 1]) %in% ancestors, 2]), collapse = ";")
       labelsUniq$descendants[i] <- descendants
       labelsUniq$ancestors[i] <- ancestors
     }

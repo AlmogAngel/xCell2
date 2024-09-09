@@ -18,5 +18,6 @@ The modified \code{xCell2Object}.
 Set the \code{genes_used} slot in an \code{xCell2Object}.
 }
 \examples{
-setGenesUsed(myObject) <- c("GeneA", "GeneB", "GeneC")
+data("DICE_demo.xCell2Ref")
+setGenesUsed(DICE_demo.xCell2Ref) <- c("GeneA", "GeneB", "GeneC")
 }

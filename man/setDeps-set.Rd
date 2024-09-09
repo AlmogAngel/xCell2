@@ -18,5 +18,7 @@ The modified \code{xCell2Object}.
 Set the \code{dependencies} slot in an \code{xCell2Object}.
 }
 \examples{
-setDeps(myObject) <- list("T cells, CD4+" = list("descendants" = "T cells, CD4+, memory",  "ancestors" = "T cells")))
+data("DICE_demo.xCell2Ref")
+setDeps(DICE_demo.xCell2Ref) <-
+ list("T cells, CD4+" = list("descendants" = "T cells, CD4+, memory",  "ancestors" = "T cells"))
 }

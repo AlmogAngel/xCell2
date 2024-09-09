@@ -16,5 +16,6 @@ A list containing the cell type dependencies.
 Access the \code{dependencies} slot from an \code{xCell2Object}.
 }
 \examples{
-getDeps(myObject)
+data("DICE_demo.xCell2Ref")
+getDeps(DICE_demo.xCell2Ref)
 }

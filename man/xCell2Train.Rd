@@ -28,7 +28,8 @@ xCell2Train(
 
 \item{mix}{A bulk mixture of gene expression data (genes in rows, samples in columns) (optional).}
 
-\item{labels}{A data frame in which the rows correspond to samples in the ref. The data frame must have four columns:
+\item{labels}{A data frame in which the rows correspond to samples in the ref.
+The data frame must have four columns:
 "ont": the cell type ontology as a character (i.e., "CL:0000545" or NA if there is no ontology).
 "label": the cell type name as a character (i.e., "T-helper 1 cell").
 "sample": the cell type sample/cell that match the column name in ref.
@@ -90,8 +91,11 @@ dice_labels[dice_labels$label == "T cells, CD8+",]$ont <- "CL:0000625"
 dice_labels[dice_labels$label == "T cells, CD4+",]$ont <- "CL:0000624"
 dice_labels[dice_labels$label == "T cells, CD4+, memory",]$ont <- "CL:0000897"
 
+# Reproducibility (optional): Set seed before running `xCell2Train`  as generating pseudo-bulk
+# samples from scRNA-Seq reference based on random sampling of cells.
+set.seed(123) 
+
 # Generate custom xCell2 reference object
-set.seed(123) # (optional) As generating pseudo-bulk samples from scRNA-Seq reference based on random sampling of cells
 DICE.xCell2Ref <- xCell2::xCell2Train(ref = dice_ref, labels = dice_labels, refType = "rnaseq")
 
 }

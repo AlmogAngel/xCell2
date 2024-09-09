@@ -16,5 +16,6 @@ A tibble containing the linear transformation parameters.
 Access the \code{params} slot from an \code{xCell2Object}.
 }
 \examples{
-getParams(myObject)
+data("DICE_demo.xCell2Ref")
+getParams(DICE_demo.xCell2Ref)
 }

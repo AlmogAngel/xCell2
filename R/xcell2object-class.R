@@ -25,7 +25,8 @@ setClass("xCell2Object", slots = list(
 #' @return A list containing the xCell2 signatures.
 #' @export
 #' @examples
-#' getSignatures(myObject)
+#' data("DICE_demo.xCell2Ref")
+#' getSignatures(DICE_demo.xCell2Ref)
 setGeneric("getSignatures", function(object) standardGeneric("getSignatures"))
 
 setMethod("getSignatures", "xCell2Object", function(object) {
@@ -41,7 +42,8 @@ setMethod("getSignatures", "xCell2Object", function(object) {
 #' @return The modified \code{xCell2Object}.
 #' @export
 #' @examples
-#' setSignatures(myObject) <- list("B cell" = c("MS4A1", "IGHM", "FCRL1", "IGHD"))
+#' data("DICE_demo.xCell2Ref")
+#' setSignatures(DICE_demo.xCell2Ref) <- list("B cell" = c("MS4A1", "IGHM", "FCRL1", "IGHD"))
 setGeneric("setSignatures<-", function(object, value) standardGeneric("setSignatures<-"))
 
 setMethod("setSignatures<-", "xCell2Object", function(object, value) {
@@ -57,7 +59,8 @@ setMethod("setSignatures<-", "xCell2Object", function(object, value) {
 #' @return A list containing the cell type dependencies.
 #' @export
 #' @examples
-#' getDeps(myObject)
+#' data("DICE_demo.xCell2Ref")
+#' getDeps(DICE_demo.xCell2Ref)
 setGeneric("getDeps", function(object) standardGeneric("getDeps"))
 
 setMethod("getDeps", "xCell2Object", function(object) {
@@ -73,7 +76,9 @@ setMethod("getDeps", "xCell2Object", function(object) {
 #' @return The modified \code{xCell2Object}.
 #' @export
 #' @examples
-#' setDeps(myObject) <- list("T cells, CD4+" = list("descendants" = "T cells, CD4+, memory",  "ancestors" = "T cells")))
+#' data("DICE_demo.xCell2Ref")
+#' setDeps(DICE_demo.xCell2Ref) <-
+#'  list("T cells, CD4+" = list("descendants" = "T cells, CD4+, memory",  "ancestors" = "T cells"))
 setGeneric("setDeps<-", function(object, value) standardGeneric("setDeps<-"))
 
 setMethod("setDeps<-", "xCell2Object", function(object, value) {
@@ -89,7 +94,8 @@ setMethod("setDeps<-", "xCell2Object", function(object, value) {
 #' @return A tibble containing the linear transformation parameters.
 #' @export
 #' @examples
-#' getParams(myObject)
+#' data("DICE_demo.xCell2Ref")
+#' getParams(DICE_demo.xCell2Ref)
 setGeneric("getParams", function(object) standardGeneric("getParams"))
 
 setMethod("getParams", "xCell2Object", function(object) {
@@ -105,7 +111,9 @@ setMethod("getParams", "xCell2Object", function(object) {
 #' @return The modified \code{xCell2Object}.
 #' @export
 #' @examples
-#' setParams(myObject) <- tibble(celltype = "B cells", a = 0.856, b = 0.197, m = 1.85, n = 0.00185)
+#' data("DICE_demo.xCell2Ref")
+#' setParams(DICE_demo.xCell2Ref) <-
+#'  data.frame(celltype = "B cells", a = 0.856, b = 0.197, m = 1.85, n = 0.00185)
 setGeneric("setParams<-", function(object, value) standardGeneric("setParams<-"))
 
 setMethod("setParams<-", "xCell2Object", function(object, value) {
@@ -121,7 +129,8 @@ setMethod("setParams<-", "xCell2Object", function(object, value) {
 #' @return A matrix representing the spillover correction factors.
 #' @export
 #' @examples
-#' getSpillMat(myObject)
+#' data("DICE_demo.xCell2Ref")
+#' getSpillMat(DICE_demo.xCell2Ref)
 setGeneric("getSpillMat", function(object) standardGeneric("getSpillMat"))
 
 setMethod("getSpillMat", "xCell2Object", function(object) {
@@ -151,7 +160,8 @@ setMethod("setSpillMat<-", "xCell2Object", function(object, value) {
 #' @return A character vector of gene names used to train the xCell2 reference object
 #' @export
 #' @examples
-#' getGenesUsed(myObject)
+#' data("DICE_demo.xCell2Ref")
+#' getGenesUsed(DICE_demo.xCell2Ref)
 setGeneric("getGenesUsed", function(object) standardGeneric("getGenesUsed"))
 
 setMethod("getGenesUsed", "xCell2Object", function(object) {
@@ -167,7 +177,8 @@ setMethod("getGenesUsed", "xCell2Object", function(object) {
 #' @return The modified \code{xCell2Object}.
 #' @export
 #' @examples
-#' setGenesUsed(myObject) <- c("GeneA", "GeneB", "GeneC")
+#' data("DICE_demo.xCell2Ref")
+#' setGenesUsed(DICE_demo.xCell2Ref) <- c("GeneA", "GeneB", "GeneC")
 setGeneric("setGenesUsed<-", function(object, value) standardGeneric("setGenesUsed<-"))
 
 setMethod("setGenesUsed<-", "xCell2Object", function(object, value) {

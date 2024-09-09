@@ -16,5 +16,6 @@ A list containing the xCell2 signatures.
 Access the \code{signatures} slot from an \code{xCell2Object}.
 }
 \examples{
-getSignatures(myObject)
+data("DICE_demo.xCell2Ref")
+getSignatures(DICE_demo.xCell2Ref)
 }
