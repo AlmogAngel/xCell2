@@ -19,7 +19,7 @@ biocViews: GeneExpression, Transcriptomics, Microarray, RNASeq, SingleCell, Diff
 Imports: 
     Rfast,
     singscore,
-    ontoProc (>= 1.27.4),
+    ontoProc (>= 1.26.4),
     ontologyIndex,
     tibble,
     dplyr,
