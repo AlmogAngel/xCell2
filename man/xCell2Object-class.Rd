@@ -14,10 +14,11 @@ An S4 class to represent the xCell2 reference object.
 
 \item{\code{dependencies}}{List of cell type dependencies.}
 
-\item{\code{params}}{Tibble of cell type linear transformation parameters.}
+\item{\code{params}}{Data frame of cell type linear transformation parameters.}
 
 \item{\code{spill_mat}}{Matrix of cell types spillover correction factors.}
 
 \item{\code{genes_used}}{Character vector of genes used to train the xCell2 reference object.}
 }}
 
+\concept{objects}

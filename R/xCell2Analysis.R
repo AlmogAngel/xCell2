@@ -14,16 +14,16 @@
 #' @param numThreads Number of threads for parallel processing (default: 1).
 #' @examples
 #' # For detailed example read xCell2 vignette.
-#' 
+#'
 #' # Load "ready to use" xCell2 reference object or generate a new one using `xCell2Train`
 #' data(DICE_demo.xCell2Ref, package = "xCell2")
-#' 
+#'
 #' # Load bulk RNA-Seq gene expression mixture
 #' data(mix_demo, package = "xCell2")
-#' 
+#'
 #' # Run xCell2 cell type enrichment analysis
 #' xcell2_res <- xCell2::xCell2Analysis(mix = mix_demo, xcell2object = DICE_demo.xCell2Ref)
-#' 
+#'
 #' @return A data frame containing the cell type enrichment for each sample in the input matrix, as estimated by xCell2.
 #' @export
 xCell2Analysis <- function(mix,
@@ -33,7 +33,6 @@ xCell2Analysis <- function(mix,
                            spillover = TRUE,
                            spilloverAlpha = 0.5,
                            numThreads = 1) {
-
   scoreMix <- function(cellType, mixRanked, signaturesCellType) {
     scores <- vapply(signaturesCellType, function(sig) {
       singscore::simpleScore(mixRanked, upSet = sig, centerScore = FALSE)$TotalScore
@@ -48,23 +47,30 @@ xCell2Analysis <- function(mix,
   genesIntersectFrac <- length(intersect(rownames(mix), getGenesUsed(xcell2object))) /
     length(getGenesUsed(xcell2object))
   if (genesIntersectFrac < minSharedGenes) {
-    stop("This xCell2 reference shares ",
-         genesIntersectFrac, " genes with the mixtures and minSharedGenes = ",
-         minSharedGenes, ".",
-         "\n", "Consider training a new xCell2 reference or adjusting minSharedGenes.")
+    stop(
+      "This xCell2 reference shares ",
+      genesIntersectFrac, " genes with the mixtures and minSharedGenes = ",
+      minSharedGenes, ".",
+      "\n", "Consider training a new xCell2 reference or adjusting minSharedGenes."
+    )
   }
 
   # Rank mix gene expression matrix
   mixRanked <- singscore::rankGenes(mix[getGenesUsed(xcell2object), ])
 
   # Score and predict
-  sigsCellTypes <- unique(unlist(lapply(names(getSignatures(xcell2object)),
-                                        function(x) { strsplit(x, "#")[[1]][1] })))
+  sigsCellTypes <- unique(unlist(lapply(
+    names(getSignatures(xcell2object)),
+    function(x) {
+      strsplit(x, "#")[[1]][1]
+    }
+  )))
 
   # Get raw enrichment scores
   resRaw <- BiocParallel::bplapply(sigsCellTypes, function(cellType) {
     signaturesCellType <- getSignatures(xcell2object)[startsWith(names(
-      getSignatures(xcell2object)), paste0(cellType, "#"))]
+      getSignatures(xcell2object)
+    ), paste0(cellType, "#"))]
     scores <- scoreMix(cellType, mixRanked, signaturesCellType)
     return(scores)
   }, BPPARAM = param)
@@ -83,11 +89,11 @@ xCell2Analysis <- function(mix,
       cellTypeRes <- res[cellType, ]
 
       # Linear transformation
-      a <- getParams(xcell2object)[xcell2object@params$celltype == cellType,]$a
-      b <- getParams(xcell2object)[xcell2object@params$celltype == cellType,]$b
-      m <- getParams(xcell2object)[xcell2object@params$celltype == cellType,]$m
+      a <- getParams(xcell2object)[xcell2object@params$celltype == cellType, ]$a
+      b <- getParams(xcell2object)[xcell2object@params$celltype == cellType, ]$b
+      m <- getParams(xcell2object)[xcell2object@params$celltype == cellType, ]$m
 
-      cellTypeRes <- (cellTypeRes^(1/b)) / a
+      cellTypeRes <- (cellTypeRes^(1 / b)) / a
       cellTypeRes <- cellTypeRes * m
 
       # Shift values
@@ -105,8 +111,12 @@ xCell2Analysis <- function(mix,
 
     rows <- intersect(rownames(res), rownames(spillMat))
 
-    scoresCorrected <- apply(res[rows, ], 2, function(x) pracma::lsqlincon(spillMat[rows, rows],
-                                                                           x, lb = 0))
+    scoresCorrected <- apply(res[rows, ], 2, function(x) {
+      pracma::lsqlincon(spillMat[rows, rows],
+        x,
+        lb = 0
+      )
+    })
     scoresCorrected[scoresCorrected < 0] <- 0
     rownames(scoresCorrected) <- rows
 
