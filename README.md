@@ -25,7 +25,8 @@ library(xCell2)
 
 ## Vignettes
 
-Detailed usage guides are under development.
+[Introduction to Cell Type Enrichment Analysis with xCell 2.0](doc/xCell2-vignette.html)
+
 
 ## Contributors
 
