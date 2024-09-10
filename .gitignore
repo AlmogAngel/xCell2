@@ -5,7 +5,6 @@
 dev_data
 .Rproj.user.backup
 inst/doc
-/doc/
 /Meta/
 xCell2.Rproj
 .DS_Store
