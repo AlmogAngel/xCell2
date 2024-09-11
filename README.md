@@ -35,7 +35,7 @@ xCell 2.0 is developed by the Aran lab at the Technion - Israel Institute of Tec
 ## Citation
 
 If you use xCell 2.0 in your research, please cite our paper:
-Angel A, Naom L, Nabel-Levy S, Aran D. xCell 2.0: Robust Algorithm for Cell Type Proportion Estimation Predicts Response to Immune Checkpoint Blockade. bioRxiv 2024. (Link to be added)
+[Angel A, Naom L, Nabel-Levy S, Aran D. xCell 2.0: Robust Algorithm for Cell Type Proportion Estimation Predicts Response to Immune Checkpoint Blockade. bioRxiv 2024.](https://doi.org/10.1101/2024.09.06.611424)
 
 ## License
 
