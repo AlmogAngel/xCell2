@@ -5,6 +5,5 @@
 ^\.git$
 ^\.gitignore$
 ^LICENSE\.md$
-^doc$
 ^Meta$
 ^xcell2logo.png$
