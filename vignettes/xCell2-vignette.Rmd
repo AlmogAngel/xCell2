@@ -87,6 +87,8 @@ Before using `xCell2Train`, you need to prepare two key inputs:
   - `"sample"`: Sample/cell identifier matching column names in the reference matrix
   - `"dataset"`: Source dataset or subject identifier
 
+When using a `SummarizedExperiment` or `SingleCellExperiment` object, the gene expression matrix should be stored in the `"counts"` slot of the `assays` component, and the sample metadata (equivalent to the "labels" data frame) should be stored in `colData`.
+
 ## Example: Using DICE Dataset
 
 Let's walk through an example using a subset of the Database of Immune Cell Expression (DICE):
@@ -152,8 +154,9 @@ DICE_demo.xCell2Ref <- xCell2::xCell2Train(
 Note that we set seed for reproducibility as generating pseudo-bulk samples from scRNA-Seq reference based on random sampling of cells.
 
 Key Parameters of `xCell2Train`:
-- *ref*: Your prepared reference gene expression matrix
-- *labels*: The labels data frame you created
+- *ref*: Your prepared reference gene expression matrix or a `SummarizedExperiment` / `SingleCellExperiment` object
+- *labels*: The labels data frame you created (not needed if ref is a SummarizedExperiment or SingleCellExperiment object,
+            as it should already be included in `colData`) (default: NULL)
 - *refType*: Type of reference data ("rnaseq", "array", or "sc")
 - *useOntology*: Whether to use ontological integration (default: TRUE)
 - *numThreads*: Number of threads for parallel processing

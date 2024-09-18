@@ -1,17 +1,28 @@
 # Function to validate input parameters for xCell2 training
 ValidateInputs <- function(ref, labels, refType) {
+  
+  # Check if input is a SummarizedExperiment or SingleCellExperiment
+  if (inherits(ref, "SummarizedExperiment") || inherits(ref, "SingleCellExperiment")) {
+    se <- ref
+    ref <- assays(se)$counts
+    labels <- as.data.frame(colData(se))
+  }else{
+    if (!any(class(ref) %in% c("matrix", "dgCMatrix", "Matrix"))) {
+      stop("ref must be one of these classes: matrix, dgCMatrix, Matrix or SummarizedExperiment/SingleCellExperiment object")
+    }
+    if (is.null(labels)) {
+      stop("labels must be a data frame with 4 columns: 'ont'', 'label'', 'sample'' and 'dataset'")
+    }
+  }
+
   if (all(colnames(labels) %in% c("ont", "label", "sample", "dataset"))) {
     labels <- labels[, c("ont", "label", "sample", "dataset")]
   } else {
-    stop("labels must have at 4 columns: 'ont'', 'label'', 'sample'' and 'dataset'")
+    stop("labels must have 4 columns: 'ont'', 'label'', 'sample'' and 'dataset'")
   }
 
   if (length(unique(labels$label)) < 3) {
     stop("Reference must have at least 3 cell types!")
-  }
-
-  if (!any(class(ref) %in% c("matrix", "dgCMatrix", "Matrix"))) {
-    stop("Reference must be one of these classes: matrix, dgCMatrix, Matrix")
   }
 
   if (!"data.frame" %in% class(labels)) {
@@ -590,13 +601,18 @@ LearnParams <- function(gepMat, corMat, signatures, depList, topSpillValue, numT
 #' @import readr
 #' @import BiocParallel
 #' @importFrom utils data
+#' @importFrom SummarizedExperiment assays colData
 #' @importFrom minpack.lm nlsLM
 #' @importFrom Rfast rowMedians rowmeans rowsums Sort
 #' @importFrom Matrix rowMeans rowSums colSums Diagonal
 #' @importFrom singscore rankGenes simpleScore
 #' @importFrom stats coef cor lm quantile var
 #' @importFrom methods new
-#' @param ref A reference gene expression matrix (genes in rows, samples/cells in columns).
+#' @param ref A reference gene expression matrix (with genes in rows and samples/cells in columns),
+#'        a SummarizedExperiment object, or a SingleCellExperiment object containing the expression
+#'        data and sample metadata. If a SummarizedExperiment or SingleCellExperiment object is provided,
+#'        the expression matrix should be stored in the "counts" slot of the `assays` component, 
+#'        and the sample metadata (equivalent to the "labels" parameter) should be stored in `colData`.
 #' @param mix A bulk mixture of gene expression data (genes in rows, samples in columns) (optional).
 #' @param labels A data frame in which the rows correspond to samples in the ref.
 #'  The data frame must have four columns:
@@ -604,6 +620,8 @@ LearnParams <- function(gepMat, corMat, signatures, depList, topSpillValue, numT
 #'  "label": the cell type name as a character (i.e., "T-helper 1 cell").
 #'  "sample": the cell type sample/cell that match the column name in ref.
 #'  "dataset": sample's source dataset or subject (can be the same for all samples if no such information).
+#'  This parameter is not needed if ref is a SummarizedExperiment or SingleCellExperiment object,
+#'  as it should already be included in `colData`.
 #' @param refType The reference gene expression data type: "rnaseq" for bulk RNA-Seq, "array" for micro-array, or "sc" for scRNA-Seq.
 #' @param minPbCells For scRNA-Seq reference only - minimum number of cells in the pseudo-bulk (optional, default: 30).
 #' @param minPbSamples For scRNA-Seq reference only - minimum number of pseudo-bulk samples (optional, default: 10).
@@ -652,7 +670,7 @@ LearnParams <- function(gepMat, corMat, signatures, depList, topSpillValue, numT
 #' @export
 xCell2Train <- function(ref,
                         mix = NULL,
-                        labels,
+                        labels = NULL,
                         refType,
                         humanToMouse = FALSE,
                         lineageFile = NULL,
@@ -666,7 +684,8 @@ xCell2Train <- function(ref,
                         minPbSamples = 10,
                         minScGenes = 1e4,
                         topSpillValue = 0.5) {
-  # Validate inputs
+
+  
   inputsValidated <- ValidateInputs(ref, labels, refType)
   ref <- inputsValidated$ref
   labels <- inputsValidated$labels

@@ -20,6 +20,7 @@ Depends:
     R (>= 4.4.0)
 biocViews: GeneExpression, Transcriptomics, Microarray, RNASeq, SingleCell, DifferentialExpression, ImmunoOncology, GeneSetEnrichment
 Imports: 
+    SummarizedExperiment,
     Rfast,
     singscore,
     ontoProc (>= 1.26.4),
