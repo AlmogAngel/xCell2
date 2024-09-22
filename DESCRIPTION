@@ -1,7 +1,7 @@
 Package: xCell2
 Type: Package
 Title: A Tool for Generic Cell Type Enrichment Analysis
-Version: 0.99.1
+Version: 0.99.2
 Authors@R: 
     c(person(given = "Almog", 
              family = "Angel", 
@@ -34,7 +34,8 @@ Imports:
     methods,
     readr,
     tidyr,
-    quadprog
+    quadprog,
+    reticulate
 Suggests:
     devtools,
     BiocManager,
