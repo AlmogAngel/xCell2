@@ -600,6 +600,7 @@ LearnParams <- function(gepMat, corMat, signatures, depList, topSpillValue, numT
 #' @import tidyr
 #' @import readr
 #' @import BiocParallel
+#' @importFrom GSEABase geneIds setName GeneSet
 #' @importFrom utils data
 #' @importFrom SummarizedExperiment assays colData
 #' @importFrom minpack.lm nlsLM
