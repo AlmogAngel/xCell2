@@ -34,6 +34,8 @@ Imports:
     methods,
     readr,
     tidyr
+Remotes:
+    R-Forge/pracma
 Suggests:
     devtools,
     BiocManager,
