@@ -21,6 +21,7 @@ Depends:
 biocViews: GeneExpression, Transcriptomics, Microarray, RNASeq, SingleCell, DifferentialExpression, ImmunoOncology, GeneSetEnrichment
 Imports: 
     SummarizedExperiment,
+    GSEABase,
     Rfast,
     singscore,
     ontoProc (>= 1.26.4),
