@@ -33,7 +33,8 @@ Imports:
     pracma,
     methods,
     readr,
-    tidyr
+    tidyr,
+    reticulate
 Suggests:
     devtools,
     BiocManager,
@@ -44,3 +45,10 @@ RoxygenNote: 7.3.2
 VignetteBuilder: knitr
 URL: https://github.com/AlmogAngel/xCell2
 BugReports: https://github.com/AlmogAngel/xCell2/issues
+Config/reticulate/autoconfigure:
+  list(
+    packages = list(
+      list(package = "owlready2")
+    )
+  )
+SystemRequirements: owlready2
