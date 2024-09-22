@@ -33,14 +33,14 @@ Imports:
     pracma,
     methods,
     readr,
-    tidyr
+    tidyr,
+    quadprog
 Suggests:
     devtools,
     BiocManager,
     knitr,
     rmarkdown,
-    testthat,
-    quadprog
+    testthat
 RoxygenNote: 7.3.2
 VignetteBuilder: knitr
 URL: https://github.com/AlmogAngel/xCell2
