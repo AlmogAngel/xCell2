@@ -33,8 +33,7 @@ Imports:
     pracma,
     methods,
     readr,
-    tidyr,
-    reticulate
+    tidyr
 Suggests:
     devtools,
     BiocManager,
