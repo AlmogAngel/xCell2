@@ -39,7 +39,8 @@ Suggests:
     BiocManager,
     knitr,
     rmarkdown,
-    testthat
+    testthat,
+    quadprog
 RoxygenNote: 7.3.2
 VignetteBuilder: knitr
 URL: https://github.com/AlmogAngel/xCell2
