@@ -1,7 +1,7 @@
 Package: xCell2
 Type: Package
 Title: A Tool for Generic Cell Type Enrichment Analysis
-Version: 0.99.3
+Version: 0.99.4
 Authors@R: 
     c(person(given = "Almog", 
              family = "Angel", 
@@ -17,13 +17,13 @@ License: GPL (>= 3)
 Encoding: UTF-8
 LazyData: false
 Depends: 
-    R (>= 4.0.0)
+    R (>= 4.4.0)
 biocViews: GeneExpression, Transcriptomics, Microarray, RNASeq, SingleCell, DifferentialExpression, ImmunoOncology, GeneSetEnrichment
 Imports: 
     SummarizedExperiment,
     Rfast,
     singscore,
-    ontoProc (>= 1.26.4),
+    ontoProc,
     ontologyIndex,
     tibble,
     dplyr,
@@ -33,9 +33,7 @@ Imports:
     pracma,
     methods,
     readr,
-    tidyr,
-    quadprog,
-    reticulate
+    tidyr
 Suggests:
     devtools,
     BiocManager,
@@ -46,10 +44,3 @@ RoxygenNote: 7.3.2
 VignetteBuilder: knitr
 URL: https://github.com/AlmogAngel/xCell2
 BugReports: https://github.com/AlmogAngel/xCell2/issues
-Config/reticulate/autoconfigure:
-  list(
-    packages = list(
-      list(package = "owlready2")
-    )
-  )
-SystemRequirements: owlready2
