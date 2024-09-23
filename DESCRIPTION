@@ -23,7 +23,7 @@ Imports:
     SummarizedExperiment,
     Rfast,
     singscore,
-    ontoProc (>= 1.26.4),
+    ontoProc,
     ontologyIndex,
     tibble,
     dplyr,
