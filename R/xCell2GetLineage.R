@@ -4,7 +4,7 @@
 #' If no output file is specified, the function returns a list of cell type dependencies.
 #' If an output file is specified, the function writes the cell type dependencies to a TSV file.
 #'
-#' @importFrom ontoProc getOnto
+#' @importFrom AnnotationHub AnnotationHub
 #' @importFrom ontologyIndex get_descendants get_ancestors
 #' @importFrom dplyr select mutate rowwise
 #' @importFrom tibble as_tibble
@@ -47,17 +47,20 @@
 #'
 #' @export
 xCell2GetLineage <- function(labels, outFile = NULL) {
+  
   labelsUniq <- labels %>%
     tibble::as_tibble() %>%
     dplyr::select("ont", "label") %>%
     unique()
-
+  
   if (all(is.na(labelsUniq[, 1]))) {
     message("Cannot find cell types dependencies - no ontologies provided")
     lineageOut <- labelsUniq %>%
       dplyr::mutate(descendants = "", ancestors = "")
   } else {
-    cl <- ontoProc::getOnto(ontoname = "cellOnto", year_added = "2023")
+    ah <- AnnotationHub::AnnotationHub()
+    # AH111554 cellOnto_2023.02.15 (2023)
+    cl <- ah[["AH111554"]]
     labelsUniq$descendants <- NA
     labelsUniq$ancestors <- NA
     for (i in seq_len(nrow(labelsUniq))) {
@@ -76,23 +79,23 @@ xCell2GetLineage <- function(labels, outFile = NULL) {
     }
     lineageOut <- labelsUniq
   }
-
+  
   # If no output is provided, xCell2GetLineage will return dependencies right away
   if (is.null(outFile)) {
     celltypes <- gsub("_", "-", dplyr::pull(lineageOut[, 2]))
     depList <- vector(mode = "list", length = length(celltypes))
     names(depList) <- celltypes
-
+    
     for (i in seq_len(nrow(lineageOut))) {
       descendants <- gsub("_", "-", strsplit(dplyr::pull(lineageOut[i, 3]), ";")[[1]])
       descendants <- descendants[!is.na(descendants)]
-
+      
       ancestors <- gsub("_", "-", strsplit(dplyr::pull(lineageOut[i, 4]), ";")[[1]])
       ancestors <- ancestors[!is.na(ancestors)]
-
+      
       depList[[i]] <- list("descendants" = descendants, "ancestors" = ancestors)
     }
-
+    
     return(depList)
   } else {
     readr::write_tsv(lineageOut, outFile)
