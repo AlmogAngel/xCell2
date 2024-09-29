@@ -4,7 +4,6 @@
 #' If no output file is specified, the function returns a list of cell type dependencies.
 #' If an output file is specified, the function writes the cell type dependencies to a TSV file.
 #'
-#' @importFrom ontoProc getOnto
 #' @importFrom ontologyIndex get_descendants get_ancestors
 #' @importFrom dplyr select mutate rowwise
 #' @importFrom tibble as_tibble
@@ -57,7 +56,7 @@ xCell2GetLineage <- function(labels, outFile = NULL) {
     lineageOut <- labelsUniq %>%
       dplyr::mutate(descendants = "", ancestors = "")
   } else {
-    cl <- ontoProc::getOnto(ontoname = "cellOnto", year_added = "2023")
+    cl <- getOntoLocal(ontoname = "cellOnto", year_added = "2023")
     labelsUniq$descendants <- NA
     labelsUniq$ancestors <- NA
     for (i in seq_len(nrow(labelsUniq))) {
@@ -98,4 +97,33 @@ xCell2GetLineage <- function(labels, outFile = NULL) {
     readr::write_tsv(lineageOut, outFile)
     warning("It is recommended that you manually check the cell type lineage file: ", outFile)
   }
+}
+
+getOntoLocal = function( ontoname="cellOnto", year_added = "2023" ) {
+ stopifnot(ontoname %in% c("caro", "cellLineOnto", "cellOnto", "cellosaurusOnto", "chebi_full",
+"chebi_lite", "diseaseOnto", "efoOnto", "goOnto", "hcaoOnto", "mondo",
+"patoOnto", "PROnto", "uberon", "Pronto"))   # only Pronto will get a 2021 PRO
+
+ ah = AnnotationHub::AnnotationHub()
+ opd = AnnotationHub::query(ah, "ontoProcData")
+ meta = mcols(opd)
+ tmp = meta |> as.data.frame() |> dplyr::filter(grepl(year_added, rdatadateadded)) |> dplyr::select(title, description)
+
+
+ if (year_added == "2023") {
+     if( ontoname %in% c("caro", "cellLineOnto")) stop("this ontology not updated in 2023, use a different year_added value")
+    ontoname = paste0(ontoname, "_")
+    stopifnot(length(grep(ontoname, tmp$title))==1)
+ }
+ else if (year_added == "2022") {
+    ontoname = paste0(ontoname, "_")
+    stopifnot(length(grep(ontoname, tmp$title))==1)
+    }
+ else if (year_added == "2021") {
+    stopifnot(length(grep(paste0("^", ontoname, "$"), tmp$title))==1)
+    }
+ tmp = tmp |> filter(grepl(ontoname, title))
+ tag = rownames(tmp)
+ stopifnot(length(tag)==1)
+ ah[[tag]]
 }
