@@ -113,7 +113,7 @@ xCell2Analysis <- function(mix,
         scoreMix(cellType, mixRanked, signaturesCellType)
       },
       warning = function(w) {
-        warning_list <<- c(warning_list, conditionMessage(w))  # Capture warnings
+        warning_list <- c(warning_list, conditionMessage(w))  # Capture warnings
         invokeRestart("muffleWarning")  # Prevent the warning from being printed repeatedly
       }
     )
