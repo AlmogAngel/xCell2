@@ -23,7 +23,11 @@ Imports:
     SummarizedExperiment,
     Rfast,
     singscore,
+<<<<<<< HEAD
     AnnotationHub,
+=======
+    ontoProc,
+>>>>>>> devel
     ontologyIndex,
     tibble,
     dplyr,
