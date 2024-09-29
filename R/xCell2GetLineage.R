@@ -103,7 +103,7 @@ getOntoLocal = function( ontoname="cellOnto", year_added = "2023" ) {
  stopifnot(ontoname %in% c("caro", "cellLineOnto", "cellOnto", "cellosaurusOnto", "chebi_full",
 "chebi_lite", "diseaseOnto", "efoOnto", "goOnto", "hcaoOnto", "mondo",
 "patoOnto", "PROnto", "uberon", "Pronto")   # only Pronto will get a 2021 PRO
-}
+
  ah = AnnotationHub::AnnotationHub()
  opd = AnnotationHub::query(ah, "ontoProcData")
  meta = mcols(opd)
