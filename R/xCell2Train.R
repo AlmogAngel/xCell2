@@ -14,30 +14,30 @@ ValidateInputs <- function(ref, labels, refType) {
       stop("labels must be a data frame with 4 columns: 'ont'', 'label'', 'sample'' and 'dataset'")
     }
   }
-
+  
   if (all(colnames(labels) %in% c("ont", "label", "sample", "dataset"))) {
     labels <- labels[, c("ont", "label", "sample", "dataset")]
   } else {
     stop("labels must have 4 columns: 'ont'', 'label'', 'sample'' and 'dataset'")
   }
-
+  
   if (length(unique(labels$label)) < 3) {
     stop("Reference must have at least 3 cell types!")
   }
-
+  
   if (!"data.frame" %in% class(labels)) {
     stop("labels must be a dataframe.")
   }
-
+  
   if (!refType %in% c("rnaseq", "array", "sc")) {
     stop("refType should be 'rnaseq', 'array' or 'sc'.")
   }
-
+  
   if (sum(grepl("_", labels$label)) != 0) {
     message("Changing underscores to dashes in cell-type labels!")
     labels$label <- gsub("_", "-", labels$label)
   }
-
+  
   out <- list(ref = ref, labels = labels)
   return(out)
 }
@@ -45,25 +45,25 @@ ValidateInputs <- function(ref, labels, refType) {
 # Function to convert single-cell data to pseudo-bulk data
 ScToPseudoBulk <- function(ref, labels, minPbCells, minPbSamples) {
   cellTypes <- unique(labels$label)
-
+  
   groupsList <- lapply(cellTypes, function(cellType) {
     cellTypeSamples <- labels[labels$label == cellType, ]$sample
-
+    
     # Calculate maximum possible number of groups given minPbCells
     numGroups <- ceiling(length(cellTypeSamples) / minPbCells)
     if (numGroups < minPbSamples) {
       numGroups <- minPbSamples
     }
-
+    
     # Generate minPbSamples pseudo samples of cellType
     if (length(cellTypeSamples) > minPbSamples) {
       cellTypeSamplesShuffled <- sample(cellTypeSamples, length(cellTypeSamples))
       listOfShuffledSamples <- split(
         cellTypeSamplesShuffled,
         ceiling(seq_along(cellTypeSamplesShuffled)
-        / (length(cellTypeSamplesShuffled) / numGroups))
+                / (length(cellTypeSamplesShuffled) / numGroups))
       )
-
+      
       vapply(listOfShuffledSamples, function(group) {
         if (length(group) == 1) {
           ref[, group]
@@ -82,10 +82,10 @@ ScToPseudoBulk <- function(ref, labels, minPbCells, minPbSamples) {
     }
   })
   names(groupsList) <- cellTypes
-
+  
   pseudoRef <- as.matrix(dplyr::bind_cols(groupsList))
   rownames(pseudoRef) <- rownames(ref)
-
+  
   pseudoLabel <- tibble::tibble(labels) %>%
     dplyr::select("ont", "label") %>%
     unique() %>%
@@ -95,7 +95,7 @@ ScToPseudoBulk <- function(ref, labels, minPbCells, minPbSamples) {
       dataset = "pseudoBulk"
     ), by = "label") %>%
     as.data.frame()
-
+  
   return(list(ref = pseudoRef, labels = pseudoLabel))
 }
 
@@ -111,7 +111,7 @@ PrepRefMix <- function(ref, mix, refType, minScGenes, humanToMouse) {
     ref <- ref[humanGenes, ]
     rownames(ref) <- human_mouse_gene_symbols[humanGenes, ]$mouse
   }
-
+  
   if (refType == "sc") {
     message("> Normalizing pseudo bulk reference to CPM.")
     libSizes <- Matrix::colSums(ref)
@@ -135,7 +135,7 @@ PrepRefMix <- function(ref, mix, refType, minScGenes, humanToMouse) {
       }
     }
     ref <- ref[varGenesToUse, ]
-
+    
     if (min(ref) < 3) {
       ref <- ref + 3
     }
@@ -145,7 +145,7 @@ PrepRefMix <- function(ref, mix, refType, minScGenes, humanToMouse) {
       if (min(ref) == 1) {
         ref <- ref - 1
       }
-
+      
       if (min(ref) < 3) {
         ref <- ref + 3
       }
@@ -155,21 +155,21 @@ PrepRefMix <- function(ref, mix, refType, minScGenes, humanToMouse) {
       }
     }
   }
-
+  
   ref <- log2(ref)
-
+  
   if (!is.null(mix)) {
     if (max(mix) >= 50) {
       mix <- log2(mix + 1)
     }
-
+    
     sharedGenes <- intersect(rownames(ref), rownames(mix))
     wm <- paste0(length(sharedGenes), " genes are shared between reference and mixture.")
     message(sprintf(wm))
     ref <- ref[sharedGenes, ]
     mix <- mix[sharedGenes, ]
   }
-
+  
   return(list(refOut = ref, mixOut = mix))
 }
 
@@ -177,22 +177,22 @@ PrepRefMix <- function(ref, mix, refType, minScGenes, humanToMouse) {
 LoadDependenciesFromFile <- function(lineageFileChecked) {
   ont <- readr::read_tsv(lineageFileChecked, show_col_types = FALSE) %>%
     dplyr::mutate_all(as.character)
-
+  
   cellTypes <- dplyr::pull(ont[, 2])
   cellTypes <- gsub("_", "-", cellTypes)
   depList <- vector(mode = "list", length = length(cellTypes))
   names(depList) <- cellTypes
-
+  
   for (i in seq_len(nrow(ont))) {
     descendants <- gsub("_", "-", strsplit(dplyr::pull(ont[i, 3]), ";")[[1]])
     descendants <- descendants[!is.na(descendants)]
-
+    
     ancestors <- gsub("_", "-", strsplit(dplyr::pull(ont[i, 4]), ";")[[1]])
     ancestors <- ancestors[!is.na(ancestors)]
-
+    
     depList[[i]] <- list("descendants" = descendants, "ancestors" = ancestors)
   }
-
+  
   return(depList)
 }
 
@@ -200,21 +200,21 @@ LoadDependenciesFromFile <- function(lineageFileChecked) {
 MakeQuantiles <- function(ref, labels, probs, numThreads) {
   param <- BiocParallel::MulticoreParam(workers = numThreads)
   cellTypes <- unique(labels[, 2])
-
+  
   quantilesMatList <- BiocParallel::bplapply(cellTypes, function(type) {
     typeSamples <- labels[, 2] == type
-
+    
     if (sum(typeSamples) == 1) {
       type.df <- cbind(ref[, typeSamples], ref[, typeSamples])
     } else {
       type.df <- ref[, typeSamples]
     }
-
+    
     # Calculate quantiles
     apply(type.df, 1, function(x) quantile(x, unique(c(probs, rev(1 - probs))), na.rm = TRUE))
   }, BPPARAM = param)
   names(quantilesMatList) <- cellTypes
-
+  
   return(quantilesMatList)
 }
 
@@ -226,13 +226,13 @@ CreateSignatures <- function(labels, depList, quantilesMatrix, probs, diffVals, 
                             diffVals, minGenes, maxGenes, minFracCtPassed) {
     # Remove dependent cell types
     notDepCellTypes <- cellTypes[!cellTypes %in% c(type, unname(unlist(depList[[type]])))]
-
+    
     # Set signature cutoffs grid
     paramDf <- expand.grid("diffVals" = diffVals, "probs" = probs)
-
+    
     # Find top genes
     typeSignatures <- list()
-
+    
     while (length(typeSignatures) < 3 & minFracCtPassed >= 0) {
       maxGenesProblem <- c()
       for (i in seq_len(nrow(paramDf))) {
@@ -244,30 +244,30 @@ CreateSignatures <- function(labels, depList, quantilesMatrix, probs, diffVals, 
         upperProb <- which(as.character(as.numeric(gsub(
           "%", "", rownames(quantilesMatrix[[1]])
         )) / 100) == as.character(1 - paramDf[i, ]$probs))
-
+        
         upperProbMatrix <- vapply(notDepCellTypes, function(x) {
           get(x, quantilesMatrix)[upperProb, ]
         }, FUN.VALUE = double(ncol(quantilesMatrix[[1]])))
-
+        
         # Check diff-prob criteria
         diffGenesMatrix <- apply(upperProbMatrix, 2, function(x) {
           get(type, quantilesMatrix)[lowerProb, ] > x + diff
         })
-
+        
         genesScores <- apply(diffGenesMatrix, 1, function(x) {
           names(which(x))
         })
         genesScores <- genesScores[lengths(genesScores) > 0]
         nCtPassed <- sort(unique(lengths(genesScores)), decreasing = TRUE)
-
+        
         # Make signatures
         for (j in nCtPassed) {
           fracCtPassed <- round(j / length(notDepCellTypes), 2)
           if (fracCtPassed < minFracCtPassed) break
-
+          
           sigGenes <- names(which(lengths(genesScores) >= j))
           nGenes <- length(sigGenes)
-
+          
           if (nGenes < minGenes) next
           if (nGenes > maxGenes) {
             maxGenesProblem <- c(maxGenesProblem, TRUE)
@@ -275,15 +275,15 @@ CreateSignatures <- function(labels, depList, quantilesMatrix, probs, diffVals, 
           } else {
             maxGenesProblem <- c(maxGenesProblem, FALSE)
           }
-
+          
           sigName <- paste(paste0(type, "#"), paramDf[i, ]$probs, diff,
-            nGenes, fracCtPassed,
-            sep = "_"
+                           nGenes, fracCtPassed,
+                           sep = "_"
           )
           typeSignatures[[sigName]] <- sigGenes
         }
       }
-
+      
       # Handle cases where too many genes are differentially expressed
       if (all(maxGenesProblem)) {
         diffValsStrict <- c(
@@ -294,7 +294,7 @@ CreateSignatures <- function(labels, depList, quantilesMatrix, probs, diffVals, 
           log2(2^max(diffVals) * 32)
         )
         paramDf <- expand.grid("diffVals" = diffValsStrict, "probs" = probs)
-
+        
         for (i in seq_len(nrow(paramDf))) {
           lowerProb <- which(as.character(as.numeric(gsub(
             "%", "", rownames(quantilesMatrix[[1]])
@@ -304,70 +304,70 @@ CreateSignatures <- function(labels, depList, quantilesMatrix, probs, diffVals, 
           )) / 100) == as.character(
             1 - paramDf[i, ]$probs
           ))
-
+          
           upperProbMatrix <- vapply(notDepCellTypes, function(x) {
             get(x, quantilesMatrix)[upperProb, ]
           }, FUN.VALUE = double(ncol(quantilesMatrix[[1]])))
-
-
+          
+          
           diffGenesMatrix <- apply(upperProbMatrix, 2, function(x) {
             get(type, quantilesMatrix)[lowerProb, ] > x + diff
           })
-
+          
           genesScores <- apply(diffGenesMatrix, 1, function(x) {
             names(which(x))
           })
           genesScores <- genesScores[lengths(genesScores) > 0]
           nCtPassed <- sort(unique(lengths(genesScores)), decreasing = TRUE)
-
+          
           # Make signatures
           for (j in nCtPassed) {
             fracCtPassed <- round(j / length(notDepCellTypes), 2)
             if (fracCtPassed < minFracCtPassed) break
-
+            
             sigGenes <- names(which(lengths(genesScores) >= j))
             nGenes <- length(sigGenes)
-
+            
             if (nGenes < minGenes) next
             if (nGenes > maxGenes) {
               maxGenesProblem <- c(maxGenesProblem, TRUE)
               break
             }
-
+            
             sigName <- paste(paste0(type, "#"), paramDf[i, ]$probs,
-              diff, nGenes, fracCtPassed,
-              sep = "_"
+                             diff, nGenes, fracCtPassed,
+                             sep = "_"
             )
             typeSignatures[[sigName]] <- sigGenes
           }
         }
       }
-
+      
       # Remove duplicate signatures
       typeSignaturesSorted <- lapply(typeSignatures, function(x) sort(x))
       typeSignaturesCollapsed <- vapply(typeSignaturesSorted,
-        paste,
-        collapse = ",", FUN.VALUE = character(1)
+                                        paste,
+                                        collapse = ",", FUN.VALUE = character(1)
       )
       duplicatedSignatures <- duplicated(typeSignaturesCollapsed)
       typeSignatures <- typeSignatures[!duplicatedSignatures]
-
+      
       # Relax parameter until there are at least 3 signatures
       minFracCtPassed <- minFracCtPassed - 0.05
     }
-
+    
     return(typeSignatures)
   }
-
+  
   param <- BiocParallel::MulticoreParam(workers = numThreads)
   cellTypes <- unique(labels[, 2])
-
+  
   allSignatures <- BiocParallel::bplapply(cellTypes, function(type) {
     typeSignatures <- getSignatures(
       cellTypes, type, depList, quantilesMatrix, probs,
       diffVals, minGenes, maxGenes, minFracCtPassed
     )
-
+    
     # Ensure minimum 3 signatures per cell type
     if (length(typeSignatures) < 3) {
       probsToUse <- c(probs, max(probs) * 1.25, max(probs) * 1.5, max(probs) * 2)
@@ -376,29 +376,29 @@ CreateSignatures <- function(labels, depList, quantilesMatrix, probs, diffVals, 
       diffValsToUse <- unique(c(minDiff * 0, minDiff * 0.5, minDiff * 0.75, diffVals))
       minGenesToUse <- round(minGenes * 0.5)
       minGenesToUse <- ifelse(minGenesToUse < 3, 3, minGenesToUse)
-
+      
       typeSignatures <- getSignatures(cellTypes, type, depList, quantilesMatrix,
-        probs = probsToUse, diffVals = diffValsToUse,
-        minGenes = minGenesToUse, maxGenes, minFracCtPassed
+                                      probs = probsToUse, diffVals = diffValsToUse,
+                                      minGenes = minGenesToUse, maxGenes, minFracCtPassed
       )
     }
-
+    
     return(typeSignatures)
   }, BPPARAM = param)
-
+  
   allSignatures <- unlist(allSignatures, recursive = FALSE)
-
+  
   if (length(allSignatures) == 0) {
     stop("No signatures found for reference!")
   }
-
+  
   return(allSignatures)
 }
 
 # Function to generate the gene expression profile matrix
 MakeGEPMat <- function(ref, labels) {
   cellTypes <- unique(labels$label)
-
+  
   gepMat <- vapply(cellTypes, function(type) {
     typeSamples <- labels[, 2] == type
     if (sum(typeSamples) == 1) {
@@ -408,14 +408,14 @@ MakeGEPMat <- function(ref, labels) {
     }
   }, FUN.VALUE = double(nrow(ref)))
   rownames(gepMat) <- rownames(ref)
-
+  
   return(gepMat)
 }
 
 # Function to calculate cell types correlation
 GetCellTypeCorrelation <- function(gepMat, refType) {
   cellTypes <- colnames(gepMat)
-
+  
   if (refType != "sc") {
     # Use top 10% most variable genes
     genesVar <- apply(gepMat, 1, var)
@@ -427,11 +427,11 @@ GetCellTypeCorrelation <- function(gepMat, refType) {
     mostVarGenesCutoff <- quantile(genesVar, 0.99, na.rm = TRUE)
     gepMat <- gepMat[genesVar > mostVarGenesCutoff, ]
   }
-
+  
   # Create correlation matrix
   corMat <- matrix(1, ncol = length(cellTypes), nrow = length(cellTypes), dimnames = list(cellTypes, cellTypes))
   lowerTriCoord <- which(lower.tri(corMat), arr.ind = TRUE)
-
+  
   # Calculate correlations
   for (i in seq_len(nrow(lowerTriCoord))) {
     celltypeI <- rownames(corMat)[lowerTriCoord[i, 1]]
@@ -439,28 +439,28 @@ GetCellTypeCorrelation <- function(gepMat, refType) {
     corMat[lowerTriCoord[i, 1], lowerTriCoord[i, 2]] <- cor(gepMat[, celltypeI], gepMat[, celltypeJ], method = "spearman")
     corMat[lowerTriCoord[i, 2], lowerTriCoord[i, 1]] <- cor(gepMat[, celltypeI], gepMat[, celltypeJ], method = "spearman")
   }
-
+  
   return(corMat)
 }
 
 # Function to learn linear transformation and spillover parameters
 LearnParams <- function(gepMat, corMat, signatures, depList, topSpillValue, numThreads) {
   param <- BiocParallel::MulticoreParam(workers = numThreads)
-
+  
   cellTypes <- colnames(gepMat)
   gepMatLinear <- 2^gepMat
   simFracs <- c(0, seq(0.01, 0.25, 0.01))
   fracToUse <- 0.25
-
+  
   # Generate mixtures
   mixList <- BiocParallel::bplapply(cellTypes, function(cellType) {
     # Generate cellType mixture
     cellTypeMat <- matrix(rep(gepMatLinear[, cellType], length(simFracs)),
-      byrow = FALSE, ncol = length(simFracs),
-      dimnames = list(rownames(gepMatLinear), simFracs)
+                          byrow = FALSE, ncol = length(simFracs),
+                          dimnames = list(rownames(gepMatLinear), simFracs)
     )
     cellTypeMatFrac <- cellTypeMat %*% diag(simFracs)
-
+    
     # Generate control mixture
     if (!is.null(depList)) {
       depCts <- unique(c(cellType, unname(unlist(depList[[cellType]]))))
@@ -468,22 +468,22 @@ LearnParams <- function(gepMat, corMat, signatures, depList, topSpillValue, numT
     } else {
       controls <- cellTypes[cellTypes != cellType]
     }
-
+    
     control <- names(sort(corMat[controls, cellType])[1])
     controlsMat <- matrix(rep(gepMatLinear[, control], length(simFracs)),
-      byrow = FALSE, ncol = length(simFracs),
-      dimnames = list(rownames(gepMatLinear), simFracs)
+                          byrow = FALSE, ncol = length(simFracs),
+                          dimnames = list(rownames(gepMatLinear), simFracs)
     )
     controlsMatFrac <- controlsMat %*% diag(1 - simFracs)
-
+    
     # Combine
     mixture <- cellTypeMatFrac + controlsMatFrac
     colnames(mixture) <- paste0(cellType, "^^", control, "%%", simFracs)
-
+    
     return(mixture)
   }, BPPARAM = param)
   names(mixList) <- cellTypes
-
+  
   # Learn linear parameters
   linearParams <- BiocParallel::bplapply(cellTypes, function(cellType) {
     # Get scores
@@ -492,37 +492,37 @@ LearnParams <- function(gepMat, corMat, signatures, depList, topSpillValue, numT
     scores <- rowMeans(vapply(signaturesCellType, function(sig) {
       singscore::simpleScore(mixMatRanked, upSet = sig, centerScore = FALSE)$TotalScore
     }, FUN.VALUE = double(ncol(mixMatRanked))))
-
+    
     # Get transformation parameters
     tp <- try(minpack.lm::nlsLM(scores ~ a * simFracs^b,
-      start = list(a = 1, b = 1),
-      control = list(maxiter = 500)
+                                start = list(a = 1, b = 1),
+                                control = list(maxiter = 500)
     ), silent = TRUE)
     a <- coef(tp)[[1]]
     b <- coef(tp)[[2]]
-
+    
     # Get linear model parameters
     scoresTransformed <- (scores^(1 / b)) / a
     lmFit <- lm(simFracs ~ scoresTransformed)
     m <- coef(lmFit)[[2]]
     n <- coef(lmFit)[[1]]
-
+    
     return(tibble::tibble("celltype" = cellType, "a" = a, "b" = b, "m" = m, "n" = n))
   }, BPPARAM = param)
   linearParams <- dplyr::bind_rows(linearParams)
-
+  
   # Learn spillover parameters
   spillScores <- BiocParallel::bplapply(cellTypes, function(cellType) {
     signaturesCellType <- signatures[gsub("#.*", "", names(signatures)) %in% cellType]
-
+    
     a <- linearParams[linearParams$celltype == cellType, ]$a
     b <- linearParams[linearParams$celltype == cellType, ]$b
     m <- linearParams[linearParams$celltype == cellType, ]$m
     n <- linearParams[linearParams$celltype == cellType, ]$n
-
+    
     # Generate fracToUse mixtures
     ctsMatFrac <- gepMatLinear * fracToUse
-
+    
     # Generate control mixture
     if (!is.null(depList)) {
       depCts <- unique(c(cellType, unname(unlist(depList[[cellType]]))))
@@ -530,15 +530,15 @@ LearnParams <- function(gepMat, corMat, signatures, depList, topSpillValue, numT
     } else {
       controls <- cellTypes[cellTypes != cellType]
     }
-
+    
     controls <- vapply(colnames(ctsMatFrac), function(ct) {
       names(sort(corMat[controls, ct])[1])
     }, FUN.VALUE = character(1))
     controlsMatFrac <- gepMatLinear[, controls] * (1 - fracToUse)
-
+    
     # Combine
     mixture <- ctsMatFrac + controlsMatFrac
-
+    
     # Get results for all cell type mixtures
     mixCtsMatRanked <- singscore::rankGenes(mixture)
     mixCtsMatScores <- vapply(signaturesCellType, function(sig) {
@@ -548,7 +548,7 @@ LearnParams <- function(gepMat, corMat, signatures, depList, topSpillValue, numT
     mixCtsMatScores <- (mixCtsMatScores^(1 / b)) / a
     mixCtsMatScores <- mixCtsMatScores * m + n
     names(mixCtsMatScores) <- colnames(mixCtsMatRanked)
-
+    
     # Get results for all cell type controls
     controlsCtsMatRanked <- singscore::rankGenes(controlsMatFrac)
     colnames(controlsCtsMatRanked) <- make.unique(colnames(controlsCtsMatRanked))
@@ -561,32 +561,32 @@ LearnParams <- function(gepMat, corMat, signatures, depList, topSpillValue, numT
     controlsCtsMatScores <- controlsCtsMatScores * m + n
     controlsCtsMatScores[controlsCtsMatScores < 0] <- 0
     names(controlsCtsMatScores) <- controls
-
+    
     finalScores <- round(mixCtsMatScores - controlsCtsMatScores, 2)
     if (!is.null(depList)) {
       depCts <- depCts[depCts != cellType]
       finalScores[depCts] <- 0
     }
     finalScores[finalScores < 0] <- 0
-
+    
     return(finalScores)
   }, BPPARAM = param)
   names(spillScores) <- cellTypes
-
+  
   # Create spillover matrix
   spillMat <- Reduce(rbind, spillScores)
   rownames(spillMat) <- cellTypes
-
+  
   # Normalize and clean spillover matrix
   spillMat[spillMat < 0] <- 0
   spillMat <- spillMat / diag(spillMat)
-
+  
   spillMat[is.nan(spillMat)] <- 0
   spillMat[spillMat > 1] <- 1
-
+  
   spillMat[spillMat > topSpillValue] <- topSpillValue
   diag(spillMat) <- 1
-
+  
   return(list(params = linearParams, spillmat = spillMat))
 }
 
@@ -684,12 +684,12 @@ xCell2Train <- function(ref,
                         minPbSamples = 10,
                         minScGenes = 1e4,
                         topSpillValue = 0.5) {
-
+  
   
   inputsValidated <- ValidateInputs(ref, labels, refType)
   ref <- inputsValidated$ref
   labels <- inputsValidated$labels
-
+  
   # Generate pseudo bulk from scRNA-Seq reference
   if (refType == "sc") {
     message("Converting scRNA-seq reference to pseudo bulk...")
@@ -697,13 +697,13 @@ xCell2Train <- function(ref,
     ref <- pbData$ref
     labels <- pbData$labels
   }
-
+  
   # Prepare reference and mixture data
   out <- PrepRefMix(ref, mix, refType, minScGenes, humanToMouse)
   ref <- out$refOut
   mix <- out$mixOut
   sharedGenes <- rownames(ref)
-
+  
   # Get cell type dependencies list
   if (useOntology) {
     if (is.null(lineageFile)) {
@@ -717,7 +717,7 @@ xCell2Train <- function(ref,
     message("Skipping ontological integration!")
     depList <- NULL
   }
-
+  
   # Generate signatures
   probs <- c(0.1, 0.25, 0.333, 0.49)
   diffVals <- c(0, 0.1, 0.585, 1, 1.585, 2, 3, 4, 5)
@@ -730,45 +730,45 @@ xCell2Train <- function(ref,
     labels, depList, quantilesMatrix, probs, diffVals, minGenes,
     maxGenes, minFracCtPassed, numThreads
   )
-
+  
   if (returnSignatures) {
     message("Retuning xCell2 reference object with signatures only.")
     xCell2S4 <- new("xCell2Object",
-      signatures = signatures,
-      dependencies = list(),
-      params = data.frame(),
-      spill_mat = matrix(),
-      genes_used = sharedGenes
+                    signatures = signatures,
+                    dependencies = list(),
+                    params = data.frame(),
+                    spill_mat = matrix(),
+                    genes_used = sharedGenes
     )
     return(xCell2S4)
   }
-
+  
   # Learn linear transformation parameters
   message("Learning linear transformation and spillover parameters...")
   gepMat <- MakeGEPMat(ref, labels)
   corMat <- GetCellTypeCorrelation(gepMat, refType)
   params <- LearnParams(gepMat, corMat, signatures, depList, topSpillValue, numThreads)
-
+  
   # Save results in S4 object
   if (is.null(depList)) {
     depList <- list()
   }
   xCell2S4 <- new("xCell2Object",
-    signatures = signatures,
-    dependencies = depList,
-    params = params$params,
-    spill_mat = params$spillmat,
-    genes_used = sharedGenes
+                  signatures = signatures,
+                  dependencies = depList,
+                  params = params$params,
+                  spill_mat = params$spillmat,
+                  genes_used = sharedGenes
   )
-
+  
   message("Your custom xCell2 reference object is ready!")
   message("> Please consider sharing with others here: https://dviraran.github.io/xCell2ref")
-
+  
   if (returnAnalysis) {
     message("Running xCell2Analysis...")
     res <- xCell2::xCell2Analysis(mix,
-      xcell2object = xCell2S4, spillover = useSpillover,
-      spilloverAlpha = spilloverAlpha, numThreads = numThreads
+                                  xcell2object = xCell2S4, spillover = useSpillover,
+                                  spilloverAlpha = spilloverAlpha, numThreads = numThreads
     )
     return(res)
   } else {
