@@ -4,7 +4,7 @@
 #' If no output file is specified, the function returns a list of cell type dependencies.
 #' If an output file is specified, the function writes the cell type dependencies to a TSV file.
 #'
-#' @importFrom ontoProc getOnto
+#' @importFrom AnnotationHub AnnotationHub
 #' @importFrom ontologyIndex get_descendants get_ancestors
 #' @importFrom dplyr select mutate rowwise
 #' @importFrom tibble as_tibble
@@ -47,6 +47,7 @@
 #'
 #' @export
 xCell2GetLineage <- function(labels, outFile = NULL) {
+  
   labelsUniq <- labels %>%
     tibble::as_tibble() %>%
     dplyr::select("ont", "label") %>%
@@ -57,7 +58,9 @@ xCell2GetLineage <- function(labels, outFile = NULL) {
     lineageOut <- labelsUniq %>%
       dplyr::mutate(descendants = "", ancestors = "")
   } else {
-    cl <- ontoProc::getOnto(ontoname = "cellOnto", year_added = "2023")
+    ah <- AnnotationHub::AnnotationHub()
+    # AH111554 cellOnto_2023.02.15 (2023)
+    cl <- ah[["AH111554"]]
     labelsUniq$descendants <- NA
     labelsUniq$ancestors <- NA
     for (i in seq_len(nrow(labelsUniq))) {
