@@ -1,7 +1,7 @@
 Package: xCell2
 Type: Package
 Title: A Tool for Generic Cell Type Enrichment Analysis
-Version: 0.99.5
+Version: 0.99.6
 Authors@R: 
     c(person(given = "Almog", 
              family = "Angel", 
@@ -23,7 +23,7 @@ Imports:
     SummarizedExperiment,
     Rfast,
     singscore,
-    ontoProc,
+    AnnotationHub,
     ontologyIndex,
     tibble,
     dplyr,
