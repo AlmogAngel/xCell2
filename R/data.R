@@ -13,7 +13,7 @@
 #' }
 #' @usage data(human_mouse_gene_symbols, package = "xCell2")
 #' @keywords datasets
-NULL
+"human_mouse_gene_symbols"
 
 #' A Subset of the DICE Reference
 #'
