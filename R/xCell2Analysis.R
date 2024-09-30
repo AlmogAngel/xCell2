@@ -40,13 +40,12 @@ xCell2Analysis <- function(mix,
     rownames(scores) <- colnames(mixRanked)
     return(scores)
   }
-
+  
   param <- BiocParallel::MulticoreParam(workers = numThreads)
-
+  
   # Check reference/mixture genes intersection
   genesIntersectFrac <- round(length(intersect(rownames(mix), getGenesUsed(xcell2object))) /
     length(getGenesUsed(xcell2object)), 2)
-  
   if (genesIntersectFrac < minSharedGenes) {
     stop(
       "This xCell2 reference shares ",
@@ -66,7 +65,7 @@ xCell2Analysis <- function(mix,
   
   # Rank mix gene expression matrix
   mixRanked <- singscore::rankGenes(mix[getGenesUsed(xcell2object), ])
-
+  
   # Score and predict
   sigsCellTypes <- unique(unlist(lapply(
     names(getSignatures(xcell2object)),
@@ -74,7 +73,7 @@ xCell2Analysis <- function(mix,
       strsplit(x, "#")[[1]][1]
     }
   )))
-
+  
   # Get raw enrichment scores
   resRaw <- BiocParallel::bplapply(sigsCellTypes, function(cellType) {
     signaturesCellType <- getSignatures(xcell2object)[startsWith(names(
@@ -128,52 +127,52 @@ xCell2Analysis <- function(mix,
     
     return(scores)
   }, BPPARAM = param)
-
+  
   names(resRaw) <- sigsCellTypes
-
+  
   res <- t(vapply(resRaw, function(cellTypeScores) {
     rowMeans(cellTypeScores)
   }, FUN.VALUE = double(nrow(resRaw[[1]]))))
-
+  
   if (rawScores) {
     return(res)
   } else {
     # Linear transformation
     res <- t(vapply(rownames(res), function(cellType) {
       cellTypeRes <- res[cellType, ]
-
+      
       # Linear transformation
       a <- getParams(xcell2object)[xcell2object@params$celltype == cellType, ]$a
       b <- getParams(xcell2object)[xcell2object@params$celltype == cellType, ]$b
       m <- getParams(xcell2object)[xcell2object@params$celltype == cellType, ]$m
-
+      
       cellTypeRes <- (cellTypeRes^(1 / b)) / a
       cellTypeRes <- cellTypeRes * m
-
+      
       # Shift values
       cellTypeRes <- cellTypeRes - min(cellTypeRes)
       cellTypeRes <- round(cellTypeRes, 5)
-
+      
       return(cellTypeRes)
     }, FUN.VALUE = double(ncol(res))))
   }
-
+  
   if (spillover) {
     # Spillover correction
     spillMat <- getSpillMat(xcell2object) * spilloverAlpha
     diag(spillMat) <- 1
-
+    
     rows <- intersect(rownames(res), rownames(spillMat))
-
+    
     scoresCorrected <- apply(res[rows, ], 2, function(x) {
       pracma::lsqlincon(spillMat[rows, rows],
-        x,
-        lb = 0
+                        x,
+                        lb = 0
       )
     })
     scoresCorrected[scoresCorrected < 0] <- 0
     rownames(scoresCorrected) <- rows
-
+    
     return(scoresCorrected)
   } else {
     return(res)
