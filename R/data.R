@@ -1,20 +1,3 @@
-#' Human to Mouse Gene Symbol Conversion Table
-#'
-#' A data frame for converting human gene symbols to mouse gene symbols.
-#'
-#' @name human_mouse_gene_symbols
-#' @docType data
-#' @title Human to Mouse Gene Symbols
-#' @description A table that provides a mapping of human gene symbols to mouse gene symbols.
-#' @format A data frame with 2 columns:
-#' \describe{
-#'   \item{human}{Character. Human gene symbols.}
-#'   \item{mouse}{Character. Corresponding mouse gene symbols.}
-#' }
-#' @usage data(human_mouse_gene_symbols, package = "xCell2")
-#' @keywords datasets
-"human_mouse_gene_symbols"
-
 #' A Subset of the DICE Reference
 #'
 #' A subset `SummarizedExperiment` object of the DICE reference for the xCell 2.0 vignette.

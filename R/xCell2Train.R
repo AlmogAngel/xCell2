@@ -100,17 +100,7 @@ ScToPseudoBulk <- function(ref, labels, minPbCells, minPbSamples) {
 }
 
 # Function to prepare reference and mixture data
-PrepRefMix <- function(ref, mix, refType, minScGenes, humanToMouse) {
-  if (humanToMouse) {
-    message("Converting reference genes from human to mouse...")
-    data_env <- new.env(parent = emptyenv())
-    data("human_mouse_gene_symbols", envir = data_env, package = "xCell2")
-    human_mouse_gene_symbols <- data_env[["human_mouse_gene_symbols"]]
-    rownames(human_mouse_gene_symbols) <- human_mouse_gene_symbols$human
-    humanGenes <- intersect(rownames(ref), human_mouse_gene_symbols$human)
-    ref <- ref[humanGenes, ]
-    rownames(ref) <- human_mouse_gene_symbols[humanGenes, ]$mouse
-  }
+PrepRefMix <- function(ref, mix, refType, minScGenes) {
   
   if (refType == "sc") {
     message("> Normalizing pseudo bulk reference to CPM.")
@@ -629,7 +619,6 @@ LearnParams <- function(gepMat, corMat, signatures, depList, topSpillValue, numT
 #' @param useOntology A Boolean for considering cell type dependencies by using ontological integration (default: TRUE).
 #' @param lineageFile Path to the cell type lineage file generated with `xCell2GetLineage` function and reviewed manually (optional).
 #' @param numThreads Number of threads for parallel processing (default: 1).
-#' @param humanToMouse A Boolean for converting human genes to mouse genes (default: FALSE).
 #' @param topSpillValue Maximum spillover compensation correction value (default: 0.5).
 #' @param returnSignatures A Boolean to return just the signatures (default: FALSE).
 #' @param returnAnalysis A Boolean to return the xCell2Analysis results (do not return reference object) (default: FALSE).
@@ -672,7 +661,6 @@ xCell2Train <- function(ref,
                         mix = NULL,
                         labels = NULL,
                         refType,
-                        humanToMouse = FALSE,
                         lineageFile = NULL,
                         numThreads = 1,
                         useOntology = TRUE,
@@ -699,7 +687,7 @@ xCell2Train <- function(ref,
   }
   
   # Prepare reference and mixture data
-  out <- PrepRefMix(ref, mix, refType, minScGenes, humanToMouse)
+  out <- PrepRefMix(ref, mix, refType, minScGenes)
   ref <- out$refOut
   mix <- out$mixOut
   sharedGenes <- rownames(ref)

@@ -9,7 +9,6 @@ xCell2Train(
   mix = NULL,
   labels = NULL,
   refType,
-  humanToMouse = FALSE,
   lineageFile = NULL,
   numThreads = 1,
   useOntology = TRUE,
@@ -42,8 +41,6 @@ This parameter is not needed if ref is a SummarizedExperiment or SingleCellExper
 as it should already be included in `colData`.}
 
 \item{refType}{The reference gene expression data type: "rnaseq" for bulk RNA-Seq, "array" for micro-array, or "sc" for scRNA-Seq.}
-
-\item{humanToMouse}{A Boolean for converting human genes to mouse genes (default: FALSE).}
 
 \item{lineageFile}{Path to the cell type lineage file generated with `xCell2GetLineage` function and reviewed manually (optional).}
 
