@@ -53,7 +53,7 @@ devtools::install_github("AlmogAngel/xCell2")
 
 ### Dependencies
 
-`xCell2` relies on several Bioconductor packages. Most dependencies will be automatically installed. If you encounter any issues, you may need to manually install some packages, particularly `ontoProc` (version 1.26.4 or higher).
+`xCell2` relies on several Bioconductor packages. Most dependencies will be automatically installed.
 
 After installation, load the package with:
 
