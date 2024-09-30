@@ -103,8 +103,9 @@ ScToPseudoBulk <- function(ref, labels, minPbCells, minPbSamples) {
 PrepRefMix <- function(ref, mix, refType, minScGenes, humanToMouse) {
   if (humanToMouse) {
     message("Converting reference genes from human to mouse...")
-    data(human_mouse_gene_symbols, envir = environment())
-    human_mouse_gene_symbols <- local_env$human_mouse_gene_symbols
+    data_env <- new.env(parent = emptyenv())
+    data("human_mouse_gene_symbols", envir = data_env, package = "xCell2")
+    human_mouse_gene_symbols <- data_env[["human_mouse_gene_symbols"]]
     rownames(human_mouse_gene_symbols) <- human_mouse_gene_symbols$human
     humanGenes <- intersect(rownames(ref), human_mouse_gene_symbols$human)
     ref <- ref[humanGenes, ]
