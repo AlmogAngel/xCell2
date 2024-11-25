@@ -7,7 +7,12 @@ Authors@R:
              family = "Angel", 
              role = c("aut", "cre"),
              email = "almog.angel@campus.technion.ac.il",
-             comment = c(ORCID = "0009-0001-3297-6935")))
+             comment = c(ORCID = "0009-0001-3297-6935")),
+             person(given = "Dvir", 
+             family = "Aran", 
+             role = "aut",
+             email = "dviraran@technion.ac.il",
+             comment = c(ORCID = "0000-0001-6334-5039")))
 Description: xCell2 provides methods for cell type enrichment analysis using cell type signatures.
     It includes three main functions - 
     1. xCell2Train for training custom references objects from bulk or single-cell RNA-seq datasets.
@@ -17,7 +22,7 @@ License: GPL (>= 3)
 Encoding: UTF-8
 LazyData: false
 Depends: 
-    R (>= 4.0.0)
+    R (>= 4.4.0)
 biocViews: GeneExpression, Transcriptomics, Microarray, RNASeq, SingleCell, DifferentialExpression, ImmunoOncology, GeneSetEnrichment
 Imports: 
     SummarizedExperiment,
