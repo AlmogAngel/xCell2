@@ -40,11 +40,8 @@ Imports:
     readr,
     tidyr
 Suggests:
-    devtools,
-    BiocManager,
     knitr,
     rmarkdown,
-    testthat
 RoxygenNote: 7.3.2
 VignetteBuilder: knitr
 URL: https://github.com/AlmogAngel/xCell2
