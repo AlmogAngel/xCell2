@@ -36,7 +36,6 @@ Imports:
     Matrix,
     minpack.lm,
     pracma,
-    quadprog,
     methods,
     readr,
     tidyr
