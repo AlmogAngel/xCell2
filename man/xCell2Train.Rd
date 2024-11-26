@@ -10,7 +10,7 @@ xCell2Train(
   labels = NULL,
   refType,
   lineageFile = NULL,
-  numThreads = 1,
+  BPPARAM = BiocParallel::SerialParam(),
   useOntology = TRUE,
   returnSignatures = FALSE,
   returnAnalysis = FALSE,
@@ -44,7 +44,7 @@ as it should already be included in `colData`.}
 
 \item{lineageFile}{Path to the cell type lineage file generated with `xCell2GetLineage` function and reviewed manually (optional).}
 
-\item{numThreads}{Number of threads for parallel processing (default: 1).}
+\item{BPPARAM}{A BiocParallelParam instance that determines the parallelisation strategy. Default is BiocParallel::SerialParam().}
 
 \item{useOntology}{A Boolean for considering cell type dependencies by using ontological integration (default: TRUE).}
 
@@ -101,4 +101,10 @@ set.seed(123)
 # Generate custom xCell2 reference object
 DICE.xCell2Ref <- xCell2::xCell2Train(ref = dice_ref, labels = dice_labels, refType = "rnaseq")
 
+# Using parallel processing with MulticoreParam
+library(BiocParallel)
+parallel_param <- MulticoreParam(workers = 2) # Adjust workers as needed
+DICE.xCell2Ref <- xCell2::xCell2Train(ref = dice_ref, labels = dice_labels, refType = "rnaseq", 
+  BPPARAM = parallel_param
+)
 }

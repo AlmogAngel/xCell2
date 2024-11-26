@@ -187,8 +187,8 @@ LoadDependenciesFromFile <- function(lineageFileChecked) {
 }
 
 # Function to calculate quantiles for each cell type
-MakeQuantiles <- function(ref, labels, probs, numThreads) {
-  param <- BiocParallel::MulticoreParam(workers = numThreads)
+MakeQuantiles <- function(ref, labels, probs, BPPARAM) {
+  
   cellTypes <- unique(labels[, 2])
   
   quantilesMatList <- BiocParallel::bplapply(cellTypes, function(type) {
@@ -202,7 +202,7 @@ MakeQuantiles <- function(ref, labels, probs, numThreads) {
     
     # Calculate quantiles
     apply(type.df, 1, function(x) quantile(x, unique(c(probs, rev(1 - probs))), na.rm = TRUE))
-  }, BPPARAM = param)
+  }, BPPARAM = BPPARAM)
   names(quantilesMatList) <- cellTypes
   
   return(quantilesMatList)
@@ -210,7 +210,7 @@ MakeQuantiles <- function(ref, labels, probs, numThreads) {
 
 # Function to create signatures for each cell type
 CreateSignatures <- function(labels, depList, quantilesMatrix, probs, diffVals, minGenes,
-                             maxGenes, minFracCtPassed, numThreads) {
+                             maxGenes, minFracCtPassed, BPPARAM) {
   # Inner function to generate signatures for a single cell type
   getSignatures <- function(cellTypes, type, depList, quantilesMatrix, probs,
                             diffVals, minGenes, maxGenes, minFracCtPassed) {
@@ -349,7 +349,7 @@ CreateSignatures <- function(labels, depList, quantilesMatrix, probs, diffVals, 
     return(typeSignatures)
   }
   
-  param <- BiocParallel::MulticoreParam(workers = numThreads)
+  
   cellTypes <- unique(labels[, 2])
   
   allSignatures <- BiocParallel::bplapply(cellTypes, function(type) {
@@ -374,7 +374,7 @@ CreateSignatures <- function(labels, depList, quantilesMatrix, probs, diffVals, 
     }
     
     return(typeSignatures)
-  }, BPPARAM = param)
+  }, BPPARAM = BPPARAM)
   
   allSignatures <- unlist(allSignatures, recursive = FALSE)
   
@@ -434,8 +434,8 @@ GetCellTypeCorrelation <- function(gepMat, refType) {
 }
 
 # Function to learn linear transformation and spillover parameters
-LearnParams <- function(gepMat, corMat, signatures, depList, topSpillValue, numThreads) {
-  param <- BiocParallel::MulticoreParam(workers = numThreads)
+LearnParams <- function(gepMat, corMat, signatures, depList, topSpillValue, BPPARAM) {
+  
   
   cellTypes <- colnames(gepMat)
   gepMatLinear <- 2^gepMat
@@ -471,7 +471,7 @@ LearnParams <- function(gepMat, corMat, signatures, depList, topSpillValue, numT
     colnames(mixture) <- paste0(cellType, "^^", control, "%%", simFracs)
     
     return(mixture)
-  }, BPPARAM = param)
+  }, BPPARAM = BPPARAM)
   names(mixList) <- cellTypes
   
   # Learn linear parameters
@@ -498,7 +498,7 @@ LearnParams <- function(gepMat, corMat, signatures, depList, topSpillValue, numT
     n <- coef(lmFit)[[1]]
     
     return(tibble::tibble("celltype" = cellType, "a" = a, "b" = b, "m" = m, "n" = n))
-  }, BPPARAM = param)
+  }, BPPARAM = BPPARAM)
   linearParams <- dplyr::bind_rows(linearParams)
   
   # Learn spillover parameters
@@ -560,7 +560,7 @@ LearnParams <- function(gepMat, corMat, signatures, depList, topSpillValue, numT
     finalScores[finalScores < 0] <- 0
     
     return(finalScores)
-  }, BPPARAM = param)
+  }, BPPARAM = BPPARAM)
   names(spillScores) <- cellTypes
   
   # Create spillover matrix
@@ -618,7 +618,7 @@ LearnParams <- function(gepMat, corMat, signatures, depList, topSpillValue, numT
 #' @param minScGenes For scRNA-Seq reference only - minimum number of genes for pseudo-bulk samples (default: 10000).
 #' @param useOntology A Boolean for considering cell type dependencies by using ontological integration (default: TRUE).
 #' @param lineageFile Path to the cell type lineage file generated with `xCell2GetLineage` function and reviewed manually (optional).
-#' @param numThreads Number of threads for parallel processing (default: 1).
+#' @param BPPARAM A BiocParallelParam instance that determines the parallelisation strategy. Default is BiocParallel::SerialParam().
 #' @param topSpillValue Maximum spillover compensation correction value (default: 0.5).
 #' @param returnSignatures A Boolean to return just the signatures (default: FALSE).
 #' @param returnAnalysis A Boolean to return the xCell2Analysis results (do not return reference object) (default: FALSE).
@@ -656,13 +656,19 @@ LearnParams <- function(gepMat, corMat, signatures, depList, topSpillValue, numT
 #' # Generate custom xCell2 reference object
 #' DICE.xCell2Ref <- xCell2::xCell2Train(ref = dice_ref, labels = dice_labels, refType = "rnaseq")
 #'
+#'# Using parallel processing with MulticoreParam
+#' library(BiocParallel)
+#' parallel_param <- MulticoreParam(workers = 2) # Adjust workers as needed
+#' DICE.xCell2Ref <- xCell2::xCell2Train(ref = dice_ref, labels = dice_labels, refType = "rnaseq", 
+#'   BPPARAM = parallel_param
+#' )
 #' @export
 xCell2Train <- function(ref,
                         mix = NULL,
                         labels = NULL,
                         refType,
                         lineageFile = NULL,
-                        numThreads = 1,
+                        BPPARAM = BiocParallel::SerialParam(),
                         useOntology = TRUE,
                         returnSignatures = FALSE,
                         returnAnalysis = FALSE,
@@ -713,10 +719,10 @@ xCell2Train <- function(ref,
   maxGenes <- 200
   minFracCtPassed <- 0.5
   message("Generating signatures...")
-  quantilesMatrix <- MakeQuantiles(ref, labels, probs, numThreads)
+  quantilesMatrix <- MakeQuantiles(ref, labels, probs, BPPARAM)
   signatures <- CreateSignatures(
     labels, depList, quantilesMatrix, probs, diffVals, minGenes,
-    maxGenes, minFracCtPassed, numThreads
+    maxGenes, minFracCtPassed, BPPARAM
   )
   
   if (returnSignatures) {
@@ -735,7 +741,7 @@ xCell2Train <- function(ref,
   message("Learning linear transformation and spillover parameters...")
   gepMat <- MakeGEPMat(ref, labels)
   corMat <- GetCellTypeCorrelation(gepMat, refType)
-  params <- LearnParams(gepMat, corMat, signatures, depList, topSpillValue, numThreads)
+  params <- LearnParams(gepMat, corMat, signatures, depList, topSpillValue, BPPARAM)
   
   # Save results in S4 object
   if (is.null(depList)) {
@@ -756,7 +762,7 @@ xCell2Train <- function(ref,
     message("Running xCell2Analysis...")
     res <- xCell2::xCell2Analysis(mix,
                                   xcell2object = xCell2S4, spillover = useSpillover,
-                                  spilloverAlpha = spilloverAlpha, numThreads = numThreads
+                                  spilloverAlpha = spilloverAlpha, BPPARAM = BPPARAM
     )
     return(res)
   } else {

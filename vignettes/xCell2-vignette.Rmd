@@ -8,24 +8,38 @@ output:
    toc_depth: 2
 vignette: >
  %\VignetteIndexEntry{Introduction to xCell2}
- %\VignetteEngine{knitr::rmarkdown}
  %\VignetteEncoding{UTF-8}
+ %\VignetteEngine{knitr::rmarkdown}
+editor_options: 
+  markdown: 
+    wrap: 72
 ---
 
 # Introduction to Cell Type Enrichment Analysis with xCell 2.0
 
-Cell type enrichment analysis and cellular deconvolution, are essential for understanding the heterogeneity of complex tissues in bulk transcriptomics data. `xCell2` is an R package that developed upon the original `xCell` methodology (Aran, et al 2017), offering improved algorithms and enhanced performance. The key advancement in xCell 2.0 is its genericity - users can now utilize any reference, including single-cell RNA-Seq data, to train an xCell2 reference object for analysis.
+Cell type enrichment analysis and cellular deconvolution, are essential
+for understanding the heterogeneity of complex tissues in bulk
+transcriptomics data. `xCell2` is an R package that developed upon the
+original `xCell` methodology (Aran, et al 2017), offering improved
+algorithms and enhanced performance. The key advancement in xCell 2.0 is
+its genericity - users can now utilize any reference, including
+single-cell RNA-Seq data, to train an xCell2 reference object for
+analysis.
 
-This package is particularly useful for researchers working with bulk transcriptomics data who want to infer the cellular composition of their samples. By leveraging reference data from various sources, xCell 2.0 offers a flexible and powerful tool for understanding the cellular heterogeneity in complex tissues.
+This package is particularly useful for researchers working with bulk
+transcriptomics data who want to infer the cellular composition of their
+samples. By leveraging reference data from various sources, xCell 2.0
+offers a flexible and powerful tool for understanding the cellular
+heterogeneity in complex tissues.
 
+This vignette provides an overview of the package’s features and
+step-by-step guidance on: - Preparing input data - Generating custom
+xCell2 reference objects - Performing cell type enrichment analysis -
+Interpreting results and best practices
 
-This vignette provides an overview of the package’s features and step-by-step guidance on:
-- Preparing input data
-- Generating custom xCell2 reference objects
-- Performing cell type enrichment analysis
-- Interpreting results and best practices
-
-Whether you are new to cell type deconvolution or an experienced bioinformatician, this guide will help you leverage `xCell2` effectively in your research.
+Whether you are new to cell type deconvolution or an experienced
+bioinformatician, this guide will help you leverage `xCell2` effectively
+in your research.
 
 ## Installation
 
@@ -53,7 +67,8 @@ devtools::install_github("AlmogAngel/xCell2")
 
 ### Dependencies
 
-`xCell2` relies on several Bioconductor packages. Most dependencies will be automatically installed.
+`xCell2` relies on several Bioconductor packages. Most dependencies will
+be automatically installed.
 
 After installation, load the package with:
 
@@ -63,35 +78,46 @@ library(xCell2)
 
 # Creating a Custom Reference with `xCell2Train`
 
-One of the key features of `xCell2` is the ability to create custom reference objects tailored to your specific research needs. This section will guide you through the process of generating a custom `xCell2` reference object using the `xCell2Train` function.
+One of the key features of `xCell2` is the ability to create custom
+reference objects tailored to your specific research needs. This section
+will guide you through the process of generating a custom `xCell2`
+reference object using the `xCell2Train` function.
 
 ## Why Create a Custom Reference?
 
-Creating a custom reference allows you to:
-- Incorporate cell types specific to your research area
-- Use the latest single-cell RNA-seq data as a reference
-- Adapt the tool for non-standard organisms or tissues
+Creating a custom reference allows you to: - Incorporate cell types
+specific to your research area - Use the latest single-cell RNA-seq data
+as a reference - Adapt the tool for non-standard organisms or tissues
 
 ## Preparing the Input Data
 
-Before using `xCell2Train`, you need to prepare two key inputs:
-1. **Reference Gene Expression Matrix**: 
-  - Can be generated from various platforms: microarray, bulk RNA-Seq, or single-cell RNA-Seq
-  - Genes should be in rows, samples/cells in columns
-  - Should be normalized to both gene length and library size. Could be in either linear or logarithmic space.
+Before using `xCell2Train`, you need to prepare two key inputs: 1.
+**Reference Gene Expression Matrix**: - Can be generated from various
+platforms: microarray, bulk RNA-Seq, or single-cell RNA-Seq - Genes
+should be in rows, samples/cells in columns - Should be normalized to
+both gene length and library size. Could be in either linear or
+logarithmic space.
 
-2. **Labels Data Frame**:
-  This data frame must contain information about each sample/cell in your reference. It should have four columns:
-  - `"ont"`: Cell type ontology (e.g., "CL:0000545" or `NA` if not applicable)
-  - `"label"`: Cell type name (e.g., "T-helper 1 cell")
-  - `"sample"`: Sample/cell identifier matching column names in the reference matrix
-  - `"dataset"`: Source dataset or subject identifier
+2.  **Labels Data Frame**: This data frame must contain information
+    about each sample/cell in your reference. It should have four
+    columns:
 
-When using a `SummarizedExperiment` or `SingleCellExperiment` object, the gene expression matrix should be stored in the `"counts"` slot of the `assays` component, and the sample metadata (equivalent to the "labels" data frame) should be stored in `colData`.
+-   `"ont"`: Cell type ontology (e.g., "CL:0000545" or `NA` if not
+    applicable)
+-   `"label"`: Cell type name (e.g., "T-helper 1 cell")
+-   `"sample"`: Sample/cell identifier matching column names in the
+    reference matrix
+-   `"dataset"`: Source dataset or subject identifier
+
+When using a `SummarizedExperiment` or `SingleCellExperiment` object,
+the gene expression matrix should be stored in the `"counts"` slot of
+the `assays` component, and the sample metadata (equivalent to the
+"labels" data frame) should be stored in `colData`.
 
 ## Example: Using DICE Dataset
 
-Let's walk through an example using a subset of the Database of Immune Cell Expression (DICE):
+Let's walk through an example using a subset of the Database of Immune
+Cell Expression (DICE):
 
 ```{r, eval = TRUE}
 # Load the demo data
@@ -110,14 +136,17 @@ dice_labels$dataset <- "DICE"
 
 ## Assigning Cell Type Ontology (optional but Recommended)
 
-*You can skip the following step if:*
-- You don't want to use ontology to avoid cell type dependencies (not recommended)
-- You are sure that there are no cell type dependencies in your reference
+*You can skip the following step if:* - You don't want to use ontology
+to avoid cell type dependencies (not recommended) - You are sure that
+there are no cell type dependencies in your reference
 
-To improve the quality of your custom reference, assign cell type ontologies using a controlled vocabulary:
+To improve the quality of your custom reference, assign cell type
+ontologies using a controlled vocabulary:
 
-- Find the cell type ontology here: [EMBL-EBI Ontology Lookup Service](https://www.ebi.ac.uk/ols4/ontologies/cl)
-- For example, search "T cells, CD4+, memory" and look for the best match ("CD4-positive, alpha-beta memory T cell" - "CL:0000897")
+-   Find the cell type ontology here: [EMBL-EBI Ontology Lookup
+    Service](https://www.ebi.ac.uk/ols4/ontologies/cl)
+-   For example, search "T cells, CD4+, memory" and look for the best
+    match ("CD4-positive, alpha-beta memory T cell" - "CL:0000897")
 
 ```{r, eval = TRUE}
 dice_labels[dice_labels$label == "B cells", ]$ont <- "CL:0000236"
@@ -134,8 +163,8 @@ Use the `xCell2GetLineage` function to check cell type dependencies:
 xCell2::xCell2GetLineage(labels = dice_labels, outFile = "demo_dice_dep.tsv")
 ```
 
-Open `demo_dice_dep.tsv` and verify the lineage assignments.
-Note that "T cells, CD4+, memory" assigned as a descendant of "T cells, CD4+"
+Open `demo_dice_dep.tsv` and verify the lineage assignments. Note that
+"T cells, CD4+, memory" assigned as a descendant of "T cells, CD4+"
 
 ## Generating the xCell2 Reference Object
 
@@ -151,84 +180,105 @@ DICE_demo.xCell2Ref <- xCell2::xCell2Train(
 )
 ```
 
-Note that we set seed for reproducibility as generating pseudo-bulk samples from scRNA-Seq reference based on random sampling of cells.
+Note that we set seed for reproducibility as generating pseudo-bulk
+samples from scRNA-Seq reference based on random sampling of cells.
 
-Key Parameters of `xCell2Train`:
-- *ref*: Your prepared reference gene expression matrix or a `SummarizedExperiment` / `SingleCellExperiment` object
-- *labels*: The labels data frame you created (not needed if ref is a SummarizedExperiment or SingleCellExperiment object,
-            as it should already be included in `colData`) (default: NULL)
-- *refType*: Type of reference data ("rnaseq", "array", or "sc")
-- *useOntology*: Whether to use ontological integration (default: TRUE)
-- *numThreads*: Number of threads for parallel processing
+Key Parameters of `xCell2Train`: - *ref*: Your prepared reference gene
+expression matrix or a `SummarizedExperiment` / `SingleCellExperiment`
+object - *labels*: The labels data frame you created (not needed if ref
+is a SummarizedExperiment or SingleCellExperiment object, as it should
+already be included in `colData`) (default: NULL) - *refType*: Type of
+reference data ("rnaseq", "array", or "sc") - *useOntology*: Whether to
+use ontological integration (default: TRUE) - *numThreads*: Number of
+threads for parallel processing
 
-For a full list of parameters and their descriptions, refer to the `xCell2Train` function documentation.
+For a full list of parameters and their descriptions, refer to the
+`xCell2Train` function documentation.
 
 ## Sharing Your Custom xCell2 Reference Object
 
-Sharing your custom `xCell2` reference object with the scientific community can greatly benefit researchers working in similar fields. Here’s how you can contribute:
+Sharing your custom `xCell2` reference object with the scientific
+community can greatly benefit researchers working in similar fields.
+Here’s how you can contribute:
 
-1. **Save Your Reference Object**
-Save your newly generated xCell2 reference object:
+1.  **Save Your Reference Object** Save your newly generated xCell2
+    reference object:
 
 ```{r, eval = FALSE}
 save(DICE_demo.xCell2Ref, file = "DICE_demo.xCell2Ref.rda")
 ```
 
-2. **Prepare Your Reference for Sharing**
-Ensure your reference includes:
-- A clear description of the source data
-- Any preprocessing steps applied
-- The version of `xCell2` used to generate it
+2.  **Prepare Your Reference for Sharing** Ensure your reference
+    includes:
 
-3. **Upload to the xCell2 References Repository**
-- Visit the [xCell2 References Repository](https://github.com/dviraran/xCell2refs)
-- Navigate to the "references" directory
-- Click "Add file" > "Upload files" and select your `.rda` file
+-   A clear description of the source data
+-   Any preprocessing steps applied
+-   The version of `xCell2` used to generate it
 
-4. **Update the README**
-To help others understand and use your reference:
-- Return to the main page of the xCell2 References Repository
-- Open the `README.md` file
-- Click the pencil icon (Edit this file) in the top right corner
-- Add an entry to the references table
+3.  **Upload to the xCell2 References Repository**
 
-5. **Submit a Pull Request**
-- Scroll to the bottom of the page
-- Select "Create a new branch for this commit and start a pull request"
-- Click "Propose changes"
-- On the next page, click "Create pull request"
+-   Visit the [xCell2 References
+    Repository](https://github.com/dviraran/xCell2refs)
+-   Navigate to the "references" directory
+-   Click "Add file" \> "Upload files" and select your `.rda` file
 
-The repository maintainers will review your submission and merge it if everything is in order.
-By sharing your custom reference, you contribute to the growth and improvement of cell type enrichment analysis across the scientific community. Your work could help researchers in related fields achieve more accurate and relevant results in their studies.
+4.  **Update the README** To help others understand and use your
+    reference:
+
+-   Return to the main page of the xCell2 References Repository
+-   Open the `README.md` file
+-   Click the pencil icon (Edit this file) in the top right corner
+-   Add an entry to the references table
+
+5.  **Submit a Pull Request**
+
+-   Scroll to the bottom of the page
+-   Select "Create a new branch for this commit and start a pull
+    request"
+-   Click "Propose changes"
+-   On the next page, click "Create pull request"
+
+The repository maintainers will review your submission and merge it if
+everything is in order. By sharing your custom reference, you contribute
+to the growth and improvement of cell type enrichment analysis across
+the scientific community. Your work could help researchers in related
+fields achieve more accurate and relevant results in their studies.
 
 ## Next Steps
 
-After creating your custom reference, you can use it for cell type enrichment analysis with `xCell2Analysis`. We'll cover this in the next section. Remember, creating a robust reference is crucial for accurate results. Take time to ensure your input data is high-quality and properly annotated.
+After creating your custom reference, you can use it for cell type
+enrichment analysis with `xCell2Analysis`. We'll cover this in the next
+section. Remember, creating a robust reference is crucial for accurate
+results. Take time to ensure your input data is high-quality and
+properly annotated.
 
 # Using Pre-trained xCell2 References
 
-`xCell2` offers pre-trained reference objects that can be easily downloaded and used for your analysis. These references cover various tissue types and are based on well-curated datasets.
+`xCell2` offers pre-trained reference objects that can be easily
+downloaded and used for your analysis. These references cover various
+tissue types and are based on well-curated datasets.
 
-| Dataset | Study | Species | Normalization | nSamples/Cells | nCellTypes | Platform | Tissues |
-|---------|-------|---------|---------------|----------------|------------|----------|---------|
-| [BlueprintEncode](https://github.com/dviraran/xCell2refs/blob/main/references/BlueprintEncode.xCell2Ref.rds) | Martens JHA and Stunnenberg HG (2013), The ENCODE Project Consortium (2012), Aran D (2019) | Homo Sapiens | TPM | 259 | 43 | RNA-seq | Mixed |
-| [ImmGenData](https://github.com/dviraran/xCell2refs/blob/main/references/ImmGenData.xCell2Ref.rds) | The Immunological Genome Project Consortium (2008), Aran D (2019) | Mus Musculus | RMA | 843 | 19 | Microarray | Immune/Blood |
-| [Immune Compendium](https://github.com/dviraran/xCell2refs/blob/main/references/ImmuneCompendium.xCell2Ref.rds) | Zaitsev A (2022) | Homo Sapiens | TPM | 3626 | 40 | RNA-seq | Immune/Blood |
-| [LM22](https://github.com/dviraran/xCell2refs/blob/main/references/LM22.xCell2Ref.rds) | Chen B (2019) | Homo Sapiens | RMA | 113 | 22 | Microarray | Mixed |
-| [MouseRNAseqData](https://github.com/dviraran/xCell2refs/blob/main/references/MouseRNAseqData.xCell2Ref.rds) | Benayoun B (2019) | Mus Musculus | TPM | 358 | 18 | RNA-seq | Mixed |
-| [Pan Cancer](https://github.com/dviraran/xCell2refs/blob/main/references/references/PanCancer.xCell2Ref.rds) | Nofech-Mozes I (2023) | Homo Sapiens | Counts | 25084 | 29 | scRNA-seq | Tumor |
-| [Tabula Muris Blood](https://github.com/dviraran/xCell2refs/blob/main/references/references/TabulaMurisBlood.xCell2Ref.rds) | The Tabula Muris Consortium (2018) | Mus Musculus | Counts | 11145 | 6 | scRNA-seq | Bone Marrow, Spleen, Thymus |
-| [Tabula Sapiens Blood](https://github.com/dviraran/xCell2refs/blob/main/references/references/TabulaSapiensBlood.xCell2Ref.rds) | The Tabula Sapiens Consortium (2022) | Homo Sapiens | Counts | 11921 | 18 | scRNA-seq | Blood, Lymph_Node, Spleen, Thymus, Bone Marrow |
-| [TME Compendium](https://github.com/dviraran/xCell2refs/blob/main/references/references/TMECompendium.xCell2Ref.rds) | Zaitsev A (2022) | Homo Sapiens | TPM | 8146 | 25 | RNA-seq | Tumor |
+| Dataset                                                                                                                         | Study                                                                                      | Species      | Normalization | nSamples/Cells | nCellTypes | Platform   | Tissues                                        |
+|---------|---------|---------|---------|---------|---------|---------|---------|
+| [BlueprintEncode](https://github.com/dviraran/xCell2refs/blob/main/references/BlueprintEncode.xCell2Ref.rds)                    | Martens JHA and Stunnenberg HG (2013), The ENCODE Project Consortium (2012), Aran D (2019) | Homo Sapiens | TPM           | 259            | 43         | RNA-seq    | Mixed                                          |
+| [ImmGenData](https://github.com/dviraran/xCell2refs/blob/main/references/ImmGenData.xCell2Ref.rds)                              | The Immunological Genome Project Consortium (2008), Aran D (2019)                          | Mus Musculus | RMA           | 843            | 19         | Microarray | Immune/Blood                                   |
+| [Immune Compendium](https://github.com/dviraran/xCell2refs/blob/main/references/ImmuneCompendium.xCell2Ref.rds)                 | Zaitsev A (2022)                                                                           | Homo Sapiens | TPM           | 3626           | 40         | RNA-seq    | Immune/Blood                                   |
+| [LM22](https://github.com/dviraran/xCell2refs/blob/main/references/LM22.xCell2Ref.rds)                                          | Chen B (2019)                                                                              | Homo Sapiens | RMA           | 113            | 22         | Microarray | Mixed                                          |
+| [MouseRNAseqData](https://github.com/dviraran/xCell2refs/blob/main/references/MouseRNAseqData.xCell2Ref.rds)                    | Benayoun B (2019)                                                                          | Mus Musculus | TPM           | 358            | 18         | RNA-seq    | Mixed                                          |
+| [Pan Cancer](https://github.com/dviraran/xCell2refs/blob/main/references/references/PanCancer.xCell2Ref.rds)                    | Nofech-Mozes I (2023)                                                                      | Homo Sapiens | Counts        | 25084          | 29         | scRNA-seq  | Tumor                                          |
+| [Tabula Muris Blood](https://github.com/dviraran/xCell2refs/blob/main/references/references/TabulaMurisBlood.xCell2Ref.rds)     | The Tabula Muris Consortium (2018)                                                         | Mus Musculus | Counts        | 11145          | 6          | scRNA-seq  | Bone Marrow, Spleen, Thymus                    |
+| [Tabula Sapiens Blood](https://github.com/dviraran/xCell2refs/blob/main/references/references/TabulaSapiensBlood.xCell2Ref.rds) | The Tabula Sapiens Consortium (2022)                                                       | Homo Sapiens | Counts        | 11921          | 18         | scRNA-seq  | Blood, Lymph_Node, Spleen, Thymus, Bone Marrow |
+| [TME Compendium](https://github.com/dviraran/xCell2refs/blob/main/references/references/TMECompendium.xCell2Ref.rds)            | Zaitsev A (2022)                                                                           | Homo Sapiens | TPM           | 8146           | 25         | RNA-seq    | Tumor                                          |
 
-
-You can also quick access popular pre-trained references that are available within the xCell2 package:
+You can also quick access popular pre-trained references that are
+available within the xCell2 package:
 
 ```{r, eval = TRUE}
 data(BlueprintEncode.xCell2Ref)
 ```
 
-Or download a pre-trained reference directly within R using the `download.file()` function:
+Or download a pre-trained reference directly within R using the
+`download.file()` function:
 
 ```{r, eval = FALSE}
 # Set the URL of the pre-trained reference
@@ -241,19 +291,25 @@ download.file(ref_url, local_filename, mode = "wb")
 BlueprintEncode.xCell2Ref <- readRDS(local_filename)
 ```
 
-Remember to choose a reference that's appropriate for your specific tissue type and experimental context. The choice of reference can impact your results, so it's important to select one that closely matches your biological system.
+Remember to choose a reference that's appropriate for your specific
+tissue type and experimental context. The choice of reference can impact
+your results, so it's important to select one that closely matches your
+biological system.
 
 # Performing Cell Type Enrichment Analysis with `xCell2Analysis`
 
-After creating or obtaining an `xCell2` reference object, the next step is to use it for cell type enrichment analysis on your bulk RNA-seq data. This section will guide you through using the `xCell2Analysis` function and interpreting its results.
+After creating or obtaining an `xCell2` reference object, the next step
+is to use it for cell type enrichment analysis on your bulk RNA-seq
+data. This section will guide you through using the `xCell2Analysis`
+function and interpreting its results.
 
 ## Preparing Your Data
 
-Before running the analysis, ensure you have:
-1. An `xCell2` reference object
-2. A bulk gene expression matrix to analyze
+Before running the analysis, ensure you have: 1. An `xCell2` reference
+object 2. A bulk gene expression matrix to analyze
 
-For this example, we'll use a pre-loaded demo reference and a sample bulk expression dataset:
+For this example, we'll use a pre-loaded demo reference and a sample
+bulk expression dataset:
 
 ```{r}
 # Load the demo reference object
@@ -273,55 +329,117 @@ xcell2_results <- xCell2::xCell2Analysis(
 )
 ```
 
-Key Parameters:
-- `mix`: Your bulk mixture gene expression data (genes in rows, samples in columns)
-- `xcell2object`: An S4 object of class `xCell2Object` (your reference)
-- `minSharedGenes`: Minimum fraction of shared genes required (default: 0.9)
-- `spillover`: Whether to use spillover correction (default: TRUE)
-- `numThreads`: Number of threads for parallel processing (default: 1)
+Key Parameters: - `mix`: Your bulk mixture gene expression data (genes
+in rows, samples in columns) - `xcell2object`: An S4 object of class
+`xCell2Object` (your reference) - `minSharedGenes`: Minimum fraction of
+shared genes required (default: 0.9) - `spillover`: Whether to use
+spillover correction (default: TRUE) - `numThreads`: Number of threads
+for parallel processing (default: 1)
 
-For a full list of parameters and their descriptions, refer to the `xCell2Analysis` function documentation.
+For a full list of parameters and their descriptions, refer to the
+`xCell2Analysis` function documentation.
 
 ## Interpreting the Results
 
-The `xCell2Analysis` function returns a matrix of cell type enrichment scores:
-- Rows represent cell types
-- Columns represent samples from your input mixture
-- Higher scores indicate a stronger presence of that cell type in the sample
+The `xCell2Analysis` function returns a matrix of cell type enrichment
+scores: - Rows represent cell types - Columns represent samples from
+your input mixture - Higher scores indicate a stronger presence of that
+cell type in the sample
 
-Important considerations:
-- Scores are relative, not absolute proportions
-- Compare scores across samples to identify differences in cell type composition
-- Consider the biological context of your samples when interpreting results
+Important considerations: - Scores are relative, not absolute
+proportions - Compare scores across samples to identify differences in
+cell type composition - Consider the biological context of your samples
+when interpreting results
 
 ## Further Analysis
 
-Once you have your `xCell2` results, you can:
-- Correlate cell type enrichment scores with clinical or experimental variables
-- Perform differential enrichment analysis between sample groups
-- Use the scores as features for machine learning models
+Once you have your `xCell2` results, you can: - Correlate cell type
+enrichment scores with clinical or experimental variables - Perform
+differential enrichment analysis between sample groups - Use the scores
+as features for machine learning models
 
-Remember, `xCell2` provides estimates of relative cell type abundance. For absolute quantification, additional experimental validation may be necessary.
+Remember, `xCell2` provides estimates of relative cell type abundance.
+For absolute quantification, additional experimental validation may be
+necessary.
 
 ## Troubleshooting
 
-If you encounter issues:
-- Ensure your input data is properly formatted
-- Check that your `mix` and `reference` use the same gene annotation system
-- Try adjusting the `minSharedGenes` parameter if many genes are missing
+If you encounter issues: - Ensure your input data is properly
+formatted - Check that your `mix` and `reference` use the same gene
+annotation system - Try adjusting the `minSharedGenes` parameter if many
+genes are missing
 
-For more detailed troubleshooting, refer to the package documentation or seek help on the `xCell2` GitHub issues page.
+For more detailed troubleshooting, refer to the package documentation or
+seek help on the `xCell2` GitHub issues page.
+
+# Parallelization in xCell2
+
+xCell2 leverages the `BiocParallel` package for parallel processing,
+enabling computationally intensive tasks to run faster by utilizing
+multiple processors. By default, xCell2 performs computations
+sequentially using `BiocParallel::SerialParam`. To enable parallel
+processing, users can specify a `BiocParallelParam` object via the
+BPPARAM argument in functions like `xCell2Train` and `xCell2Analysis`.
+
+To use parallelization, simply create a `BiocParallelParam` instance:
+
+```{r}
+library(BiocParallel)
+
+# Example: Setting up parallel processing with 2 workers
+BPPARAM <- MulticoreParam(workers = 2) # Adjust the number of workers as needed
+```
+
+If you are using an operating system where MulticoreParam is unavailable
+(e.g., certain Windows configurations), `SnowParam` can be used as an
+alternative:
+
+```{r}
+BPPARAM <- SnowParam(workers = 2)
+```
+
+Example: Generating the xCell2 Reference Object with Parallelization
+
+```{r}
+# Generate the xCell2 reference object with parallel processing
+DICE_demo.xCell2Ref <- xCell2::xCell2Train(
+  ref = dice_ref,
+  labels = dice_labels,
+  refType = "rnaseq",
+  BPPARAM = BPPARAM
+)
+```
+
+Example: Generating the xCell2 Reference Object with Parallelization
+
+```{r}
+# Perform cell type enrichment analysis with parallel processing
+xcell2_results <- xCell2::xCell2Analysis(
+  mix = mix_demo,
+  xcell2object = DICE_demo.xCell2Ref,
+  BPPARAM = BPPARAM
+)
+```
+
+For more information on `BiocParallel` and its options, visit the
+[BiocParallel package
+documentation](https://www.bioconductor.org/packages/release/bioc/html/BiocParallel.html).
 
 # Citing xCell2
 
-If you use `xCell2` in your research, please cite:
-Angel A, Naom L, Nabel-Levy S, Aran D. xCell 2.0: Robust Algorithm for Cell Type Proportion Estimation Predicts Response to Immune Checkpoint Blockade. bioRxiv 2024.
+If you use `xCell2` in your research, please cite: Angel A, Naom L,
+Nabel-Levy S, Aran D. xCell 2.0: Robust Algorithm for Cell Type
+Proportion Estimation Predicts Response to Immune Checkpoint Blockade.
+bioRxiv 2024.
 
 # Referece
 
-- Aran, D., Hu, Z., & Butte, A. J. (2017). xCell: digitally portraying the tissue cellular heterogeneity landscape. Genome biology, 18, 1-14.
+-   Aran, D., Hu, Z., & Butte, A. J. (2017). xCell: digitally portraying
+    the tissue cellular heterogeneity landscape. Genome biology, 18,
+    1-14.
 
-- Aran, D. (2021). Extracting insights from heterogeneous tissues. Nature Computational Science, 1(4), 247-248.
+-   Aran, D. (2021). Extracting insights from heterogeneous tissues.
+    Nature Computational Science, 1(4), 247-248.
 
 # R Session Info
 

@@ -11,7 +11,7 @@
 #' @param rawScores Boolean to indicate whether to return raw enrichment scores (default: FALSE).
 #' @param spillover Boolean - use spillover correction on the transformed enrichment scores? (default: TRUE).
 #' @param spilloverAlpha A numeric for spillover alpha value (default: 0.5).
-#' @param numThreads Number of threads for parallel processing (default: 1).
+#' @param BPPARAM A BiocParallelParam instance that determines the parallelisation strategy. Default is BiocParallel::SerialParam().
 #' @examples
 #' # For detailed example read xCell2 vignette.
 #'
@@ -24,6 +24,15 @@
 #' # Run xCell2 cell type enrichment analysis
 #' xcell2_res <- xCell2::xCell2Analysis(mix = mix_demo, xcell2object = DICE_demo.xCell2Ref)
 #'
+#' # Example using parallel processing with MulticoreParam
+#' library(BiocParallel)
+#' parallel_param <- MulticoreParam(workers = 2) # Adjust workers as needed
+#' xcell2_res_parallel <- xCell2::xCell2Analysis(
+#'   mix = mix_demo, 
+#'   xcell2object = DICE_demo.xCell2Ref, 
+#'   BPPARAM = parallel_param
+#' )
+#' 
 #' @return A data frame containing the cell type enrichment for each sample in the input matrix, as estimated by xCell2.
 #' @export
 xCell2Analysis <- function(mix,
@@ -32,7 +41,7 @@ xCell2Analysis <- function(mix,
                            rawScores = FALSE,
                            spillover = TRUE,
                            spilloverAlpha = 0.5,
-                           numThreads = 1) {
+                           BPPARAM = BiocParallel::SerialParam()) {
   scoreMix <- function(cellType, mixRanked, signaturesCellType) {
     scores <- vapply(signaturesCellType, function(sig) {
       singscore::simpleScore(mixRanked, upSet = sig, centerScore = FALSE)$TotalScore
@@ -41,8 +50,7 @@ xCell2Analysis <- function(mix,
     return(scores)
   }
   
-  param <- BiocParallel::MulticoreParam(workers = numThreads)
-  
+
   # Check reference/mixture genes intersection
   genesIntersectFrac <- round(length(intersect(rownames(mix), getGenesUsed(xcell2object))) /
     length(getGenesUsed(xcell2object)), 2)
@@ -126,7 +134,7 @@ xCell2Analysis <- function(mix,
     }
     
     return(scores)
-  }, BPPARAM = param)
+  }, BPPARAM = BPPARAM)
   
   names(resRaw) <- sigsCellTypes
   

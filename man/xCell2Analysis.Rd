@@ -11,7 +11,7 @@ xCell2Analysis(
   rawScores = FALSE,
   spillover = TRUE,
   spilloverAlpha = 0.5,
-  numThreads = 1
+  BPPARAM = BiocParallel::SerialParam()
 )
 }
 \arguments{
@@ -27,7 +27,7 @@ xCell2Analysis(
 
 \item{spilloverAlpha}{A numeric for spillover alpha value (default: 0.5).}
 
-\item{numThreads}{Number of threads for parallel processing (default: 1).}
+\item{BPPARAM}{A BiocParallelParam instance that determines the parallelisation strategy. Default is BiocParallel::SerialParam().}
 }
 \value{
 A data frame containing the cell type enrichment for each sample in the input matrix, as estimated by xCell2.
@@ -46,5 +46,14 @@ data(mix_demo, package = "xCell2")
 
 # Run xCell2 cell type enrichment analysis
 xcell2_res <- xCell2::xCell2Analysis(mix = mix_demo, xcell2object = DICE_demo.xCell2Ref)
+
+# Example using parallel processing with MulticoreParam
+library(BiocParallel)
+parallel_param <- MulticoreParam(workers = 2) # Adjust workers as needed
+xcell2_res_parallel <- xCell2::xCell2Analysis(
+  mix = mix_demo, 
+  xcell2object = DICE_demo.xCell2Ref, 
+  BPPARAM = parallel_param
+)
 
 }
