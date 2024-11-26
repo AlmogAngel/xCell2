@@ -329,15 +329,32 @@ xcell2_results <- xCell2::xCell2Analysis(
 )
 ```
 
-Key Parameters: - `mix`: Your bulk mixture gene expression data (genes
-in rows, samples in columns) - `xcell2object`: An S4 object of class
-`xCell2Object` (your reference) - `minSharedGenes`: Minimum fraction of
-shared genes required (default: 0.9) - `spillover`: Whether to use
-spillover correction (default: TRUE) - `numThreads`: Number of threads
-for parallel processing (default: 1)
+## Understanding the Parameters
 
-For a full list of parameters and their descriptions, refer to the
-`xCell2Analysis` function documentation.
+The `xCell2Analysis` function provides several parameters to customize the analysis:
+
+- **mix**: The bulk gene expression matrix to analyze (genes in rows, samples in columns).
+- **xcell2object**: A trained or pre-loaded `xCell2` reference object.
+- **minSharedGenes**: The minimum fraction of shared genes required between the mix and the reference (default: 0.9).
+  You can access the gene used in the pre-train references with `getGenesUsed`, for example:
+```{r}
+library(xCell2)
+data("TabulaMurisBlood.xCell2Ref")
+TabulaMurisBlood.xCell2Ref@genes_used
+```
+  If your gene expression matrix and the reference share a low fraction of shared genes, we recommend using the `xCell2Train` function to generate custom cell type signatures        tailored to the genes in your dataset.
+- **rawScores**: A Boolean indicating whether to return raw enrichment scores (default: FALSE). 
+  Raw enrichment scores are the initial scores computed based on gene signatures before 
+  applying the linear transformation step and spillover correction.
+ - **spillover**: A Boolean to enable spillover correction (default: TRUE).
+  Spillover occurs when gene expression patterns overlap between closely related cell types, potentially inflating enrichment scores.
+  By correcting for spillover, xCell2 improves the specificity of enrichment scores for closely related cell types. 
+ - **spilloverAlpha**: A numeric value (default: 0.5) that controls the strength of spillover correction. 
+  Lower values apply weaker correction, while higher values apply stronger correction. An alpha value of 
+  0.5 is suitable for most cases. However, if your reference contains very closely related cell types, 
+  consider using a higher value. Conversely, use a lower value if the cell types in your reference are more distinct.
+ - **BPPARAM**: A `BiocParallelParam` instance for parallel processing. This parameter replaces the deprecated `numThreads` argument and allows users to specify the parallelization   strategy. Refer to the [Parallelization in xCell2](#parallelization-in-xcell2) section for details.
+
 
 ## Interpreting the Results
 

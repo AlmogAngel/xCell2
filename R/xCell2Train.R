@@ -623,7 +623,13 @@ LearnParams <- function(gepMat, corMat, signatures, depList, topSpillValue, BPPA
 #' @param returnSignatures A Boolean to return just the signatures (default: FALSE).
 #' @param returnAnalysis A Boolean to return the xCell2Analysis results (do not return reference object) (default: FALSE).
 #' @param useSpillover A Boolean to use spillover correction in xCell2Analysis (returnAnalysis must be TRUE) (default: TRUE).
-#' @param spilloverAlpha A numeric for spillover alpha value in xCell2Analysis (returnAnalysis must be TRUE) (default: 0.5).
+#' Spillover occurs when gene expression patterns overlap between closely related cell types, 
+#' potentially inflating enrichment scores. By correcting for spillover, xCell2 improves the specificity of enrichment scores for closely related cell types. 
+#' `spilloverAlpha` can be tuned to adjust the strength of the correction to avoid under- or over-correction.
+#' @param spilloverAlpha A numeric value (default: 0.5) that controls the strength of spillover correction. 
+#' Lower values apply weaker correction, while higher values apply stronger correction. An alpha value of 
+#' 0.5 is suitable for most cases. However, if your reference contains very closely related cell types, 
+#' consider using a higher value. Conversely, use a lower value if the cell types in your reference are more distinct.
 #' @return An S4 object containing cell types' signatures, linear transformation parameters, spillover matrix and dependencies.
 #' @examples
 #' # For detailed example read xCell2 vignette.

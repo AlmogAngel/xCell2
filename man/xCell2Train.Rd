@@ -52,9 +52,15 @@ as it should already be included in `colData`.}
 
 \item{returnAnalysis}{A Boolean to return the xCell2Analysis results (do not return reference object) (default: FALSE).}
 
-\item{useSpillover}{A Boolean to use spillover correction in xCell2Analysis (returnAnalysis must be TRUE) (default: TRUE).}
+\item{useSpillover}{A Boolean to use spillover correction in xCell2Analysis (returnAnalysis must be TRUE) (default: TRUE).
+Spillover occurs when gene expression patterns overlap between closely related cell types, 
+potentially inflating enrichment scores. By correcting for spillover, xCell2 improves the specificity of enrichment scores for closely related cell types. 
+`spilloverAlpha` can be tuned to adjust the strength of the correction to avoid under- or over-correction.}
 
-\item{spilloverAlpha}{A numeric for spillover alpha value in xCell2Analysis (returnAnalysis must be TRUE) (default: 0.5).}
+\item{spilloverAlpha}{A numeric value (default: 0.5) that controls the strength of spillover correction. 
+Lower values apply weaker correction, while higher values apply stronger correction. An alpha value of 
+0.5 is suitable for most cases. However, if your reference contains very closely related cell types, 
+consider using a higher value. Conversely, use a lower value if the cell types in your reference are more distinct.}
 
 \item{minPbCells}{For scRNA-Seq reference only - minimum number of cells in the pseudo-bulk (optional, default: 30).}
 

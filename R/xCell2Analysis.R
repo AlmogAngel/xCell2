@@ -8,9 +8,15 @@
 #' @param mix A bulk mixture of gene expression data (genes in rows, samples in columns).
 #' @param xcell2object An S4 object of class `xCell2Object`.
 #' @param minSharedGenes Minimum fraction of shared genes required between the mix and the reference (default: 0.9).
-#' @param rawScores Boolean to indicate whether to return raw enrichment scores (default: FALSE).
-#' @param spillover Boolean - use spillover correction on the transformed enrichment scores? (default: TRUE).
-#' @param spilloverAlpha A numeric for spillover alpha value (default: 0.5).
+#' @param rawScores A Boolean to indicate whether to return raw enrichment scores (default: FALSE).
+#' @param spillover A Boolean to enable spillover correction on the enrichment scores (default: TRUE). 
+#' Spillover occurs when gene expression patterns overlap between closely related cell types, 
+#' potentially inflating enrichment scores. By correcting for spillover, xCell2 improves the specificity of enrichment scores for closely related cell types. 
+#' `spilloverAlpha` can be tuned to adjust the strength of the correction to avoid under- or over-correction.
+#' @param spilloverAlpha A numeric value (default: 0.5) that controls the strength of spillover correction. 
+#' Lower values apply weaker correction, while higher values apply stronger correction. An alpha value of 
+#' 0.5 is suitable for most cases. However, if your reference contains very closely related cell types, 
+#' consider using a higher value. Conversely, use a lower value if the cell types in your reference are more distinct.
 #' @param BPPARAM A BiocParallelParam instance that determines the parallelisation strategy. Default is BiocParallel::SerialParam().
 #' @examples
 #' # For detailed example read xCell2 vignette.
