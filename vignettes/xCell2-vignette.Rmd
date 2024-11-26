@@ -425,6 +425,38 @@ For more information on `BiocParallel` and its options, visit the
 [BiocParallel package
 documentation](https://www.bioconductor.org/packages/release/bioc/html/BiocParallel.html).
 
+# Key differences between xCell 2.0, xCell (First Version) and Similar Software
+
+## xCell vs. xCell2: Key Enhancements
+
+`xCell2` builds on the foundation of the original `xCell` (Aran et al., 2017) and introduces improvements in flexibility and performance.
+While the first version of `xCell` was limited to pre-trained references and general immune and stromal profiling, `xCell2` is a highly flexible and generic tool that can be tailored for various novel applications across multiple tissues and organisms. By allowing users to train custom references from diverse data sources such as scRNA-Seq, bulk RNA-Seq, or microarray datasets.
+
+
+## Cell Type Enrichment Analysis vs. Cellular Deconvolution
+
+Cell type enrichment analysis and deconvolution both aim to infer the cellular composition of bulk transcriptomics data.
+However, they differ fundamentally in their methodologies and assumptions:
+
+- **Deconvolution**: Deconvolution methods aim to estimate cell type proportions by modeling the bulk gene expression as a weighted sum of reference profiles. A key limitation is that the estimated cell type proportions must sum to 1. This creates dependencies between cell type estimates and can introduce bias, particularly if a cell type exists in the sample but is absent in the reference.
+
+Key limitations of deconvolution methods include:
+- **Dependency on Complete References**: Deconvolution requires all relevant cell types to be present in the reference. If a cell type exists in the sample but is missing in the reference, the proportions of other cell types will be skewed.
+- **Spillover Effects**: Most deconvolution methods do not account for spillover between closely related cell types, leading to inaccuracies.
+- **Lineage Relationships**: Deconvolution cannot handle cell types with hierarchical relationships (e.g., T-cells and CD4+ T-cells) within the same run, as the final proportions are dependent and must sum to 1.
+
+- **Enrichment Scores**: In contrast, enrichment score-based methods, such as `xCell`, compute independent scores for each cell type based on gene signatures. This approach avoids dependencies between cell type estimates and provides greater flexibility when reference data are incomplete.
+
+
+## Comparison with Other Software
+
+In addition to improvements over `xCell`, `xCell2` demonstrates comparable or superior performance when benchmarked against popular deconvolution tools such as:
+- **CIBERSORTx**
+- **EPIC**
+- **BayesPrism**
+
+
+For detailed benchmarking and comparisons, refer to the xCell2 publication (Angel et al., 2024).
 # Citing xCell2
 
 If you use `xCell2` in your research, please cite: Angel A, Naom L,
@@ -440,6 +472,8 @@ bioRxiv 2024.
 
 -   Aran, D. (2021). Extracting insights from heterogeneous tissues.
     Nature Computational Science, 1(4), 247-248.
+
+-   Angel, A., Naom, L., Nabet-Levy, S., & Aran, D. (2024). xCell 2.0: Robust Algorithm for cell type Proportion Estimation Predicts Response to Immune Checkpoint     Blockade. bioRxiv, 2024-09.
 
 # R Session Info
 
