@@ -2,7 +2,7 @@
 % Please edit documentation in R/xCell2Train.R
 \name{xCell2Train}
 \alias{xCell2Train}
-\title{xCell2Train function}
+\title{Train Custom xCell2 Reference Object}
 \usage{
 xCell2Train(
   ref,
@@ -18,74 +18,112 @@ xCell2Train(
   spilloverAlpha = 0.5,
   minPbCells = 30,
   minPbSamples = 10,
-  minScGenes = 10000,
-  topSpillValue = 0.5
+  minScGenes = 10000
 )
 }
 \arguments{
-\item{ref}{A reference gene expression matrix (with genes in rows and samples/cells in columns),
-a SummarizedExperiment object, or a SingleCellExperiment object containing the expression
-data and sample metadata. If a SummarizedExperiment or SingleCellExperiment object is provided,
-the expression matrix should be stored in the "counts" slot of the `assays` component, 
-and the sample metadata (equivalent to the "labels" parameter) should be stored in `colData`.}
+\item{ref}{A reference gene expression matrix (genes in rows, samples/cells in columns). Alternatively, a 
+\linkS4class{SummarizedExperiment} or \linkS4class{SingleCellExperiment} object containing expression data and sample metadata. 
+The sample metadata should be stored in \code{colData}. For RNA-Seq data, normalization to gene length (e.g., TPM, RPKM) is recommended.}
 
-\item{mix}{A bulk mixture of gene expression data (genes in rows, samples in columns) (optional).}
+\item{mix}{A bulk mixture of gene expression data (genes in rows, samples in columns) (optional). 
+This parameter is required if \code{returnAnalysis} is set to \code{TRUE}, as it is used for enrichment analysis.}
 
-\item{labels}{A data frame in which the rows correspond to samples in the ref.
-The data frame must have four columns:
-"ont": the cell type ontology as a character (i.e., "CL:0000545" or NA if there is no ontology).
-"label": the cell type name as a character (i.e., "T-helper 1 cell").
-"sample": the cell type sample/cell that match the column name in ref.
-"dataset": sample's source dataset or subject (can be the same for all samples if no such information).
-This parameter is not needed if ref is a SummarizedExperiment or SingleCellExperiment object,
-as it should already be included in `colData`.}
+\item{labels}{A data frame with the following columns:
+  \itemize{
+    \item \code{"ont"}: The cell type ontology ID (e.g., \code{"CL:0000545"}). Set to \code{NA} if not available. 
+      Ontologies can be found at \href{https://www.ebi.ac.uk/ols4/ontologies/cl}{EBI Ontology Lookup Service (OLS)} or 
+      by using the \link[ontologyIndex]{ontologyIndex} package.
+    \item \code{"label"}: The cell type name (e.g., \code{"T-helper 1 cell"}).
+    \item \code{"sample"}: The sample or cell identifier, matching column names in the reference matrix.
+    \item \code{"dataset"}: The dataset source for each sample. If not applicable, use a constant value for all samples.
+  }
+This parameter is unnecessary if \code{ref} is a SummarizedExperiment or SingleCellExperiment object, as metadata should be in \code{colData}.}
 
-\item{refType}{The reference gene expression data type: "rnaseq" for bulk RNA-Seq, "array" for micro-array, or "sc" for scRNA-Seq.}
+\item{refType}{The type of reference data: \code{"rnaseq"} for RNA-Seq, \code{"array"} for microarray, or \code{"sc"} for scRNA-Seq.}
 
-\item{lineageFile}{Path to the cell type lineage file generated with `xCell2GetLineage` function and reviewed manually (optional).}
+\item{lineageFile}{Path to a manually curated cell type lineage file generated with \code{\link{xCell2GetLineage}} (optional).}
 
-\item{BPPARAM}{A BiocParallelParam instance that determines the parallelisation strategy. Default is BiocParallel::SerialParam().}
+\item{BPPARAM}{A \linkS4class{BiocParallelParam} instance that determines the parallelization strategy (more in "Details"). 
+Default is \code{BiocParallel::SerialParam()}.}
 
-\item{useOntology}{A Boolean for considering cell type dependencies by using ontological integration (default: TRUE).}
+\item{useOntology}{A Boolean indicating whether to use ontological integration for cell type dependencies (default: \code{TRUE}). 
+Lineage relationships are determined using the Cell Ontology (CL). Users can refine these dependencies with 
+\code{\link{xCell2GetLineage}} and provide them via the \code{lineageFile} parameter.}
 
-\item{returnSignatures}{A Boolean to return just the signatures (default: FALSE).}
+\item{returnSignatures}{A Boolean to return only cell type signatures (default: \code{FALSE}).}
 
-\item{returnAnalysis}{A Boolean to return the xCell2Analysis results (do not return reference object) (default: FALSE).}
+\item{returnAnalysis}{A Boolean to return \code{\link{xCell2Analysis}} results instead of a reference object (default: \code{FALSE}).}
 
-\item{useSpillover}{A Boolean to use spillover correction in xCell2Analysis (returnAnalysis must be TRUE) (default: TRUE).
-Spillover occurs when gene expression patterns overlap between closely related cell types, 
-potentially inflating enrichment scores. By correcting for spillover, xCell2 improves the specificity of enrichment scores for closely related cell types. 
-`spilloverAlpha` can be tuned to adjust the strength of the correction to avoid under- or over-correction.}
+\item{useSpillover}{A Boolean to use spillover correction during analysis when \code{returnAnalysis} is \code{TRUE} (default: \code{TRUE}).
+Spillover occurs when gene expression patterns overlap between closely related cell types, potentially inflating enrichment scores. 
+Correcting for spillover enhances the specificity of enrichment scores, particularly for related cell types. 
+The strength of this correction can be adjusted using the \code{spilloverAlpha} parameter.}
 
-\item{spilloverAlpha}{A numeric value (default: 0.5) that controls the strength of spillover correction. 
-Lower values apply weaker correction, while higher values apply stronger correction. An alpha value of 
-0.5 is suitable for most cases. However, if your reference contains very closely related cell types, 
-consider using a higher value. Conversely, use a lower value if the cell types in your reference are more distinct.}
+\item{spilloverAlpha}{Numeric value controlling spillover correction strength (default: \code{0.5}).
+Lower values apply weaker correction, while higher values apply stronger correction. 
+An alpha value of 0.5 is suitable for most cases, but users may tune this parameter based on the similarity 
+of cell types in their reference.}
 
-\item{minPbCells}{For scRNA-Seq reference only - minimum number of cells in the pseudo-bulk (optional, default: 30).}
+\item{minPbCells}{Minimum number of cells in a pseudo-bulk sample for scRNA-Seq references (default: \code{30}).}
 
-\item{minPbSamples}{For scRNA-Seq reference only - minimum number of pseudo-bulk samples (optional, default: 10).}
+\item{minPbSamples}{Minimum number of pseudo-bulk samples for scRNA-Seq references (default: \code{10}).}
 
-\item{minScGenes}{For scRNA-Seq reference only - minimum number of genes for pseudo-bulk samples (default: 10000).}
-
-\item{topSpillValue}{Maximum spillover compensation correction value (default: 0.5).}
+\item{minScGenes}{Minimum number of genes for pseudo-bulk samples for scRNA-Seq references (default: \code{1e4}).}
 }
 \value{
-An S4 object containing cell types' signatures, linear transformation parameters, spillover matrix and dependencies.
+An \code{xCell2Object} containing:
+  \itemize{
+    \item \strong{signatures}: Cell type-specific gene signatures.
+    \item \strong{dependencies}: Lineage-based dependencies.
+    \item \strong{params}: Linear transformation parameters.
+    \item \strong{spill_mat}: A spillover correction matrix.
+    \item \strong{genes_used}: Genes used for training.
+  }
 }
 \description{
-This function generates a custom xCell2 reference object for cell type enrichment analysis.
+This function creates a custom reference object for \code{\link{xCell2Analysis}}, enabling cell type enrichment analysis.
+It supports references derived from RNA-Seq, microarray, and scRNA-Seq data and which can be derived from various tissues and organisms. 
+Users can incorporate cell type lineage relationships to refine signatures or use spillover correction for improved specificity.
+}
+\details{
+The \code{xCell2Train} function identifies cell type-specific gene signatures from the input reference data. It supports 
+RNA-Seq, microarray, and scRNA-Seq datasets, working for diverse tissues and organisms. The resulting reference object is compatible 
+with \code{\link{xCell2Analysis}}, enabling cell type enrichment analysis for bulk gene expression data.
+
+## Ontological integration
+Ontological integration (\code{useOntology}) leverages hierarchical cell type relationships to ensure biologically meaningful signatures. 
+Dependencies can be refined using \code{\link{xCell2GetLineage}}, which generates lineage files for manual review.
+
+## Spillover correction
+Spillover occurs when gene expression patterns overlap between closely related cell types, potentially inflating enrichment scores. 
+Correcting for spillover enhances the specificity of enrichment scores, particularly for related cell types. 
+The strength of this correction can be adjusted using the \code{spilloverAlpha} parameter.
+  
+## Contribute Your xCell2 Referece Object to Advance Scientific Collaboration
+Users are encouraged to share their reference objects via the \href{https://dviraran.github.io/xCell2ref}{xCell2 Reference Repository}.
+
+## Parallelization with \code{BPPARAM}
+To achieve faster processing by running computations in parallel, \code{xCell2Analysis} supports parallelization through the \code{BPPARAM} 
+parameter. Users can define a parallelization strategy using \code{BiocParallelParam} from the \code{BiocParallel} package. 
+For example, \code{\link[BiocParallel]{MulticoreParam}} is suitable for multi-core processing on Linux and macOS, while 
+\code{\link[BiocParallel]{SnowParam}} or \code{\link[BiocParallel]{SerialParam}} are better suited for Windows systems. 
+Refer to the \href{https://www.bioconductor.org/packages/release/bioc/html/BiocParallel.html}{BiocParallel documentation} 
+for further guidance on parallelization strategies.
 }
 \examples{
 # For detailed example read xCell2 vignette.
 
-# Extract reference matrix
+library(xCell2)
+library(SummarizedExperiment)
+
+# Extract demo reference matrix
 data(dice_demo_ref, package = "xCell2")
-dice_ref <- as.matrix(dice_demo_ref@assays@data$logcounts)
-colnames(dice_ref) <- make.unique(colnames(dice_ref)) # Make samples samples unique
+dice_ref <- assay(dice_demo_ref, "logcounts") # Here the values are in TPM but log transformed
+colnames(dice_ref) <- make.unique(colnames(dice_ref)) # Ensure unique sample names
 
 # Extract reference metadata
-dice_labels <- as.data.frame(dice_demo_ref@colData)
+dice_labels <- as.data.frame(colData(dice_demo_ref)) # "label" column already exists
 
 # Prepare labels data frame
 dice_labels$ont <- NA
@@ -100,7 +138,7 @@ dice_labels[dice_labels$label == "T cells, CD8+", ]$ont <- "CL:0000625"
 dice_labels[dice_labels$label == "T cells, CD4+", ]$ont <- "CL:0000624"
 dice_labels[dice_labels$label == "T cells, CD4+, memory", ]$ont <- "CL:0000897"
 
-# Reproducibility (optional): Set seed before running `xCell2Train`  as generating pseudo-bulk
+# Reproducibility (optional): Set seed before running `xCell2Train` as generating pseudo-bulk
 # samples from scRNA-Seq reference based on random sampling of cells.
 set.seed(123)
 
@@ -113,4 +151,11 @@ parallel_param <- MulticoreParam(workers = 2) # Adjust workers as needed
 DICE.xCell2Ref <- xCell2::xCell2Train(ref = dice_ref, labels = dice_labels, refType = "rnaseq", 
   BPPARAM = parallel_param
 )
+}
+\seealso{
+\code{\link{xCell2Analysis}}, which uses the trained reference object for enrichment analysis. \cr
+\code{\link{xCell2GetLineage}}, for refining cell type dependencies.
+}
+\author{
+Almog Angel and Dvir Aran
 }

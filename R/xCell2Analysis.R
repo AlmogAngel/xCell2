@@ -1,30 +1,65 @@
-#' xCell2Analysis function
+#' Perform Cell Type Enrichment Analysis
 #'
-#' This function performs cell type enrichment analysis to identify proportions of cell types in a bulk gene expression mixture.
+#' This function estimate the relative enrichment of cell types in a bulk gene expression mixture.
+#' The analysis leverages gene signatures from a pre-trained \code{xCell2Object} to compute enrichment scores for each cell type. 
+#' It also applies linear transformation and spillover correction to refine the enrichment scores.
 #'
+#' @importFrom magrittr %>%
 #' @importFrom singscore rankGenes simpleScore
-#' @importFrom BiocParallel MulticoreParam bplapply
+#' @importFrom BiocParallel MulticoreParam SerialParam bplapply
 #' @importFrom pracma lsqlincon
-#' @param mix A bulk mixture of gene expression data (genes in rows, samples in columns).
-#' @param xcell2object An S4 object of class `xCell2Object`.
-#' @param minSharedGenes Minimum fraction of shared genes required between the mix and the reference (default: 0.9).
-#' @param rawScores A Boolean to indicate whether to return raw enrichment scores (default: FALSE).
-#' @param spillover A Boolean to enable spillover correction on the enrichment scores (default: TRUE). 
-#' Spillover occurs when gene expression patterns overlap between closely related cell types, 
-#' potentially inflating enrichment scores. By correcting for spillover, xCell2 improves the specificity of enrichment scores for closely related cell types. 
-#' `spilloverAlpha` can be tuned to adjust the strength of the correction to avoid under- or over-correction.
-#' @param spilloverAlpha A numeric value (default: 0.5) that controls the strength of spillover correction. 
-#' Lower values apply weaker correction, while higher values apply stronger correction. An alpha value of 
-#' 0.5 is suitable for most cases. However, if your reference contains very closely related cell types, 
-#' consider using a higher value. Conversely, use a lower value if the cell types in your reference are more distinct.
-#' @param BPPARAM A BiocParallelParam instance that determines the parallelisation strategy. Default is BiocParallel::SerialParam().
+#' 
+#' @param mix A bulk mixture of gene expression data (genes in rows, samples in columns). 
+#'   The input should use the same gene annotation system as the reference object.
+#' @param xcell2object A pre-trained reference object of class \code{xCell2Object}, created using the \code{\link{xCell2Train}} function. 
+#'   Pre-trained references are available within the package for common use cases.
+#' @param minSharedGenes Minimum fraction of shared genes required between the mixture and the reference object (default: \code{0.9}). 
+#'   If the shared fraction falls below this threshold, the function will stop with an error or warning, as accurate analysis 
+#'   depends on sufficient overlap between the mixture and reference genes.
+#' @param rawScores A Boolean indicating whether to return raw enrichment scores (default: \code{FALSE}). 
+#'   Raw enrichment scores are computed directly from gene rankings without linear transformation or spillover correction.
+#' @param spillover A Boolean to enable spillover correction on the enrichment scores (default: \code{TRUE}). 
+#'   Spillover occurs when gene expression patterns overlap between closely related cell types, potentially inflating enrichment scores. 
+#'   Correcting for spillover enhances the specificity of enrichment scores, particularly for related cell types. 
+#'   The strength of this correction can be adjusted using the \code{spilloverAlpha} parameter.
+#' @param spilloverAlpha A numeric value controlling the strength of spillover correction (default: \code{0.5}). 
+#'   Lower values apply weaker correction, while higher values apply stronger correction. 
+#'   An alpha value of 0.5 is suitable for most cases, but users may tune this parameter based on the similarity 
+#'   of cell types in their reference.
+#' @param BPPARAM A \linkS4class{BiocParallelParam} instance that determines the parallelization strategy (more in "Details"). 
+#'   Default is \code{BiocParallel::SerialParam()}.
+#' 
+#' @return A data frame containing the cell type enrichment for each sample in the input matrix, as estimated by xCell2. 
+#' Each row corresponds to a cell type, and each column corresponds to a sample.
+#' 
+#' @details
+#' The \code{xCell2Analysis} function performs cell type enrichment analysis by leveraging gene signatures 
+#' from a pre-trained \code{xCell2Object}. It computes enrichment scores for each cell type in the provided 
+#' bulk gene expression mixture (\code{mix}), applies linear transformations, and corrects for spillover. 
+#' Spillover correction addresses the overlap of gene expression patterns between closely related cell types, 
+#' improving the specificity of the enrichment scores.
+#'
+#' ## Parallelization with \code{BPPARAM}
+#' To achieve faster processing by running computations in parallel, \code{xCell2Analysis} supports parallelization through the \code{BPPARAM} 
+#' parameter. Users can define a parallelization strategy using \code{BiocParallelParam} from the \code{BiocParallel} package. 
+#' For example, \code{\link[BiocParallel]{MulticoreParam}} is suitable for multi-core processing on Linux and macOS, while 
+#' \code{\link[BiocParallel]{SnowParam}} or \code{\link[BiocParallel]{SerialParam}} are better suited for Windows systems. 
+#' Refer to the \href{https://www.bioconductor.org/packages/release/bioc/html/BiocParallel.html}{BiocParallel documentation} 
+#' for further guidance on parallelization strategies.
+#'
+#' ## Relationship with Other Function(s)
+#' The pre-trained \code{xCell2Object} used in \code{xCell2Analysis} is created via the \code{\link{xCell2Train}} function.
+#' 
 #' @examples
 #' # For detailed example read xCell2 vignette.
+#'
+#' library(xCell2)
+#' library(SummarizedExperiment)
 #'
 #' # Load "ready to use" xCell2 reference object or generate a new one using `xCell2Train`
 #' data(DICE_demo.xCell2Ref, package = "xCell2")
 #'
-#' # Load bulk RNA-Seq gene expression mixture
+#' # Load demo bulk RNA-Seq gene expression mixture
 #' data(mix_demo, package = "xCell2")
 #'
 #' # Run xCell2 cell type enrichment analysis
@@ -39,7 +74,10 @@
 #'   BPPARAM = parallel_param
 #' )
 #' 
-#' @return A data frame containing the cell type enrichment for each sample in the input matrix, as estimated by xCell2.
+#' @seealso 
+#' \code{\link{xCell2Train}}, for generating the reference object used in this analysis.
+#' 
+#' @author Almog Angel and Dvir Aran
 #' @export
 xCell2Analysis <- function(mix,
                            xcell2object,

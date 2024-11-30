@@ -26,6 +26,7 @@ Depends:
 biocViews: GeneExpression, Transcriptomics, Microarray, RNASeq, SingleCell, DifferentialExpression, ImmunoOncology, GeneSetEnrichment
 Imports: 
     SummarizedExperiment,
+    SingleCellExperiment,
     Rfast,
     singscore,
     AnnotationHub,
@@ -38,10 +39,10 @@ Imports:
     pracma,
     methods,
     readr,
-    tidyr
+    magrittr
 Suggests:
     knitr,
-    rmarkdown,
+    rmarkdown
 RoxygenNote: 7.3.2
 VignetteBuilder: knitr
 URL: https://github.com/AlmogAngel/xCell2
