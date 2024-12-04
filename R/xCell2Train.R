@@ -700,15 +700,16 @@ LearnParams <- function(gepMat, corMat, signatures, depList, BPPARAM) {
 #' # For detailed example read xCell2 vignette.
 #'
 #' library(xCell2)
-#' library(SummarizedExperiment)
 #' 
-#' # Extract demo reference matrix
+#' # Extract demo reference gene expression matrix
 #' data(dice_demo_ref, package = "xCell2")
-#' dice_ref <- assay(dice_demo_ref, "logcounts") # Here the values are in TPM but log transformed
+#'# Here the values are in TPM but log transformed
+#' dice_ref <- SummarizedExperiment::assay(dice_demo_ref, "logcounts")
 #' colnames(dice_ref) <- make.unique(colnames(dice_ref)) # Ensure unique sample names
 #'
 #' # Extract reference metadata
-#' dice_labels <- as.data.frame(colData(dice_demo_ref)) # "label" column already exists
+#' dice_labels <- SummarizedExperiment::colData(dice_demo_ref)
+#' dice_labels <- as.data.frame(dice_labels) # "label" column already exists
 #'
 #' # Prepare labels data frame
 #' dice_labels$ont <- NA

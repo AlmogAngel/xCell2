@@ -5,20 +5,24 @@
 \alias{xCell2Object-class}
 \title{xCell2Object Class}
 \description{
-An S4 class to represent the xCell2 reference object.
+An S4 class to represent the xCell2 reference object. This object contains
+cell type-specific gene signatures, hierarchical dependencies, linear transformation parameters,
+spillover correction matrices, and genes used for training.
 }
 \section{Slots}{
 
 \describe{
-\item{\code{signatures}}{List of xCell2 signatures.}
+\item{\code{signatures}}{A list of cell type-specific gene signatures.}
 
-\item{\code{dependencies}}{List of cell type dependencies.}
+\item{\code{dependencies}}{A list of hierarchical dependencies between cell types.}
 
-\item{\code{params}}{Data frame of cell type linear transformation parameters.}
+\item{\code{params}}{A data frame containing linear transformation parameters for cell types.}
 
-\item{\code{spill_mat}}{Matrix of cell types spillover correction factors.}
+\item{\code{spill_mat}}{A matrix containing spillover correction factors for cell types.}
 
-\item{\code{genes_used}}{Character vector of genes used to train the xCell2 reference object.}
+\item{\code{genes_used}}{A character vector of genes used for training the xCell2 reference object.}
 }}
 
-\concept{objects}
+\seealso{
+\link[xCell2]{xcell2object-methods}
+}

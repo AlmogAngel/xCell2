@@ -54,7 +54,6 @@
 #' # For detailed example read xCell2 vignette.
 #'
 #' library(xCell2)
-#' library(SummarizedExperiment)
 #'
 #' # Load "ready to use" xCell2 reference object or generate a new one using `xCell2Train`
 #' data(DICE_demo.xCell2Ref, package = "xCell2")

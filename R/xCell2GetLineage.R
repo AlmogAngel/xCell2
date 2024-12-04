@@ -53,13 +53,13 @@
 #' # For detailed example read xCell2 vignette.
 #'
 #' library(xCell2)
-#' library(SummarizedExperiment)
 #'  
 #' # Load demo reference object
 #' data(dice_demo_ref, package = "xCell2")
 #' 
 #' # Prepare labels data frame
-#' dice_labels <- as.data.frame(colData(dice_demo_ref)) # "label" column already exists
+#' dice_labels <- SummarizedExperiment::colData(dice_demo_ref)
+#' dice_labels <- as.data.frame(dice_labels) # "label" column already exists
 #' dice_labels$ont <- NA
 #' dice_labels$sample <- colnames(dice_demo_ref)
 #' dice_labels$dataset <- "DICE"
