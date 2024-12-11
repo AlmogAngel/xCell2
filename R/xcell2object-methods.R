@@ -1,137 +1,92 @@
-#' @title Get Cell Type Signatures
-#' @description Retrieve the cell type-specific gene signatures from an \linkS4class{xCell2Object}.
+#' @title Access Cell Type Signatures
+#' @description Retrieve or assign the cell type-specific gene signatures for an \linkS4class{xCell2Object}.
 #' @param object An \linkS4class{xCell2Object}.
-#' @return A list of cell type-specific gene signatures.
-#' @examples
-#' obj <- new("xCell2Object")
-#' getSignatures(obj)
-#' @name getSignatures
-#' @rdname getSignatures-xCell2Object-method
+#' @param value A list of cell type-specific gene signatures (for the setter).
+#' @return For `getSignatures`, a list of cell type-specific gene signatures. 
+#'         For `setSignatures<-`, the updated \linkS4class{xCell2Object}.
+#' @seealso \link{xCell2Object-class}
+#' @aliases getSignatures setSignatures<-
+#' @rdname signatures
 #' @export
 setMethod("getSignatures", "xCell2Object", function(object) object@signatures)
 
-#' @title Set Cell Type Signatures
-#' @description Assign cell type-specific gene signatures to an \linkS4class{xCell2Object}.
-#' @param object An \linkS4class{xCell2Object}.
-#' @param value A list of cell type-specific gene signatures.
-#' @return The modified \linkS4class{xCell2Object}.
-#' @examples
-#' obj <- new("xCell2Object")
-#' setSignatures(obj) <- list("Signature1" = c("GeneA", "GeneB"))
-#' @name setSignatures
-#' @rdname setSignatures-xCell2Object-method
+#' @rdname signatures
 #' @export
 setReplaceMethod("setSignatures", "xCell2Object", function(object, value) {
   object@signatures <- value
   object
 })
 
-#' @title Get Cell Type Dependencies
-#' @description Retrieve hierarchical dependencies between cell types from an \linkS4class{xCell2Object}.
+#' @title Access Cell Type Dependencies
+#' @description Retrieve or assign the hierarchical dependencies between cell types for an \linkS4class{xCell2Object}.
 #' @param object An \linkS4class{xCell2Object}.
-#' @return A list of cell type dependencies.
-#' @examples
-#' obj <- new("xCell2Object")
-#' getDeps(obj)
-#' @name getDeps
-#' @rdname getDeps-xCell2Object-method
+#' @param value A list of hierarchical dependencies (for the setter).
+#' @return For `getDeps`, a list of hierarchical dependencies. 
+#'         For `setDeps<-`, the updated \linkS4class{xCell2Object}.
+#' @seealso \link{xCell2Object-class}
+#' @aliases getDeps setDeps<-
+#' @rdname dependencies
 #' @export
 setMethod("getDeps", "xCell2Object", function(object) object@dependencies)
 
-#' @title Set Cell Type Dependencies
-#' @description Assign hierarchical dependencies between cell types to an \linkS4class{xCell2Object}.
-#' @param object An \linkS4class{xCell2Object}.
-#' @param value A list of cell type dependencies.
-#' @return The modified \linkS4class{xCell2Object}.
-#' @examples
-#' obj <- new("xCell2Object")
-#' setDeps(obj) <- list("Dependency1" = "ParentType")
-#' @name setDeps
-#' @rdname setDeps-xCell2Object-method
+#' @rdname dependencies
 #' @export
 setReplaceMethod("setDeps", "xCell2Object", function(object, value) {
   object@dependencies <- value
   object
 })
 
-#' @title Get Transformation Parameters
-#' @description Retrieve linear transformation parameters from an \linkS4class{xCell2Object}.
+#' @title Access Transformation Parameters
+#' @description Retrieve or assign linear transformation parameters for cell types for an \linkS4class{xCell2Object}.
 #' @param object An \linkS4class{xCell2Object}.
-#' @return A data frame of transformation parameters.
-#' @examples
-#' obj <- new("xCell2Object")
-#' getParams(obj)
-#' @name getParams
-#' @rdname getParams-xCell2Object-method
+#' @param value A data frame of transformation parameters (for the setter).
+#' @return For `getParams`, a data frame of transformation parameters. 
+#'         For `setParams<-`, the updated \linkS4class{xCell2Object}.
+#' @seealso \link{xCell2Object-class}
+#' @aliases getParams setParams<-
+#' @rdname params
 #' @export
 setMethod("getParams", "xCell2Object", function(object) object@params)
 
-#' @title Set Transformation Parameters
-#' @description Assign linear transformation parameters to an \linkS4class{xCell2Object}.
-#' @param object An \linkS4class{xCell2Object}.
-#' @param value A data frame of transformation parameters.
-#' @return The modified \linkS4class{xCell2Object}.
-#' @examples
-#' obj <- new("xCell2Object")
-#' setParams(obj) <- data.frame(param1 = 1, param2 = 2)
-#' @name setParams
-#' @rdname setParams-xCell2Object-method
+#' @rdname params
 #' @export
 setReplaceMethod("setParams", "xCell2Object", function(object, value) {
   object@params <- value
   object
 })
 
-#' @title Get Spillover Matrix
-#' @description Retrieve the spillover correction matrix from an \linkS4class{xCell2Object}.
+#' @title Access Spillover Matrix
+#' @description Retrieve or assign the spillover correction matrix for an \linkS4class{xCell2Object}.
 #' @param object An \linkS4class{xCell2Object}.
-#' @return A matrix of spillover correction factors.
-#' @examples
-#' obj <- new("xCell2Object")
-#' getSpillMat(obj)
-#' @name getSpillMat
-#' @rdname getSpillMat-xCell2Object-method
+#' @param value A matrix of spillover correction factors (for the setter).
+#' @return For `getSpillMat`, a matrix of spillover correction factors. 
+#'         For `setSpillMat<-`, the updated \linkS4class{xCell2Object}.
+#' @seealso \link{xCell2Object-class}
+#' @aliases getSpillMat setSpillMat<-
+#' @rdname spillMat
 #' @export
 setMethod("getSpillMat", "xCell2Object", function(object) object@spill_mat)
 
-#' @title Set Spillover Matrix
-#' @description Assign the spillover correction matrix to an \linkS4class{xCell2Object}.
-#' @param object An \linkS4class{xCell2Object}.
-#' @param value A matrix of spillover correction factors.
-#' @return The modified \linkS4class{xCell2Object}.
-#' @examples
-#' obj <- new("xCell2Object")
-#' setSpillMat(obj) <- matrix(0, nrow = 2, ncol = 2)
-#' @name setSpillMat
-#' @rdname setSpillMat-xCell2Object-method
+#' @rdname spillMat
 #' @export
 setReplaceMethod("setSpillMat", "xCell2Object", function(object, value) {
   object@spill_mat <- value
   object
 })
 
-#' @title Get Genes Used
-#' @description Retrieve the genes used in training the reference from an \linkS4class{xCell2Object}.
+#' @title Access Genes Used
+#' @description Retrieve or assign the genes used in training the reference for an \linkS4class{xCell2Object}.
 #' @param object An \linkS4class{xCell2Object}.
-#' @return A character vector of genes.
-#' @examples
-#' obj <- new("xCell2Object")
-#' getGenesUsed(obj)
-#' @name getGenesUsed
-#' @rdname getGenesUsed-xCell2Object-method
+#' @param value A character vector of genes (for the setter).
+#' @return For `getGenesUsed`, a character vector of genes. 
+#'         For `setGenesUsed<-`, the updated \linkS4class{xCell2Object}.
+#' @seealso \link{xCell2Object-class}
+#' @aliases getGenesUsed setGenesUsed<-
+#' @rdname genesUsed
 #' @export
 setMethod("getGenesUsed", "xCell2Object", function(object) object@genes_used)
 
-#' @title Set Genes Used
-#' @description Assign the genes used in training the reference to an \linkS4class{xCell2Object}.
-#' @param object An \linkS4class{xCell2Object}.
-#' @param value A character vector of genes.
-#' @return The modified \linkS4class{xCell2Object}.
-#' @examples
-#' obj <- new("xCell2Object")
-#' setGenesUsed(obj) <- c("GeneA", "GeneB", "GeneC")
-#' @name setGenesUsed
-#' @rdname setGenesUsed-xCell2Object-method
+#' @rdname genesUsed
 #' @export
 setReplaceMethod("setGenesUsed", "xCell2Object", function(object, value) {
   object@genes_used <- value

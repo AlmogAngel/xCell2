@@ -23,6 +23,3 @@ spillover correction matrices, and genes used for training.
 \item{\code{genes_used}}{A character vector of genes used for training the xCell2 reference object.}
 }}
 
-\seealso{
-\link[xCell2]{xcell2object-methods}
-}

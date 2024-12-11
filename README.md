@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="xcell2logo.png" width="30%">
+  <img src="man/figures/xcell2logo.png" width="30%">
 </div>
 
 # xCell 2.0: Robust Cell Type Enrichment Analysis

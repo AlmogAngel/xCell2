@@ -1,49 +1,79 @@
-#' @title Get Signatures
-#' @description Retrieve the cell type-specific gene signatures from an \linkS4class{xCell2Object}.
+#' @title Access Cell Type Signatures
+#' @description Retrieve or assign the cell type-specific gene signatures for an \linkS4class{xCell2Object}.
+#' @param object An \linkS4class{xCell2Object}.
+#' @param value A list of cell type-specific gene signatures (for the setter).
+#' @return For `getSignatures`, a list of cell type-specific gene signatures. 
+#'         For `setSignatures<-`, the updated \linkS4class{xCell2Object}.
+#' @seealso \link{xCell2Object-class}
+#' @name signatures
+#' @rdname signatures
 #' @export
 setGeneric("getSignatures", function(object) standardGeneric("getSignatures"))
 
-#' @title Set Signatures
-#' @description Assign cell type-specific gene signatures to an \linkS4class{xCell2Object}.
+#' @rdname signatures
 #' @export
 setGeneric("setSignatures<-", function(object, value) standardGeneric("setSignatures<-"))
 
-#' @title Get Dependencies
-#' @description Retrieve the hierarchical dependencies between cell types from an \linkS4class{xCell2Object}.
+#' @title Access Cell Type Dependencies
+#' @description Retrieve or assign hierarchical dependencies between cell types for an \linkS4class{xCell2Object}.
+#' @param object An \linkS4class{xCell2Object}.
+#' @param value A list of hierarchical dependencies (for the setter).
+#' @return For `getDeps`, a list of hierarchical dependencies. 
+#'         For `setDeps<-`, the updated \linkS4class{xCell2Object}.
+#' @seealso \link{xCell2Object-class}
+#' @name dependencies
+#' @rdname dependencies
 #' @export
 setGeneric("getDeps", function(object) standardGeneric("getDeps"))
 
-#' @title Set Dependencies
-#' @description Assign the hierarchical dependencies between cell types to an \linkS4class{xCell2Object}.
+#' @rdname dependencies
 #' @export
 setGeneric("setDeps<-", function(object, value) standardGeneric("setDeps<-"))
 
-#' @title Get Parameters
-#' @description Retrieve the linear transformation parameters for cell types from an \linkS4class{xCell2Object}.
+#' @title Access Transformation Parameters
+#' @description Retrieve or assign linear transformation parameters for an \linkS4class{xCell2Object}.
+#' @param object An \linkS4class{xCell2Object}.
+#' @param value A data frame of transformation parameters (for the setter).
+#' @return For `getParams`, a data frame of transformation parameters. 
+#'         For `setParams<-`, the updated \linkS4class{xCell2Object}.
+#' @seealso \link{xCell2Object-class}
+#' @name params
+#' @rdname params
 #' @export
 setGeneric("getParams", function(object) standardGeneric("getParams"))
 
-#' @title Set Parameters
-#' @description Assign the linear transformation parameters for cell types to an \linkS4class{xCell2Object}.
+#' @rdname params
 #' @export
 setGeneric("setParams<-", function(object, value) standardGeneric("setParams<-"))
 
-#' @title Get Spillover Matrix
-#' @description Retrieve the spillover correction matrix from an \linkS4class{xCell2Object}.
+#' @title Access Spillover Matrix
+#' @description Retrieve or assign the spillover correction matrix for an \linkS4class{xCell2Object}.
+#' @param object An \linkS4class{xCell2Object}.
+#' @param value A matrix of spillover correction factors (for the setter).
+#' @return For `getSpillMat`, a matrix of spillover correction factors. 
+#'         For `setSpillMat<-`, the updated \linkS4class{xCell2Object}.
+#' @seealso \link{xCell2Object-class}
+#' @name spillMat
+#' @rdname spillMat
 #' @export
 setGeneric("getSpillMat", function(object) standardGeneric("getSpillMat"))
 
-#' @title Set Spillover Matrix
-#' @description Assign the spillover correction matrix to an \linkS4class{xCell2Object}.
+#' @rdname spillMat
 #' @export
 setGeneric("setSpillMat<-", function(object, value) standardGeneric("setSpillMat<-"))
 
-#' @title Get Genes Used
-#' @description Retrieve the genes used in training the reference from an \linkS4class{xCell2Object}.
+#' @title Access Genes Used
+#' @description Retrieve or assign the genes used in training the reference for an \linkS4class{xCell2Object}.
+#' @param object An \linkS4class{xCell2Object}.
+#' @param value A character vector of genes (for the setter).
+#' @return For `getGenesUsed`, a character vector of genes. 
+#'         For `setGenesUsed<-`, the updated \linkS4class{xCell2Object}.
+#' @seealso \link{xCell2Object-class}
+#' @name genesUsed
+#' @rdname genesUsed
 #' @export
 setGeneric("getGenesUsed", function(object) standardGeneric("getGenesUsed"))
 
-#' @title Set Genes Used
-#' @description Assign the genes used in training the reference to an \linkS4class{xCell2Object}.
+#' @rdname genesUsed
 #' @export
 setGeneric("setGenesUsed<-", function(object, value) standardGeneric("setGenesUsed<-"))
