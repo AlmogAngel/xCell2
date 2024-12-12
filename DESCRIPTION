@@ -22,7 +22,7 @@ License: GPL (>= 3)
 Encoding: UTF-8
 LazyData: false
 Depends: 
-    R (>= 4.4.0)
+    R (>= 4.0.0)
 biocViews: GeneExpression, Transcriptomics, Microarray, RNASeq, SingleCell, DifferentialExpression, ImmunoOncology, GeneSetEnrichment
 Imports: 
     SummarizedExperiment,

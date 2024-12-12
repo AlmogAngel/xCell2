@@ -593,7 +593,7 @@ where \( 1 - \text{Tumor Purity} \) represents the fraction of non-tumor cells i
 
 
 **Interpreting Normalized Scores**
-After normalization, the enrichment scores reflect the relative abundance of the cell type within the TME, accounting for the sample’s tumor purity. This adjustment allows for more meaningful comparisons of immune or stromal cell proportions between samples with varying tumor purity levels. For example, in the plot above, normalized scores for CD8+ T cells highlight differences that might otherwise be obscured in raw scores due to variations in tumor purity.
+After normalization, the enrichment scores reflect the relative abundance of the cell type within the TME, accounting for the sample’s tumor purity. This adjustment allows for more meaningful comparisons of immune or stromal cell enrichment between samples with varying tumor purity levels. For example, in the plot above, normalized scores for CD8+ T cells highlight differences that might otherwise be obscured in raw scores due to variations in tumor purity.
 
 ## Comparing Cellular Enrichment Across Conditions
 
