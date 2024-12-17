@@ -26,7 +26,7 @@ xCell2Train(
 \linkS4class{SummarizedExperiment} or \linkS4class{SingleCellExperiment} object containing expression data and sample metadata. 
 The sample metadata should be stored in \code{colData}. For RNA-Seq data, normalization to gene length (e.g., TPM, RPKM) is recommended.}
 
-\item{mix}{A bulk mixture of gene expression data (genes in rows, samples in columns) (optional). 
+\item{mix}{A bulk mixture of gene expression matrix (genes in rows, samples in columns) (optional). 
 This parameter is required if \code{returnAnalysis} is set to \code{TRUE}, as it is used for enrichment analysis.}
 
 \item{labels}{A data frame with the following columns:

@@ -15,7 +15,7 @@ xCell2Analysis(
 )
 }
 \arguments{
-\item{mix}{A bulk mixture of gene expression data (genes in rows, samples in columns). 
+\item{mix}{A bulk mixture of gene expression matrix (genes in rows, samples in columns). 
 The input should use the same gene annotation system as the reference object.}
 
 \item{xcell2object}{A pre-trained reference object of class \code{xCell2Object}, created using the \code{\link{xCell2Train}} function. 

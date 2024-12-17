@@ -517,7 +517,7 @@ If your expression matrix and the reference share a low percentage of common gen
 
 ## Key Parameters of `xCell2Analysis`
 
-- **`mix`**: The bulk mixture of gene expression data to analyze, with genes in rows and samples in columns. The gene nomenclature must match the reference, see [Ensuring Gene Compatibility](#preparing-the-input-data).
+- **`mix`**: The bulk mixture of gene expression matrix to analyze, with genes in rows and samples in columns. The gene nomenclature must match the reference, see [Ensuring Gene Compatibility](#preparing-the-input-data).
 
 - **`xcell2object`**: A pre-trained reference object of class `xCell2Object`, created using the `xCell2Train` function. Pre-trained references are also available for common use cases. See [Using Pre-trained xCell2 References](#using-pre-trained-xcell2-references).
 

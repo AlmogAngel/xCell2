@@ -8,8 +8,9 @@
 #' @importFrom singscore rankGenes simpleScore
 #' @importFrom BiocParallel MulticoreParam SerialParam bplapply
 #' @importFrom pracma lsqlincon
+#' @importFrom progress progress_bar
 #' 
-#' @param mix A bulk mixture of gene expression data (genes in rows, samples in columns). 
+#' @param mix A bulk mixture of gene expression matrix (genes in rows, samples in columns). 
 #'   The input should use the same gene annotation system as the reference object.
 #' @param xcell2object A pre-trained reference object of class \code{xCell2Object}, created using the \code{\link{xCell2Train}} function. 
 #'   Pre-trained references are available within the package for common use cases.
@@ -85,48 +86,19 @@ xCell2Analysis <- function(mix,
                            spillover = TRUE,
                            spilloverAlpha = 0.5,
                            BPPARAM = BiocParallel::SerialParam()) {
+  
+  message("Starting xCell2 Analysis...")
+  
   scoreMix <- function(cellType, mixRanked, signaturesCellType) {
+
     scores <- vapply(signaturesCellType, function(sig) {
       singscore::simpleScore(mixRanked, upSet = sig, centerScore = FALSE)$TotalScore
     }, FUN.VALUE = double(ncol(mixRanked)))
     rownames(scores) <- colnames(mixRanked)
     return(scores)
   }
-  
-
-  # Check reference/mixture genes intersection
-  genesIntersectFrac <- round(length(intersect(rownames(mix), getGenesUsed(xcell2object))) /
-    length(getGenesUsed(xcell2object)), 2)
-  if (genesIntersectFrac < minSharedGenes) {
-    stop(
-      "This xCell2 reference shares ",
-      genesIntersectFrac, " genes with the mixtures and minSharedGenes = ",
-      minSharedGenes, ".",
-      "\n", "Consider training a new xCell2 reference or adjusting minSharedGenes."
-    )
-  }
-
-  if (genesIntersectFrac < 0.85) {
-    warning(
-      "This xCell2 reference shares only ",
-      genesIntersectFrac, " genes with the mixtures.",
-      "\n", "Consider using a reference that share at least 85% of the genes with the mixture for optimal results."
-    )    
-  }
-  
-  # Rank mix gene expression matrix
-  mixRanked <- singscore::rankGenes(mix[getGenesUsed(xcell2object), ])
-  
-  # Score and predict
-  sigsCellTypes <- unique(unlist(lapply(
-    names(getSignatures(xcell2object)),
-    function(x) {
-      strsplit(x, "#")[[1]][1]
-    }
-  )))
-  
-  # Get raw enrichment scores
-  resRaw <- BiocParallel::bplapply(sigsCellTypes, function(cellType) {
+  calcEnrichment <- function(cellType) {
+    
     signaturesCellType <- getSignatures(xcell2object)[startsWith(names(
       getSignatures(xcell2object)
     ), paste0(cellType, "#"))]
@@ -145,7 +117,7 @@ xCell2Analysis <- function(mix,
       rownames(zeros_matrix) <- colnames(mixRanked)
       return(zeros_matrix)
     }
-
+    
     if (any(sigs2remove)) {
       warning(
         "Removing ", sum(sigs2remove), "/", length(signaturesCellType), " signatures of '",
@@ -177,8 +149,59 @@ xCell2Analysis <- function(mix,
     }
     
     return(scores)
-  }, BPPARAM = BPPARAM)
+  }
   
+  # Wrapper function to include progress bar
+  calcEnrichmentWrapper <- function(cellType) {
+    pb$tick()
+    calcEnrichment(cellType)
+  }
+
+  # Check reference/mixture genes intersection
+  genesIntersectFrac <- round(length(intersect(rownames(mix), getGenesUsed(xcell2object))) /
+    length(getGenesUsed(xcell2object)), 2)
+  if (genesIntersectFrac < minSharedGenes) {
+    stop(
+      "This xCell2 reference shares ",
+      genesIntersectFrac, " genes with the mixtures and minSharedGenes = ",
+      minSharedGenes, ".",
+      "\n", "Consider training a new xCell2 reference or adjusting minSharedGenes."
+    )
+  }
+
+  if (genesIntersectFrac < 0.85) {
+    warning(
+      "This xCell2 reference shares only ",
+      genesIntersectFrac, " genes with the mixtures.",
+      "\n", "Consider using a reference that share at least 85% of the genes with the mixture for optimal results."
+    )    
+  }
+  
+
+  # Rank mix gene expression matrix
+  mixRanked <- singscore::rankGenes(mix[getGenesUsed(xcell2object), ])
+  
+  # Score and predict
+  sigsCellTypes <- unique(unlist(lapply(
+    names(getSignatures(xcell2object)),
+    function(x) {
+      strsplit(x, "#")[[1]][1]
+    }
+  )))
+  
+  # Get raw enrichment scores
+  message("Calculating enrichment scores for all cell types...")
+  
+  if (BPPARAM$workers > 1) {
+    resRaw <- BiocParallel::bplapply(sigsCellTypes, calcEnrichment, BPPARAM = BPPARAM)
+  }else{
+    pb <- progress::progress_bar$new(
+      format = "[:bar] :percent (:current/:total) :elapsed",
+      total = length(sigsCellTypes), clear = FALSE, width = 60
+    )
+    resRaw <- BiocParallel::bplapply(sigsCellTypes, calcEnrichmentWrapper, BPPARAM = BPPARAM)
+  }
+
   names(resRaw) <- sigsCellTypes
   
   res <- t(vapply(resRaw, function(cellTypeScores) {
@@ -186,6 +209,7 @@ xCell2Analysis <- function(mix,
   }, FUN.VALUE = double(nrow(resRaw[[1]]))))
   
   if (rawScores) {
+    message("Returning raw enrichment scores without linear transformation or correction.")
     return(res)
   } else {
     # Linear transformation
@@ -209,6 +233,7 @@ xCell2Analysis <- function(mix,
   }
   
   if (spillover) {
+    message("Performing spillover correction...")
     # Spillover correction
     spillMat <- getSpillMat(xcell2object) * spilloverAlpha
     diag(spillMat) <- 1
@@ -224,8 +249,11 @@ xCell2Analysis <- function(mix,
     scoresCorrected[scoresCorrected < 0] <- 0
     rownames(scoresCorrected) <- rows
     
+    message("xCell2 Analysis completed successfully.")
     return(scoresCorrected)
   } else {
+    message("Skipping spillover correction...")
+    message("xCell2 Analysis completed successfully.")
     return(res)
   }
 }

@@ -39,7 +39,8 @@ Imports:
     pracma,
     methods,
     readr,
-    magrittr
+    magrittr,
+    progress
 Suggests:
     knitr,
     rmarkdown,
