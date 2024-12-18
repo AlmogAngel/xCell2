@@ -21,11 +21,18 @@ Curated by Zaitsev A (2022) and trained by Angel A, et al. (2024).
 data(TMECompendium.xCell2Ref, package = "xCell2")
 }
 \description{
-A reference object for use in `xCell2Analysis` or to create a new reference using `xCell2Train`.
+A reference object for use in `xCell2Analysis`.
 }
 \details{
 xCell2 Object Trained from the Tumor Microenvironment Compendium Reference
 
 An xCell2 reference object created from the Tumor Microenvironment Compendium reference.
+
+
+Normalized data used to train this `xCell2` reference object can be found here:
+https://science.bostongene.com/kassandra/downloads
+}
+\references{
+Zaitsev, A., et al. (2022). Precise reconstruction of the TME using bulk RNA-seq and a machine learning algorithm trained on artificial transcriptomes. Cancer Cell, 40(8), 879-894.
 }
 \keyword{datasets}

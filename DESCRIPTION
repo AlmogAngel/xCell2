@@ -1,13 +1,18 @@
 Package: xCell2
 Type: Package
 Title: A Tool for Generic Cell Type Enrichment Analysis
-Version: 0.99.94
+Version: 0.99.97
 Authors@R: 
     c(person(given = "Almog", 
              family = "Angel", 
              role = c("aut", "cre"),
              email = "almog.angel@campus.technion.ac.il",
-             comment = c(ORCID = "0009-0001-3297-6935")))
+             comment = c(ORCID = "0009-0001-3297-6935")),
+             person(given = "Dvir", 
+             family = "Aran", 
+             role = "aut",
+             email = "dviraran@technion.ac.il",
+             comment = c(ORCID = "0000-0001-6334-5039")))
 Description: xCell2 provides methods for cell type enrichment analysis using cell type signatures.
     It includes three main functions - 
     1. xCell2Train for training custom references objects from bulk or single-cell RNA-seq datasets.
@@ -17,10 +22,11 @@ License: GPL (>= 3)
 Encoding: UTF-8
 LazyData: false
 Depends: 
-    R (>= 4.4.0)
+    R (>= 4.0.0)
 biocViews: GeneExpression, Transcriptomics, Microarray, RNASeq, SingleCell, DifferentialExpression, ImmunoOncology, GeneSetEnrichment
 Imports: 
     SummarizedExperiment,
+    SingleCellExperiment,
     Rfast,
     singscore,
     AnnotationHub,
@@ -31,16 +37,17 @@ Imports:
     Matrix,
     minpack.lm,
     pracma,
-    quadprog,
     methods,
     readr,
-    tidyr
+    magrittr,
+    progress
 Suggests:
-    devtools,
-    BiocManager,
     knitr,
     rmarkdown,
-    testthat
+    ggplot2,
+    randomForest,
+    tidyr,
+    EnhancedVolcano
 RoxygenNote: 7.3.2
 VignetteBuilder: knitr
 URL: https://github.com/AlmogAngel/xCell2
