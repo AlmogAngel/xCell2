@@ -110,7 +110,7 @@ test_that("xCell2Train can return analysis results", {
   analysis_result <- xCell2Train(ref = dice_ref, mix = mock_mix, labels = dice_labels, refType = "rnaseq", returnAnalysis = TRUE)
   
   # Check output type
-  expect_s3_class(analysis_result, "matrix")
+  expect_true(inherits(analysis_result, "matrix"))
   
   # Ensure dimensions match the mock mixture
   expect_equal(ncol(analysis_result), ncol(mock_mix))

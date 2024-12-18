@@ -10,7 +10,7 @@ test_that("xCell2Analysis handles valid input correctly", {
   result <- xCell2Analysis(mix = mix_demo, xcell2object = DICE_demo.xCell2Ref, spillover = FALSE)
   
   # Check output type
-  expect_s3_class(result, "matrix")
+  expect_true(inherits(analysis_result, "matrix"))
   
   # Check dimensions of the result
   expect_equal(nrow(result), length(unique(gsub("#.*", "", names(getSignatures(DICE_demo.xCell2Ref))))))
@@ -29,7 +29,7 @@ test_that("xCell2Analysis handles spillover correction", {
   result <- xCell2Analysis(mix = mix_demo, xcell2object = DICE_demo.xCell2Ref, spillover = TRUE)
   
   # Check output type
-  expect_s3_class(result, "matrix")
+  expect_true(inherits(analysis_result, "matrix"))
   
   # Ensure no negative values after spillover correction
   expect_true(all(result >= 0))
@@ -46,7 +46,7 @@ test_that("xCell2Analysis handles insufficient shared genes", {
   # Expect error due to insufficient shared genes
   expect_error(
     xCell2Analysis(mix = reduced_mix, xcell2object = DICE_demo.xCell2Ref),
-    "Insufficient shared genes between reference and bulk mixture"
+    "This xCell2 reference shares 0 genes with the mixtures and minSharedGenes = 0.9.\nConsider training a new xCell2 reference or adjusting minSharedGenes."
   )
 })
 
@@ -59,7 +59,7 @@ test_that("xCell2Analysis handles rawScores parameter", {
   result <- xCell2Analysis(mix = mix_demo, xcell2object = DICE_demo.xCell2Ref, rawScores = TRUE, spillover = FALSE)
   
   # Check output type
-  expect_s3_class(result, "matrix")
+  expect_true(inherits(analysis_result, "matrix"))
   
   # Check dimensions of the result
   expect_equal(nrow(result), length(unique(gsub("#.*", "", names(getSignatures(DICE_demo.xCell2Ref))))))
@@ -77,5 +77,5 @@ test_that("xCell2Analysis respects BPPARAM", {
   result <- xCell2Analysis(mix = mix_demo, xcell2object = DICE_demo.xCell2Ref, BPPARAM = parallel_param, spillover = FALSE)
   
   # Check output type
-  expect_s3_class(result, "matrix")
+  expect_true(inherits(analysis_result, "matrix"))
 })

@@ -1,6 +1,18 @@
 # Function to validate input parameters for xCell2 training
 ValidateInputs <- function(ref, labels, refType) {
   
+  if (!refType %in% c("rnaseq", "array", "sc")) {
+    stop("refType should be 'rnaseq', 'array' or 'sc'.")
+  }
+  
+  if (length(unique(labels$label)) < 3) {
+    stop("Reference must have at least 3 cell types!")
+  }
+  
+  if (!"data.frame" %in% class(labels)) {
+    stop("labels must be a dataframe.")
+  }
+  
   # Check if input is a SummarizedExperiment or SingleCellExperiment
   if (inherits(ref, "SummarizedExperiment") || inherits(ref, "SingleCellExperiment")) {
     se <- ref
@@ -47,17 +59,6 @@ ValidateInputs <- function(ref, labels, refType) {
     stop("labels must have 4 columns: 'ont'', 'label'', 'sample'' and 'dataset'")
   }
   
-  if (length(unique(labels$label)) < 3) {
-    stop("Reference must have at least 3 cell types!")
-  }
-  
-  if (!"data.frame" %in% class(labels)) {
-    stop("labels must be a dataframe.")
-  }
-  
-  if (!refType %in% c("rnaseq", "array", "sc")) {
-    stop("refType should be 'rnaseq', 'array' or 'sc'.")
-  }
   
   if (sum(grepl("_", labels$label)) != 0) {
     message("Changing underscores to dashes in cell-type labels!")
