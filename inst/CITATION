@@ -1,0 +1,15 @@
+citHeader("To cite xCell2 please use:")
+
+bibentry(
+  bibtype = "Article",
+  author = c(
+    person("Almog", "Angel"),
+    person("Dvir", "Aran")
+  ),
+  title = "xCell 2.0: Robust Algorithm for Cell Type Proportion Estimation Predicts Response to Immune Checkpoint Blockade",
+  journal = "bioRxiv",
+  year = "2024",
+  doi = "10.1101/2024.09.06.611424",
+  url = "https://doi.org/10.1101/2024.09.06.611424"
+)
+
