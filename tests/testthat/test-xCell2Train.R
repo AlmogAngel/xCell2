@@ -44,7 +44,7 @@ test_that("xCell2Train works with scRNA-Seq data", {
   dice_labels$dataset <- "DICE"
   
   # Test scRNA-Seq training
-  trained_ref <- xCell2Train(ref = dice_ref, labels = dice_labels, refType = "sc")
+  trained_ref <- xCell2Train(ref = dice_ref, labels = dice_labels, refType = "sc", minScGenes = 800)
   
   # Check output type
   expect_s4_class(trained_ref, "xCell2Object")
