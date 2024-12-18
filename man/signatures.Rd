@@ -34,6 +34,13 @@ Retrieve or assign the cell type-specific gene signatures for an \linkS4class{xC
 
 Retrieve or assign the cell type-specific gene signatures for an \linkS4class{xCell2Object}.
 }
+\examples{
+data(DICE_demo.xCell2Ref, package = "xCell2")
+setSignatures(DICE_demo.xCell2Ref) <- list("T_cells" = c("GeneA", "GeneB"), "B_cells" = c("GeneC"))
+getSignatures(DICE_demo.xCell2Ref)
+data(DICE_demo.xCell2Ref, package = "xCell2")
+setSignatures(DICE_demo.xCell2Ref) <- list("T_cells" = c("GeneA", "GeneB"))
+}
 \seealso{
 \link{xCell2Object-class}
 

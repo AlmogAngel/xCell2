@@ -34,6 +34,17 @@ Retrieve or assign the spillover correction matrix for an \linkS4class{xCell2Obj
 
 Retrieve or assign the spillover correction matrix for an \linkS4class{xCell2Object}.
 }
+\examples{
+data(DICE_demo.xCell2Ref, package = "xCell2")
+spill_mat <- matrix(c(1, 0.1, 0.1, 1), nrow = 2, byrow = TRUE)
+rownames(spill_mat) <- colnames(spill_mat) <- c("T_cells", "B_cells")
+setSpillMat(DICE_demo.xCell2Ref) <- spill_mat
+getSpillMat(DICE_demo.xCell2Ref)
+data(DICE_demo.xCell2Ref, package = "xCell2")
+spill_mat <- matrix(c(1, 0.05, 0.05, 1), nrow = 2, byrow = TRUE)
+rownames(spill_mat) <- colnames(spill_mat) <- c("T_cells", "B_cells")
+setSpillMat(DICE_demo.xCell2Ref) <- spill_mat
+}
 \seealso{
 \link{xCell2Object-class}
 
