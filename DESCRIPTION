@@ -1,7 +1,7 @@
 Package: xCell2
 Type: Package
 Title: A Tool for Generic Cell Type Enrichment Analysis
-Version: 0.01
+Version: 1.00.00
 Authors@R: 
     c(person(given = "Almog", 
              family = "Angel", 
