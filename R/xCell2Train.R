@@ -78,6 +78,11 @@ ScToPseudoBulk <- function(ref, labels, minPbCells, minPbSamples) {
     
     # Calculate maximum possible number of groups given minPbCells
     numGroups <- ceiling(length(cellTypeSamples) / minPbCells)
+    
+    if (length(cellTypeSamples) < minPbSamples) {
+    minPbSamples <- length(cellTypeSamples)
+    }
+    
     if (numGroups < minPbSamples) {
       numGroups <- minPbSamples
     }
@@ -104,7 +109,7 @@ ScToPseudoBulk <- function(ref, labels, minPbCells, minPbSamples) {
       }, FUN.VALUE = double(nrow(ref)))
     } else {
       tmp <- ref[, cellTypeSamples]
-      colnames(tmp) <- as.character(seq_len(tmp))
+      colnames(tmp) <- as.character(seq_along(colnames(tmp)))
       tmp
     }
   })
