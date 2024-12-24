@@ -7,10 +7,23 @@
 #' @seealso \link{xCell2Object-class}
 #' @aliases getSignatures setSignatures<-
 #' @rdname signatures
+<<<<<<< HEAD
+=======
+#' @examples
+#' data(DICE_demo.xCell2Ref, package = "xCell2")
+#' setSignatures(DICE_demo.xCell2Ref) <- list("T_cells" = c("GeneA", "GeneB"), "B_cells" = c("GeneC"))
+#' getSignatures(DICE_demo.xCell2Ref)
+>>>>>>> devel
 #' @export
 setMethod("getSignatures", "xCell2Object", function(object) object@signatures)
 
 #' @rdname signatures
+<<<<<<< HEAD
+=======
+#' @examples
+#' data(DICE_demo.xCell2Ref, package = "xCell2")
+#' setSignatures(DICE_demo.xCell2Ref) <- list("T_cells" = c("GeneA", "GeneB"))
+>>>>>>> devel
 #' @export
 setReplaceMethod("setSignatures", "xCell2Object", function(object, value) {
   object@signatures <- value
@@ -26,10 +39,23 @@ setReplaceMethod("setSignatures", "xCell2Object", function(object, value) {
 #' @seealso \link{xCell2Object-class}
 #' @aliases getDeps setDeps<-
 #' @rdname dependencies
+<<<<<<< HEAD
+=======
+#' @examples
+#' data(DICE_demo.xCell2Ref, package = "xCell2")
+#' setDeps(DICE_demo.xCell2Ref) <- list("Parent" = "ChildType1")
+#' getDeps(DICE_demo.xCell2Ref)
+>>>>>>> devel
 #' @export
 setMethod("getDeps", "xCell2Object", function(object) object@dependencies)
 
 #' @rdname dependencies
+<<<<<<< HEAD
+=======
+#' @examples
+#' data(DICE_demo.xCell2Ref, package = "xCell2")
+#' setDeps(DICE_demo.xCell2Ref) <- list("ParentType" = "ChildType1")
+>>>>>>> devel
 #' @export
 setReplaceMethod("setDeps", "xCell2Object", function(object, value) {
   object@dependencies <- value
@@ -45,10 +71,23 @@ setReplaceMethod("setDeps", "xCell2Object", function(object, value) {
 #' @seealso \link{xCell2Object-class}
 #' @aliases getParams setParams<-
 #' @rdname params
+<<<<<<< HEAD
+=======
+#' @examples
+#' data(DICE_demo.xCell2Ref, package = "xCell2")
+#' setParams(DICE_demo.xCell2Ref) <- data.frame(celltype = "T_cells", a = 0.5, b = 2, m = 1.5)
+#' getParams(DICE_demo.xCell2Ref)
+>>>>>>> devel
 #' @export
 setMethod("getParams", "xCell2Object", function(object) object@params)
 
 #' @rdname params
+<<<<<<< HEAD
+=======
+#' @examples
+#' data(DICE_demo.xCell2Ref, package = "xCell2")
+#' setParams(DICE_demo.xCell2Ref) <- data.frame(celltype = "B_cells", a = 0.6, b = 1.8, m = 2.1)
+>>>>>>> devel
 #' @export
 setReplaceMethod("setParams", "xCell2Object", function(object, value) {
   object@params <- value
@@ -64,10 +103,27 @@ setReplaceMethod("setParams", "xCell2Object", function(object, value) {
 #' @seealso \link{xCell2Object-class}
 #' @aliases getSpillMat setSpillMat<-
 #' @rdname spillMat
+<<<<<<< HEAD
+=======
+#' @examples
+#' data(DICE_demo.xCell2Ref, package = "xCell2")
+#' spill_mat <- matrix(c(1, 0.1, 0.1, 1), nrow = 2, byrow = TRUE)
+#' rownames(spill_mat) <- colnames(spill_mat) <- c("T_cells", "B_cells")
+#' setSpillMat(DICE_demo.xCell2Ref) <- spill_mat
+#' getSpillMat(DICE_demo.xCell2Ref)
+>>>>>>> devel
 #' @export
 setMethod("getSpillMat", "xCell2Object", function(object) object@spill_mat)
 
 #' @rdname spillMat
+<<<<<<< HEAD
+=======
+#' @examples
+#' data(DICE_demo.xCell2Ref, package = "xCell2")
+#' spill_mat <- matrix(c(1, 0.05, 0.05, 1), nrow = 2, byrow = TRUE)
+#' rownames(spill_mat) <- colnames(spill_mat) <- c("T_cells", "B_cells")
+#' setSpillMat(DICE_demo.xCell2Ref) <- spill_mat
+>>>>>>> devel
 #' @export
 setReplaceMethod("setSpillMat", "xCell2Object", function(object, value) {
   object@spill_mat <- value
@@ -83,10 +139,23 @@ setReplaceMethod("setSpillMat", "xCell2Object", function(object, value) {
 #' @seealso \link{xCell2Object-class}
 #' @aliases getGenesUsed setGenesUsed<-
 #' @rdname genesUsed
+<<<<<<< HEAD
+=======
+#' @examples
+#' data(DICE_demo.xCell2Ref, package = "xCell2")
+#' setGenesUsed(DICE_demo.xCell2Ref) <- c("GeneA", "GeneB", "GeneC")
+#' getGenesUsed(DICE_demo.xCell2Ref)
+>>>>>>> devel
 #' @export
 setMethod("getGenesUsed", "xCell2Object", function(object) object@genes_used)
 
 #' @rdname genesUsed
+<<<<<<< HEAD
+=======
+#' @examples
+#' data(DICE_demo.xCell2Ref, package = "xCell2")
+#' setGenesUsed(DICE_demo.xCell2Ref) <- c("GeneA", "GeneB", "GeneC")
+>>>>>>> devel
 #' @export
 setReplaceMethod("setGenesUsed", "xCell2Object", function(object, value) {
   object@genes_used <- value

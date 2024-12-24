@@ -5,13 +5,13 @@
 \alias{BlueprintEncode.xCell2Ref}
 \title{Blueprint and ENCODE Projects Reference}
 \format{
-An `xCell2Object` (S4) containing:
+An \code{xCell2Object} containing:
 \describe{
-  \item{\code{params}}{A tibble of parameters for linear transformation.}
-  \item{\code{signatures}}{A list containing cell-type signatures.}
-  \item{\code{dependencies}}{A list specifying cell type dependencies.}
-  \item{\code{spill_mat}}{A matrix representing spillover correction factors.}
-  \item{\code{genes_used}}{A character vector of genes used to generate the reference.}
+  \item{\code{params}}{Linear transformation parameters.}
+  \item{\code{signatures}}{Gene signatures for cell types.}
+  \item{\code{dependencies}}{Cell lineage dependencies.}
+  \item{\code{spill_mat}}{Spillover correction matrix.}
+  \item{\code{genes_used}}{Genes included in the reference.}
 }
 }
 \source{
@@ -21,11 +21,14 @@ Martens JHA and Stunnenberg HG (2013); The ENCODE Project Consortium (2012), cur
 data(BlueprintEncode.xCell2Ref, package = "xCell2")
 }
 \description{
-A reference object for use in `xCell2Analysis` or to create a new reference using `xCell2Train`.
+Pre-trained xCell2 reference for use in \code{xCell2Analysis} or extending via \code{xCell2Train}.
 }
 \details{
-xCell2 Object Trained from the Blueprint and ENCODE Projects Reference
+Blueprint and ENCODE Projects Reference (human)
 
-An xCell2 reference object created from the Blueprint and ENCODE projects reference.
+A pre-trained xCell2 reference object based on the Blueprint and ENCODE projects datasets.
+}
+\seealso{
+\code{\link{xCell2Analysis}} and \code{\link{xCell2Train}}.
 }
 \keyword{datasets}

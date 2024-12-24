@@ -34,6 +34,16 @@ Retrieve or assign hierarchical dependencies between cell types for an \linkS4cl
 
 Retrieve or assign the hierarchical dependencies between cell types for an \linkS4class{xCell2Object}.
 }
+<<<<<<< HEAD
+=======
+\examples{
+data(DICE_demo.xCell2Ref, package = "xCell2")
+setDeps(DICE_demo.xCell2Ref) <- list("Parent" = "ChildType1")
+getDeps(DICE_demo.xCell2Ref)
+data(DICE_demo.xCell2Ref, package = "xCell2")
+setDeps(DICE_demo.xCell2Ref) <- list("ParentType" = "ChildType1")
+}
+>>>>>>> devel
 \seealso{
 \link{xCell2Object-class}
 

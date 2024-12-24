@@ -1,6 +1,65 @@
 # Function to validate input parameters for xCell2 training
 ValidateInputs <- function(ref, labels, refType) {
   
+<<<<<<< HEAD
+  # Check if input is a SummarizedExperiment or SingleCellExperiment
+  if (inherits(ref, "SummarizedExperiment") || inherits(ref, "SingleCellExperiment")) {
+    se <- ref
+    
+    if (refType != "array") {
+      # Attempt to access TPM data first, followed by other assay types
+      if ("tpm" %in% assayNames(se)) {
+        ref <- assay(se, "tpm")
+      } else if ("logcounts" %in% assayNames(se)) {
+        warning("TPM data not found. Using log-transformed counts instead.")
+        ref <- assay(se, "logcounts")
+      } else if ("normcounts" %in% assayNames(se)) {
+        warning("TPM data not found. Using normalized counts instead.")
+        ref <- assay(se, "normcounts")
+      } else if ("counts" %in% assayNames(se)) {
+        warning("TPM data not found. Using raw counts instead.")
+        ref <- assay(se, "counts")
+      } else {
+        stop("No valid assay (tmp, logcounts, normcounts, counts) found in the SummarizedExperiment/SingleCellExperiment reference.")
+      }
+    } else {
+      # Use counts for microarray data
+      if ("counts" %in% assayNames(se)) {
+        ref <- assay(se, "counts")
+      } else {
+        stop("No counts data found in the SummarizedExperiment object for microarray reference")
+      }
+    }
+    
+    labels <- as.data.frame(colData(se))
+  } else {
+    # Handle non-SummarizedExperiment/SingleCellExperiment input
+    if (!any(class(ref) %in% c("matrix", "dgCMatrix", "Matrix"))) {
+      stop("ref must be one of these classes: matrix, dgCMatrix, Matrix or SummarizedExperiment/SingleCellExperiment object")
+    }
+    if (is.null(labels)) {
+      stop("labels must be a data frame with 4 columns: 'ont', 'label', 'sample', and 'dataset'")
+    }
+  }
+  
+  if (all(colnames(labels) %in% c("ont", "label", "sample", "dataset"))) {
+    labels <- labels[, c("ont", "label", "sample", "dataset")]
+  } else {
+    stop("labels must have 4 columns: 'ont'', 'label'', 'sample'' and 'dataset'")
+=======
+  if (!refType %in% c("rnaseq", "array", "sc")) {
+    stop("refType should be 'rnaseq', 'array' or 'sc'.")
+>>>>>>> devel
+  }
+  
+  if (length(unique(labels$label)) < 3) {
+    stop("Reference must have at least 3 cell types!")
+  }
+  
+  if (!"data.frame" %in% class(labels)) {
+    stop("labels must be a dataframe.")
+  }
+  
   # Check if input is a SummarizedExperiment or SingleCellExperiment
   if (inherits(ref, "SummarizedExperiment") || inherits(ref, "SingleCellExperiment")) {
     se <- ref
@@ -47,17 +106,6 @@ ValidateInputs <- function(ref, labels, refType) {
     stop("labels must have 4 columns: 'ont'', 'label'', 'sample'' and 'dataset'")
   }
   
-  if (length(unique(labels$label)) < 3) {
-    stop("Reference must have at least 3 cell types!")
-  }
-  
-  if (!"data.frame" %in% class(labels)) {
-    stop("labels must be a dataframe.")
-  }
-  
-  if (!refType %in% c("rnaseq", "array", "sc")) {
-    stop("refType should be 'rnaseq', 'array' or 'sc'.")
-  }
   
   if (sum(grepl("_", labels$label)) != 0) {
     message("Changing underscores to dashes in cell-type labels!")
@@ -77,6 +125,11 @@ ScToPseudoBulk <- function(ref, labels, minPbCells, minPbSamples) {
     
     # Calculate maximum possible number of groups given minPbCells
     numGroups <- ceiling(length(cellTypeSamples) / minPbCells)
+    
+    if (length(cellTypeSamples) < minPbSamples) {
+    minPbSamples <- length(cellTypeSamples)
+    }
+    
     if (numGroups < minPbSamples) {
       numGroups <- minPbSamples
     }
@@ -103,7 +156,7 @@ ScToPseudoBulk <- function(ref, labels, minPbCells, minPbSamples) {
       }, FUN.VALUE = double(nrow(ref)))
     } else {
       tmp <- ref[, cellTypeSamples]
-      colnames(tmp) <- as.character(seq_len(tmp))
+      colnames(tmp) <- as.character(seq_along(colnames(tmp)))
       tmp
     }
   })
@@ -611,8 +664,12 @@ LearnParams <- function(gepMat, corMat, signatures, depList, BPPARAM) {
 #' Train Custom xCell2 Reference Object
 #'
 #' This function creates a custom reference object for \code{\link{xCell2Analysis}}, enabling cell type enrichment analysis.
+<<<<<<< HEAD
 #' It supports references derived from RNA-Seq, microarray, and scRNA-Seq data and which can be derived from various tissues and organisms. 
 #' Users can incorporate cell type lineage relationships to refine signatures or use spillover correction for improved specificity.
+=======
+#' It supports references derived from RNA-Seq, microarray, and scRNA-Seq data and can be derived from various tissues and organisms. 
+>>>>>>> devel
 #'
 #' @importFrom magrittr %>%
 #' @importFrom dplyr bind_cols select right_join mutate_all pull bind_rows
@@ -628,11 +685,35 @@ LearnParams <- function(gepMat, corMat, signatures, depList, BPPARAM) {
 #' @importFrom singscore rankGenes simpleScore
 #' @importFrom stats coef cor lm quantile var
 #' @importFrom methods new
+<<<<<<< HEAD
 #' @param ref A reference gene expression matrix (genes in rows, samples/cells in columns). Alternatively, a 
 #'   \linkS4class{SummarizedExperiment} or \linkS4class{SingleCellExperiment} object containing expression data and sample metadata. 
 #'   The sample metadata should be stored in \code{colData}. For RNA-Seq data, normalization to gene length (e.g., TPM, RPKM) is recommended.
 #' @param mix A bulk mixture of gene expression matrix (genes in rows, samples in columns) (optional). 
 #' This parameter is required if \code{returnAnalysis} is set to \code{TRUE}, as it is used for enrichment analysis.
+=======
+#'
+#' @param ref A reference gene expression matrix (genes in rows, samples/cells in columns) or a 
+#'   \linkS4class{SummarizedExperiment}/\linkS4class{SingleCellExperiment} object with expression data in the assays slot.  
+#'   
+#'   \strong{Valid Assays:}
+#'   \describe{
+#'     \item{\code{"tpm"}}{Transcripts Per Million (recommended for RNA-Seq).}
+#'     \item{\code{"logcounts"}}{Log-transformed normalized counts.}
+#'     \item{\code{"normcounts"}}{Normalized counts.}
+#'     \item{\code{"counts"}}{Raw counts (required for microarray references).}
+#'   }
+#'   
+#'   \strong{Notes:}
+#'   \itemize{
+#'     \item If multiple assays exist, \code{"tpm"} is prioritized.
+#'     \item For microarray data, the \code{"counts"} assay must be used.
+#'   }
+#'
+#' @param mix A bulk mixture of gene expression matrix (genes in rows, samples in columns) (optional). 
+#'   This parameter is required if \code{returnAnalysis} is set to \code{TRUE}, as it is used for enrichment analysis.
+#'
+>>>>>>> devel
 #' @param labels A data frame with the following columns:
 #'   \itemize{
 #'     \item \code{"ont"}: The cell type ontology ID (e.g., \code{"CL:0000545"}). Set to \code{NA} if not available. 
@@ -642,6 +723,7 @@ LearnParams <- function(gepMat, corMat, signatures, depList, BPPARAM) {
 #'     \item \code{"sample"}: The sample or cell identifier, matching column names in the reference matrix.
 #'     \item \code{"dataset"}: The dataset source for each sample. If not applicable, use a constant value for all samples.
 #'   }
+<<<<<<< HEAD
 #' This parameter is unnecessary if \code{ref} is a SummarizedExperiment or SingleCellExperiment object, as metadata should be in \code{colData}.
 #' @param refType The type of reference data: \code{"rnaseq"} for RNA-Seq, \code{"array"} for microarray, or \code{"sc"} for scRNA-Seq.
 #' @param minPbCells Minimum number of cells in a pseudo-bulk sample for scRNA-Seq references (default: \code{30}).
@@ -663,6 +745,34 @@ LearnParams <- function(gepMat, corMat, signatures, depList, BPPARAM) {
 #'   Lower values apply weaker correction, while higher values apply stronger correction. 
 #'   An alpha value of 0.5 is suitable for most cases, but users may tune this parameter based on the similarity 
 #'   of cell types in their reference.
+=======
+#'   This parameter is unnecessary if \code{ref} is a SummarizedExperiment or SingleCellExperiment object, as metadata should be in \code{colData}.
+#'
+#' @param refType The type of reference data: \code{"rnaseq"} for RNA-Seq, \code{"array"} for microarray, or \code{"sc"} for scRNA-Seq.
+#'
+#' @param minPbCells Minimum number of cells in a pseudo-bulk sample for scRNA-Seq references (default: \code{30}).
+#' @param minPbSamples Minimum number of pseudo-bulk samples for scRNA-Seq references (default: \code{10}).
+#' @param minScGenes Minimum number of genes for pseudo-bulk samples for scRNA-Seq references (default: \code{1e4}).
+#'
+#' @param useOntology A Boolean indicating whether to use ontological integration for cell type dependencies (default: \code{TRUE}). 
+#'   Lineage relationships are determined using the Cell Ontology (CL). Users can refine these dependencies with 
+#'   \code{\link{xCell2GetLineage}} and provide them via the \code{lineageFile} parameter.
+#'
+#' @param lineageFile Path to a manually curated cell type lineage file generated with \code{\link{xCell2GetLineage}} (optional).
+#'
+#' @param BPPARAM A \linkS4class{BiocParallelParam} instance that determines the parallelization strategy (more in "Details"). 
+#'   Default is \code{BiocParallel::SerialParam()}.
+#'
+#' @param returnSignatures A Boolean to return only cell type signatures (default: \code{FALSE}).
+#' @param returnAnalysis A Boolean to return \code{\link{xCell2Analysis}} results instead of a reference object (default: \code{FALSE}).
+#'
+#' @param useSpillover A Boolean to use spillover correction during analysis when \code{returnAnalysis} is \code{TRUE} (default: \code{TRUE}).
+#'   Spillover correction enhances the specificity of enrichment scores by accounting for overlaps between cell types.
+#'
+#' @param spilloverAlpha Numeric value controlling spillover correction strength (default: \code{0.5}).
+#'   Lower values apply weaker correction, while higher values apply stronger correction.
+#'
+>>>>>>> devel
 #' @return An \code{xCell2Object} containing:
 #'   \itemize{
 #'     \item \strong{signatures}: Cell type-specific gene signatures.
@@ -671,6 +781,7 @@ LearnParams <- function(gepMat, corMat, signatures, depList, BPPARAM) {
 #'     \item \strong{spill_mat}: A spillover correction matrix.
 #'     \item \strong{genes_used}: Genes used for training.
 #'   }
+<<<<<<< HEAD
 #' @details
 #' The \code{xCell2Train} function identifies cell type-specific gene signatures from the input reference data. It supports 
 #' RNA-Seq, microarray, and scRNA-Seq datasets, working for diverse tissues and organisms. The resulting reference object is compatible 
@@ -740,6 +851,35 @@ LearnParams <- function(gepMat, corMat, signatures, depList, BPPARAM) {
 #' @seealso 
 #' \code{\link{xCell2Analysis}}, which uses the trained reference object for enrichment analysis. \cr
 #' \code{\link{xCell2GetLineage}}, for refining cell type dependencies. 
+=======
+#'
+#' @details
+#' \strong{Ontological Integration:}
+#' Ontological integration (\code{useOntology}) leverages hierarchical cell type relationships to ensure biologically meaningful signatures. 
+#' Dependencies can be refined using \code{\link{xCell2GetLineage}}, which generates lineage files for manual review.
+#'
+#' \strong{Spillover Correction:}
+#' Spillover correction enhances the specificity of enrichment scores by reducing overlaps between related cell types. 
+#' Use the \code{spilloverAlpha} parameter to tune the strength of correction.
+#'
+#' \strong{Contribute Your xCell2 Reference Object:}
+#' Users are encouraged to share their reference objects via the \href{https://dviraran.github.io/xCell2ref}{xCell2 Reference Repository}.
+#'
+#' @examples
+#' library(xCell2)
+#' data(dice_demo_ref, package = "xCell2")
+#' dice_ref <- SummarizedExperiment::assay(dice_demo_ref, "logcounts")
+#' colnames(dice_ref) <- make.unique(colnames(dice_ref))
+#' dice_labels <- as.data.frame(SummarizedExperiment::colData(dice_demo_ref))
+#' dice_labels$ont <- NA
+#' dice_labels$sample <- colnames(dice_ref)
+#' dice_labels$dataset <- "DICE"
+#' DICE.xCell2Ref <- xCell2::xCell2Train(ref = dice_ref, labels = dice_labels, refType = "rnaseq")
+#'
+#' @seealso 
+#' \code{\link{xCell2Analysis}}, for enrichment analysis. 
+#' \code{\link{xCell2GetLineage}}, for refining cell type dependencies.
+>>>>>>> devel
 #' @author Almog Angel and Dvir Aran
 #' @export
 xCell2Train <- function(ref,

@@ -34,6 +34,16 @@ Retrieve or assign linear transformation parameters for an \linkS4class{xCell2Ob
 
 Retrieve or assign linear transformation parameters for cell types for an \linkS4class{xCell2Object}.
 }
+<<<<<<< HEAD
+=======
+\examples{
+data(DICE_demo.xCell2Ref, package = "xCell2")
+setParams(DICE_demo.xCell2Ref) <- data.frame(celltype = "T_cells", a = 0.5, b = 2, m = 1.5)
+getParams(DICE_demo.xCell2Ref)
+data(DICE_demo.xCell2Ref, package = "xCell2")
+setParams(DICE_demo.xCell2Ref) <- data.frame(celltype = "B_cells", a = 0.6, b = 1.8, m = 2.1)
+}
+>>>>>>> devel
 \seealso{
 \link{xCell2Object-class}
 
