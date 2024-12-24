@@ -1,0 +1,126 @@
+xCell2_labels	all_labels	ont
+stem cell	Stem cells	CL:0000034
+innate lymphoid cells	ILC	CL:0001065
+stromal cell	Stromal cells	CL:0000499
+Regulatory NK cells	Regulatory NK cells;Regulatory_NK_cells	NA
+Transitional memory T-helpers	Transitional_memory_T_helpers;Transitional memory T-helpers	NA
+preadipocyte	Preadipocytes	CL:0002334
+neuron	Neurons	CL:0000540
+unswitched memory B cell	Non-switched memory B-cells;B NSM;Non_switched_memory_B_cells	CL:0000970
+class switched memory B cell	Class-switched memory B-cells;B SM;Class_switched_memory_B_cells	CL:0000972
+exhausted B cell	Exhausted B-cells;B Ex	NA
+memory B cell	Memory B-cells;B Memory;B cells memory;Memory_B_cells;B.Memory	CL:0000787
+CD27neg memory B-cells	CD27neg memory B-cells;CD27neg_Memory_B_cells	NA
+naive B cell	naive B-cells;B Naive;Naive_B_cells;B cells naive;B cells na•ve;B cells, naive;B.Naive	CL:0000788
+plasma cell	Plasma cells;Plasma_B_cells;Plasma-B-cells;Plasma cell	CL:0000786
+Non plasma B-cells	Non plasma B-cells;Non_plasma_B_cells;Non-plasma-B-cells	NA
+Non plasmablasts	Non plasmablasts;Non_plasmablasts	NA
+plasmablast	Plasmablasts;Plasmablast	CL:0000980
+pro-B cell	pro B-cells;B cells, pro	CL:0000826
+"CD4-positive, alpha-beta memory T cell"	CD4+ memory T-cells;T CD4 Memory;T.CD4.Memory	CL:0000897
+"naive thymus-derived CD4-positive, alpha-beta T cell"	CD4+ naive T-cells;T CD4 Naive;T cells CD4 naive;T cells CD4 na•ve;Naive CD4+ T cells;Naive_CD4_T_cells;T.CD4.Naive	CL:0000895
+"central memory CD4-positive, alpha-beta T cell"	CD4+ Tcm	CL:0000904
+"effector memory CD4-positive, alpha-beta T cell"	CD4+ Tem;Effector/Memory CD4+ T cells	CL:0000905
+CD4+ Tte	CD4+ Tte;T CD4 TE	NA
+gamma-delta T cell	Tgd cells;T gd;gd_T_Cells;gd_T_cells;gd-T-Cells;T cells gamma delta;Gammadelta_Tcells;Tgd	CL:0000798
+T gd Vd2	T gd Vd2	NA
+T gd non-Vd2	T gd non-Vd2	NA
+Naive T-helpers	Naive T-helpers;Naive_T_helpers	NA
+T-helper 1 cell	Th1 cells;Th1;Th1_cells;Th1-cells	CL:0000545
+T-helper 2 cell	Th2 cells;Th2;Th2_cells;Th2-cells	CL:0000546
+T-helper 17 cell	Th17 cells;Th17_cells;Th17-cells;Th17	CL:0000899
+memory T cell	T Memory;T.Memory	CL:0000813
+Memory T-helpers	Memory T-helpers;Memory_T_helpers	NA
+Central memory T-helpers	Central memory T-helpers;Central_memory_T_helpers	NA
+Effector memory T-helpers	Effector memory T-helpers;Effector_memory_T_helpers	NA
+regulatory T cell	Tregs;T cells regulatory (Tregs);T regulatory cells	CL:0000815
+"CD8-positive, alpha-beta memory T cell"	CD8+ memory T-cells;Memory_CD8_T_cells;T CD8 Memory;T.CD8.Memory	CL:0000909
+"central memory CD8-positive, alpha-beta T cell"	CD8+ Tcm;Central_memory_CD8_T_cells;T CD8 CM	CL:0000907
+"effector memory CD8-positive, alpha-beta T cell"	CD8+ Tem;Effector_memory_CD8_T_cells;T CD8 EM;Effector/Memory CD8+ T cells	CL:0000913
+CD8+ Tte	CD8+ Tte;T CD8 TE	NA
+CD8+ Ttm	CD8+ Ttm;Transitional_memory_CD8_T_cells	NA
+aDC	aDC	NA
+conventional dendritic cell	cDC;CDC	CL:0000990
+iDC	iDC	NA
+"plasmacytoid dendritic cell, human"	pDC;PDC;pDCs;Plasmacytoid_dendritic_cells	CL:0001058
+ly Endothelial cells	ly Endothelial cells	NA
+microvascular endothelial cell	mv Endothelial cells	NA
+keratinocyte	Keratinocytes	NA
+mesangial cell	Mesangial cells	CL:0000650
+sebum secreting cell	Sebocytes	CL:0000317
+pericyte	Pericytes	CL:0000669
+common lymphoid progenitor	CLP	CL:0000051
+common myeloid progenitor	CMP	CL:0000049
+erythrocyte	Erythrocytes	CL:0000232
+granulocyte monocyte progenitor cell	GMP	CL:0000557
+megakaryocyte	Megakaryocytes	CL:0000556
+megakaryocyte-erythroid progenitor cell	MEP	CL:0000050
+inflammatory macrophage	Macrophages M1;Macrophages-M1;Macrophages_M1	CL:0000863
+alternatively activated macrophage	Macrophages M2;Macrophages-M2;Macrophages_M2	CL:0000890
+hematopoietic stem cell	HSC	CL:0000037
+hematopoietic multipotent progenitor cell	MPP	CL:0000837
+platelet	"Platelets;Platelets, (10e9/l)"	CL:0000233
+B cell	B-cells;B_cells;B cell;Bcells;B cells	CL:0000236
+"CD4-positive, alpha-beta T cell"	CD4 Tcell;CD4+ T-cells;CD4_T_cells;CD4-T-cells;T cell CD4+;CD4+ T cell;CD4_Tcells;T CD4;T.CD4;CD4 T cell;CD4 T cells;CD4 Tcell;CD4 T cell	CL:0000624
+"naive thymus-derived CD8-positive, alpha-beta T cell"	CD8+ naive T-cells;Naive_CD8_T_cells;T CD8 Na•ve;Naive CD8+ T cells;T CD8 Naive;T.CD8.Naive	CL:0000900
+"CD8-positive, alpha-beta T cell"	CD8+ T-cells;CD8_T_cells;CD8-T-cells;T cell CD8+;T cells CD8;CD8+ T cell;CD8_Tcells;T CD8;T.CD8;CD8 T cell;CD8 T cells;CD8 Tcell	CL:0000625
+CD8+ T-cells PD1 high	CD8+ T-cells PD1 high;CD8_T_cells_PD1_high;CD8-T-cells-PD1-high	NA
+CD8+ T-cells PD1 low	CD8+ T-cells PD1 low;CD8_T_cells_PD1_low;CD8-T-cells-PD1-low	NA
+natural killer cell	NK cells;NK_cells;NK-cells;NK cell;NKcells;Natural killer cell;NK	CL:0000623
+CD57neg Cytotoxic NK cells	CD57neg Cytotoxic NK cells;CD57neg_Cytotoxic_NK_cells	NA
+CD57pos Cytotoxic NK cells	CD57pos Cytotoxic NK cells;CD57pos_Cytotoxic_NK_cells	NA
+mature NK T cell	NKT	CL:0002040
+fat cell	Adipocytes	CL:0000136
+astrocyte	Astrocytes	CL:0000127
+chondrocyte	Chondrocytes	CL:0000138
+endothelial cell	Endothelial cells;Endothelium;Endothelial cell;Endothelial Cells;Endothelial	CL:0000115
+epithelial cell	Epithelial cells;Epithelial cells;Epithelial Cell	CL:0000066
+fibroblast	Fibroblasts;Fibroblast	CL:0000057
+hepatocyte	Hepatocytes	CL:0000182
+melanocyte	Melanocytes	CL:0000148
+mesenchymal stem cell	MSC	CL:0000134
+cell of skeletal muscle	Skeletal muscle	CL:0000188
+smooth muscle cell	Smooth muscle;Smooth Muscle Cells	CL:0000192
+basophil	"Basophils;Basophils;Basophils LD"	CL:0000767
+dendritic cell	DC;DCs;Dendritic_cells;Dendritic Cell;Dendritic cell	CL:0000451
+eosinophil	"Eosinophils;Eosinophils;Eosinophil"	CL:0000771
+macrophage	Macrophages;Macrophages M0;Macrophage	CL:0000235
+mast cell	Mast cells;Mast_cells;Mast cell	CL:0000097
+monocyte	"Monocytes;Monocytes;Monocyte"	CL:0000576
+neutrophil	"Neutrophils;Neutrophils;Neutrophil"	CL:0000775
+muscle cell	Myocytes;Muscle_cells	CL:0000187
+intermediate monocyte	Monocytes I	CL:0002393
+non-classical monocyte	Monocytes NC;Non_classical_monocytes;Monocytes, CD16+;CD16+ monocytes	CL:0000875
+osteoblast	Osteoblast	CL:0000062
+professional antigen presenting cell	APC	CL:0000145
+Alveolar cells	Alveolar_cells	NA
+classical monocyte	Classical monocytes;Classical_monocytes;Monocytes C;CD16- monocytes	CL:0000860
+Cytotoxic NK cells	Cytotoxic NK cells;Cytotoxic_NK_cells	NA
+T follicular helper cell	Follicular T-helper;Follicular_T_helper;Follicular_T_helpers;Tfh;Follicular-T-helper;T cells follicular helper	CL:0002038
+GSM	GSM	NA
+granulocyte	Granulocytes;Granulocytes LD;Granulocyte	CL:0000094
+lymphocyte	"Lymphocytes;Lymphoid_cells;Lymphoid"	CL:0000542
+mucosal invariant T cell	MAIT;MAIT cells	CL:0000940
+myeloid suppressor cell	MDSC	CL:0000889
+myeloid cell	Myeloid;Myeloid_cells;Myeloid-cells	CL:0000763
+Myeloid Phagocytes	Myeloid Phagocytes	NA
+myofibroblast cell	Myofibroblasts	CL:0000186
+oligodendrocyte	Oligodendrocytes;Oligodendrocytes	CL:0000128
+phagocyte	Phagocytes	CL:0000234
+naive T cell	T Naive;T.Naive	CL:0000898
+"effector memory CD8-positive, alpha-beta T cell, terminally differentiated"	CD8+ TEMRA;TEMRA_CD8_T_cells	CL:0001062
+T-helpers TEMRA	T-helpers TEMRA;TEMRA_T_helpers	NA
+T cell	T-cells;T_cells;T cells;T.cells	CL:0000084
+helper T cell	T-helpers;T_helpers;Th	CL:0000912
+malignant cell	Tumor KI67+;Cancer cells;hct116;Tumor;tumor;cancer-cells;cancer_cells;Kidney Cancer Cell;Endometrial Cancer Cell;Bladder Cancer Cell;Pancreatic Cancer Cell;Esophageal Cancer Cell;Breast Cancer Cell;Lung Cancer Cell;Digestive Tract Cancer Cell;Prostate Cancer Cell;Brain Cancer;Neuroblastoma;Bone Cancer Cell;Soft Tissue Cancer Cell;Skin Cancer Cell;Sarcoma;Gastric Cancer Cell;Ovarian Cancer Cell;Colon/Colorectal Cancer Cell;Liver Cancer Cell;Bile Duct Cancer Cell;Brain Cancer Cell	CL:0001064
+Exhausted CD8+ T cells	Exhausted CD8+ T cells	NA
+blood cell	Blood_Cell;Blood Cell	CL:0000081
+stromal cell	Stromal Cell	CL:0000499
+Cancer Associated Fibroblasts	Cancer Associated Fibroblasts;CAFs	NA
+biliary cell	Billiary Cell	NA
+Terminally differentiated effector CD4+ T cells	Terminally differentiated effector CD4+ T cells	NA
+glial cell	Glial Cells	CL:0000125
+myeloid dendritic cell	mDCs	CL:0000782
+effector CD4-positive, alpha-beta T cell	effector CD4+ T cells	CL:0001044
+effector CD8-positive, alpha-beta T cell	effector CD8+ T cells	CL:0001050
+mature NK T cell	NKT	CL:0000814

@@ -5,21 +5,25 @@
 \alias{dice_demo_ref}
 \title{Subset of the DICE Reference}
 \format{
-A `SummarizedExperiment` object.
+A \linkS4class{SummarizedExperiment} object.
 }
 \source{
-Schmiedel B et al. (2018)
+Schmiedel B et al. (2018).
 }
 \usage{
 data(dice_demo_ref, package = "xCell2")
 }
 \description{
-A demo reference object derived from the DICE reference for use in the xCell 2.0 vignette.
+Demo reference object derived from the DICE dataset for training xCell2 references.
 }
 \details{
-A Subset of the DICE Reference
+Subset of the DICE Reference
 
-A subset `SummarizedExperiment` object of the DICE reference for the xCell 2.0 vignette.
-This is a demo reference object to learn how to use the `xCell2Train` function.
+A subset of the DICE reference stored as a `SummarizedExperiment` object for the xCell 2.0 vignette.
+This demo reference object demonstrates the use of \code{xCell2Train} for generating a custom xCell2 reference.
 }
-\keyword{datasets}
+\seealso{
+\code{\link{xCell2Train}} for generating references, and \code{\link{xCell2Analysis}} for enrichment analysis.
+}
+\keyword{datasets,}
+\keyword{references}

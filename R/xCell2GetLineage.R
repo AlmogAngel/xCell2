@@ -1,9 +1,7 @@
 #' Identify Cell Type Lineage Dependencies
 #'
-#' This function identifies cell type dependencies based on the Cell Ontology, including both
-#' descendants and ancestors for each cell type. 
-#' It allows users to investigate and manually inspect cell type lineage relationships in their 
-#' reference dataset, enabling more accurate and biologically meaningful analyses with \code{xCell2}.
+#' Identifies cell type dependencies based on the Cell Ontology, including both descendants and ancestors for each cell type.  
+#' Enables manual inspection and refinement of lineage relationships to improve biological accuracy in \code{xCell2} analyses.
 #'
 #' @importFrom magrittr %>%
 #' @importFrom AnnotationHub AnnotationHub
@@ -13,58 +11,60 @@
 #' @importFrom readr write_tsv
 #' @importFrom SummarizedExperiment assay assayNames colData
 #' @importFrom SingleCellExperiment colData
-#' @param labels A data frame with the following four columns:
+#'
+#' @param labels A data frame with the following required columns:
 #'   \itemize{
-#'     \item \code{"ont"}: The cell type ontology ID as a character (e.g., \code{"CL:0000545"}). Set as \code{NA} if no ontology is available.
-#'       Ontologies can be found at \href{https://www.ebi.ac.uk/ols4/ontologies/cl}{EBI Ontology Lookup Service (OLS)} or 
-#'       by using the \link[ontologyIndex]{ontologyIndex} package.
-#'     \item \code{"label"}: The cell type name as a character (e.g., \code{"T-helper 1 cell"}).
-#'     \item \code{"sample"}: The sample or cell identifier, matching the column names in the reference gene expression matrix.
-#'     \item \code{"dataset"}: The dataset or subject source for each sample. If not applicable, a constant value can be used for all samples.
+#'     \item \code{"ont"}: Cell type ontology ID (e.g., \code{"CL:0000545"}). Use \code{NA} if unavailable.  
+#'       Ontologies can be accessed via \href{https://www.ebi.ac.uk/ols4/ontologies/cl}{EBI Ontology Lookup Service (OLS)}  
+#'       or the \link[ontologyIndex]{ontologyIndex} package.
+#'     \item \code{"label"}: Cell type name (e.g., \code{"T-helper 1 cell"}).
+#'     \item \code{"sample"}: Sample or cell identifier matching column names in the gene expression matrix.
+#'     \item \code{"dataset"}: Dataset or subject source. Use a constant value if not applicable.
 #'   }
-#' @param outFile An optional output file name for saving the cell type dependencies as a TSV file. If specified, the file will include 
-#'   the \code{"ont"}, \code{"label"}, \code{"descendants"}, and \code{"ancestors"} columns. This file is suitable for manual inspection 
-#'   and adjustment.
+#' @param outFile Optional. Output file name for saving dependencies as a TSV file.  
+#'   The file includes columns for \code{"ont"}, \code{"label"}, \code{"descendants"}, and \code{"ancestors"}.  
+#'   Suitable for manual inspection and refinement before use in downstream analyses.
+#'
 #' @return 
+#'   If \code{outFile} is:
 #'   \itemize{
-#'     \item If \code{outFile} is not specified, the function returns a list of cell type dependencies. Each entry in the list corresponds 
-#'     to a cell type, with its descendants and ancestors provided as separate components.
-#'     \item If \code{outFile} is specified, the function writes a TSV file with the cell type dependencies, providing a warning to 
-#'     encourage manual inspection and validation.
+#'     \item \code{NULL}: Returns a list of dependencies for each cell type, with descendants and ancestors as components.
+#'     \item Specified: Writes a TSV file and warns the user to inspect and validate results manually.
 #'   }
+#'
 #' @details
-#' The \code{xCell2GetLineage} function enables advanced users to generate a cell type dependency file for manual inspection and adjustment. 
-#' This file can then be passed to the \code{\link{xCell2Train}} function via the \code{lineageFile} parameter, ensuring that ontological 
-#' integration (\code{useOntology}) operates with user-curated dependencies for maximum reliability.
+#' The \code{xCell2GetLineage} function generates lineage relationships for cell types based on the Cell Ontology.  
+#' These relationships refine lineage-based dependencies, improving the biological relevance of gene signatures.  
+#' Users can:
+#' \itemize{
+#'   \item Use the generated TSV file for manual adjustments before training custom references via \code{\link{xCell2Train}}.
+#'   \item Skip this step entirely, allowing \code{xCell2Train} to infer dependencies automatically.
+#' }
 #'
-#' If the user chooses not to use this function, \code{xCell2Train} will automatically detect cell type lineage dependencies during the 
-#' reference training process. However, manual inspection allows users to refine lineage relationships for more precise and biologically 
-#' meaningful cell type signatures.
+#' If no ontology IDs (\code{"ont"}) are provided, the function outputs empty dependencies with a message for user guidance.
 #'
-#' If no ontologies (\code{"ont"}) are provided in the labels data frame, the function will notify the user and return a default structure 
-#' with empty dependencies.
+#' \strong{Relationship with Other Functions:}
+#' \itemize{
+#'   \item \code{\link{xCell2Train}}: Incorporates lineage relationships during reference training.
+#'   \item \code{\link{xCell2Analysis}}: Uses trained references for enrichment analysis.
+#' }
 #'
-#' ## Relationship with Other Function(s)
-#' The dependencies generated by this function enhance the \code{xCell2Train} process by refining lineage-based cell type relationships. 
-#' These refined relationships improve the quality of cell type-specific gene signatures, leading to more accurate results in 
-#' \code{\link{xCell2Analysis}}.
-#' 
 #' @examples
-#' # For detailed example read xCell2 vignette.
+#' # For detailed examples, see the xCell2 vignette.
 #'
 #' library(xCell2)
-#'  
+#'
 #' # Load demo reference object
 #' data(dice_demo_ref, package = "xCell2")
-#' 
+#'
 #' # Prepare labels data frame
 #' dice_labels <- SummarizedExperiment::colData(dice_demo_ref)
-#' dice_labels <- as.data.frame(dice_labels) # "label" column already exists
+#' dice_labels <- as.data.frame(dice_labels)
 #' dice_labels$ont <- NA
 #' dice_labels$sample <- colnames(dice_demo_ref)
 #' dice_labels$dataset <- "DICE"
 #'
-#' # Assign cell type ontology
+#' # Assign ontology IDs
 #' dice_labels[dice_labels$label == "B cells", ]$ont <- "CL:0000236"
 #' dice_labels[dice_labels$label == "Monocytes", ]$ont <- "CL:0000576"
 #' dice_labels[dice_labels$label == "NK cells", ]$ont <- "CL:0000623"
@@ -75,14 +75,15 @@
 #' # Generate cell type lineage dependencies
 #' xCell2::xCell2GetLineage(labels = dice_labels)
 #'
-#' # Manually inspect and adjust the saved file "demo_dice_dep.tsv"
-#' # Use this file as input to xCell2Train via the `lineageFile` parameter for customized
-#' # ontological integration.
+#' # Manually inspect and adjust saved dependencies for refined lineage relationships
+#' # Use the adjusted file as input to xCell2Train via the `lineageFile` parameter.
+#'
 #' @seealso 
-#' \code{\link{xCell2Train}}, for incorporating lineage relationships during reference training. \cr
-#' \code{\link{xCell2Analysis}}, which uses the trained reference object for cell type enrichment analysis. \cr
-#' \code{\link{AnnotationHub}}, for accessing ontology data. \cr
-#' \code{\link{ontologyIndex}}, for exploring cell ontologies programmatically.
+#' \code{\link{xCell2Train}} for training custom references with lineage data.  
+#' \code{\link{xCell2Analysis}} for enrichment analysis using trained references.  
+#' \code{\link{AnnotationHub}} to access ontology data.  
+#' \code{\link{ontologyIndex}} to programmatically explore ontologies.
+#'
 #' @author Almog Angel and Dvir Aran
 #' @export
 xCell2GetLineage <- function(labels, outFile = NULL) {

@@ -5,27 +5,32 @@
 \alias{DICE_demo.xCell2Ref}
 \title{Demo xCell2 Reference Object}
 \format{
-An `xCell2Object` (S4) containing:
+An \code{xCell2Object} containing:
 \describe{
-  \item{\code{params}}{A tibble of parameters for linear transformation.}
-  \item{\code{signatures}}{A list containing cell-type signatures.}
-  \item{\code{dependencies}}{A list specifying cell type dependencies.}
-  \item{\code{spill_mat}}{A matrix representing spillover correction factors.}
-  \item{\code{genes_used}}{A character vector of genes used to generate the reference.}
+  \item{\code{params}}{Linear transformation parameters.}
+  \item{\code{signatures}}{Cell-type-specific gene signatures.}
+  \item{\code{dependencies}}{Cell type lineage dependencies.}
+  \item{\code{spill_mat}}{Spillover correction matrix.}
+  \item{\code{genes_used}}{Genes included in the reference.}
 }
 }
 \source{
-Schmiedel B et al. (2018)
+Schmiedel B et al. (2018).
 }
 \usage{
 data(DICE_demo.xCell2Ref, package = "xCell2")
 }
 \description{
-This object can be used to learn and demonstrate the functionality of the `xCell2Analysis` function.
+Pre-trained xCell2 reference object based on the DICE dataset.
 }
 \details{
-Demo xCell2 Reference Object from a Subset of the DICE Reference
+Demo xCell2 Reference Object from DICE Subset (human)
 
-A demo xCell2 reference object derived from a subset of the DICE reference dataset.
+A demo xCell2 reference object derived from a subset of the DICE dataset.
+Suitable for demonstrating the use of \code{xCell2Analysis}.
 }
-\keyword{datasets}
+\seealso{
+\code{\link{xCell2Analysis}} for enrichment analysis, and \code{\link{xCell2Train}} for training custom references.
+}
+\keyword{datasets,}
+\keyword{references}

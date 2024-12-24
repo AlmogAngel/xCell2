@@ -5,17 +5,22 @@
 \alias{mix_demo}
 \title{Demo Bulk Gene Expression Data}
 \format{
-A matrix with rows representing genes and columns representing samples.
+A matrix with genes (rows) and samples (columns).
 }
 \usage{
 data(mix_demo, package = "xCell2")
 }
 \description{
-A demo mixture matrix for bulk RNA-Seq gene expression data. This dataset can be used to learn how to use the `xCell2Train` function.
+Example RNA-Seq data to demonstrate \code{xCell2Analysis}.
 }
 \details{
 Demo Bulk Gene Expression Data (RNA-Seq)
 
-A demo mixture matrix for bulk RNA-Seq gene expression data, used to demonstrate how to use the `xCell2Train` function.
+A demo mixture matrix for bulk RNA-Seq gene expression data.  
+Use this dataset to test \code{xCell2Analysis} with pre-trained xCell2 references.
 }
-\keyword{datasets}
+\seealso{
+\code{\link{xCell2Analysis}} for enrichment analysis.
+}
+\keyword{datasets,}
+\keyword{examples}

@@ -5,13 +5,13 @@
 \alias{TMECompendium.xCell2Ref}
 \title{Tumor Microenvironment Compendium Reference}
 \format{
-An `xCell2Object` (S4) containing:
+An \code{xCell2Object} containing:
 \describe{
-  \item{\code{params}}{A tibble of parameters for linear transformation.}
-  \item{\code{signatures}}{A list containing cell-type signatures.}
-  \item{\code{dependencies}}{A list specifying cell type dependencies.}
-  \item{\code{spill_mat}}{A matrix representing spillover correction factors.}
-  \item{\code{genes_used}}{A character vector of genes used to generate the reference.}
+  \item{\code{params}}{Linear transformation parameters.}
+  \item{\code{signatures}}{Cell-type-specific gene signatures.}
+  \item{\code{dependencies}}{Cell type lineage dependencies.}
+  \item{\code{spill_mat}}{Spillover correction matrix.}
+  \item{\code{genes_used}}{Genes included in the reference.}
 }
 }
 \source{
@@ -21,18 +21,22 @@ Curated by Zaitsev A (2022) and trained by Angel A, et al. (2024).
 data(TMECompendium.xCell2Ref, package = "xCell2")
 }
 \description{
-A reference object for use in `xCell2Analysis`.
+Pre-trained xCell2 reference object for analyzing tumor microenvironments.
 }
 \details{
-xCell2 Object Trained from the Tumor Microenvironment Compendium Reference
+Tumor Microenvironment Compendium Reference (human)
 
-An xCell2 reference object created from the Tumor Microenvironment Compendium reference.
+An xCell2 reference object created from the Tumor Microenvironment Compendium dataset.
 
 
-Normalized data used to train this `xCell2` reference object can be found here:
-https://science.bostongene.com/kassandra/downloads
+Normalized data for training can be accessed at:  
+\url{https://science.bostongene.com/kassandra/downloads}.
 }
 \references{
-Zaitsev, A., et al. (2022). Precise reconstruction of the TME using bulk RNA-seq and a machine learning algorithm trained on artificial transcriptomes. Cancer Cell, 40(8), 879-894.
+Zaitsev, A., et al. (2022). Cancer Cell, 40(8), 879-894.
 }
-\keyword{datasets}
+\seealso{
+\code{\link{xCell2Analysis}} and \code{\link{xCell2Train}}.
+}
+\keyword{datasets,}
+\keyword{references}
