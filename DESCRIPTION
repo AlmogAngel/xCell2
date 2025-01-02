@@ -1,7 +1,7 @@
 Package: xCell2
 Type: Package
 Title: A Tool for Generic Cell Type Enrichment Analysis
-Version: 0.99.105
+Version: 0.99.106
 Authors@R: 
     c(person(given = "Almog", 
              family = "Angel", 
@@ -40,7 +40,8 @@ Imports:
     methods,
     readr,
     magrittr,
-    progress
+    progress,
+    quadprog
 Suggests:
     testthat,
     knitr,
@@ -48,8 +49,7 @@ Suggests:
     ggplot2,
     randomForest,
     tidyr,
-    EnhancedVolcano,
-    quadprog
+    EnhancedVolcano
 RoxygenNote: 7.3.2
 VignetteBuilder: knitr
 URL: https://github.com/AlmogAngel/xCell2

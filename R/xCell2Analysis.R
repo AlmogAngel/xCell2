@@ -9,6 +9,7 @@
 #' @importFrom BiocParallel MulticoreParam SerialParam bplapply
 #' @importFrom pracma lsqlincon
 #' @importFrom progress progress_bar
+#' @importFrom quadprog solve.QP
 #'
 #' @param mix A bulk mixture of gene expression data (genes in rows, samples in columns). 
 #'   The input must use the same gene annotation system as the reference object.
