@@ -1,21 +1,15 @@
 #' Perform Cell Type Enrichment Analysis
 #'
-<<<<<<< HEAD
-#' This function estimate the relative enrichment of cell types in a bulk gene expression mixture.
-#' The analysis leverages gene signatures from a pre-trained \code{xCell2Object} to compute enrichment scores for each cell type. 
-#' It also applies linear transformation and spillover correction to refine the enrichment scores.
-=======
 #' Estimates the relative enrichment of cell types in a bulk gene expression mixture.
 #' This function uses gene signatures from a pre-trained \code{xCell2Object} to compute enrichment scores, 
 #' with options for linear transformation and spillover correction to improve specificity.
->>>>>>> devel
 #'
 #' @importFrom magrittr %>%
 #' @importFrom singscore rankGenes simpleScore
 #' @importFrom BiocParallel MulticoreParam SerialParam bplapply
 #' @importFrom pracma lsqlincon
 #' @importFrom progress progress_bar
-<<<<<<< HEAD
+#' @importFrom quadprog solve.QP
 #' 
 #' @param mix A bulk mixture of gene expression matrix (genes in rows, samples in columns). 
 #'   The input should use the same gene annotation system as the reference object.
@@ -67,7 +61,6 @@
 #' data(DICE_demo.xCell2Ref, package = "xCell2")
 #'
 #' # Load demo bulk RNA-Seq gene expression mixture
-=======
 #'
 #' @param mix A bulk mixture of gene expression data (genes in rows, samples in columns). 
 #'   The input must use the same gene annotation system as the reference object.
@@ -114,7 +107,6 @@
 #' data(DICE_demo.xCell2Ref, package = "xCell2")
 #'
 #' # Load demo bulk gene expression mixture
->>>>>>> devel
 #' data(mix_demo, package = "xCell2")
 #'
 #' # Perform cell type enrichment analysis
@@ -123,31 +115,18 @@
 #'   xcell2object = DICE_demo.xCell2Ref
 #' )
 #'
-<<<<<<< HEAD
-#' # Example using parallel processing with MulticoreParam
-#' library(BiocParallel)
-#' parallel_param <- MulticoreParam(workers = 2) # Adjust workers as needed
-=======
 #' # Parallel processing example with BiocParallel
 #' library(BiocParallel)
 #' parallel_param <- MulticoreParam(workers = 2)
->>>>>>> devel
 #' xcell2_res_parallel <- xCell2::xCell2Analysis(
 #'   mix = mix_demo, 
 #'   xcell2object = DICE_demo.xCell2Ref, 
 #'   BPPARAM = parallel_param
 #' )
-<<<<<<< HEAD
-#' 
-#' @seealso 
-#' \code{\link{xCell2Train}}, for generating the reference object used in this analysis.
-#' 
-=======
 #'
 #' @seealso 
 #' \code{\link{xCell2Train}}, for creating the reference object used in this analysis.
 #'
->>>>>>> devel
 #' @author Almog Angel and Dvir Aran
 #' @export
 xCell2Analysis <- function(mix,
