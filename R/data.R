@@ -59,13 +59,8 @@ NULL
 #' @name TMECompendium.xCell2Ref
 #' @docType data
 #' @title Tumor Microenvironment Compendium Reference
-<<<<<<< HEAD
-#' @description A reference object for use in `xCell2Analysis`.
-#' @format An `xCell2Object` (S4) containing:
-=======
 #' @description Pre-trained xCell2 reference object for analyzing tumor microenvironments.
 #' @format An \code{xCell2Object} containing:
->>>>>>> devel
 #' \describe{
 #'   \item{\code{params}}{Linear transformation parameters.}
 #'   \item{\code{signatures}}{Cell-type-specific gene signatures.}
@@ -75,14 +70,6 @@ NULL
 #' }
 #' @usage data(TMECompendium.xCell2Ref, package = "xCell2")
 #' @details
-<<<<<<< HEAD
-#' Normalized data used to train this `xCell2` reference object can be found here:
-#' https://science.bostongene.com/kassandra/downloads
-#' 
-#' @source Curated by Zaitsev A (2022) and trained by Angel A, et al. (2024).
-#' @references Zaitsev, A., et al. (2022). Precise reconstruction of the TME using bulk RNA-seq and a machine learning algorithm trained on artificial transcriptomes. Cancer Cell, 40(8), 879-894.
-#' @keywords datasets
-=======
 #' Normalized data for training can be accessed at:  
 #' \url{https://science.bostongene.com/kassandra/downloads}.
 #' @source Curated by Zaitsev A (2022) and trained by Angel A, et al. (2024).
@@ -90,7 +77,6 @@ NULL
 #' Zaitsev, A., et al. (2022). Cancer Cell, 40(8), 879-894.
 #' @keywords datasets, references
 #' @seealso \code{\link{xCell2Analysis}} and \code{\link{xCell2Train}}.
->>>>>>> devel
 NULL
 
 #' Tabula Muris Blood Reference (mouse)

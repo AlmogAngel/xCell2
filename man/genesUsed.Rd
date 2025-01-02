@@ -34,8 +34,6 @@ Retrieve or assign the genes used in training the reference for an \linkS4class{
 
 Retrieve or assign the genes used in training the reference for an \linkS4class{xCell2Object}.
 }
-<<<<<<< HEAD
-=======
 \examples{
 data(DICE_demo.xCell2Ref, package = "xCell2")
 setGenesUsed(DICE_demo.xCell2Ref) <- c("GeneA", "GeneB", "GeneC")
@@ -43,7 +41,6 @@ getGenesUsed(DICE_demo.xCell2Ref)
 data(DICE_demo.xCell2Ref, package = "xCell2")
 setGenesUsed(DICE_demo.xCell2Ref) <- c("GeneA", "GeneB", "GeneC")
 }
->>>>>>> devel
 \seealso{
 \link{xCell2Object-class}
 
