@@ -6,5 +6,9 @@
 ^\.gitignore$
 ^LICENSE\.md$
 ^Meta$
+<<<<<<< HEAD
+^man/figures/xcell2logo\.png$
+=======
 ^man/figures$
 ^manuscript_figures$
+>>>>>>> devel
