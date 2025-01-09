@@ -50,6 +50,7 @@ Follow these steps:
   4. **Access the App**
      - Open your web browser and go to [http://localhost:3838](http://localhost:3838).
      - Start analyzing your data with the intuitive xCell 2.0 interface!
+     - When you are done, go back to Docker Desktop and **Stop** the image.
        
 ## Contributors
 
