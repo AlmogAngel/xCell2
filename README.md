@@ -15,19 +15,45 @@ devtools::install_github('AlmogAngel/xCell2')
 library(xCell2)
 ```
 
-## Important Notes
-
-<ul>
-<li>xCell 2.0 produces enrichment scores, not percentages. It's designed for comparing across samples, not cell types.</li>
-<li>xCell 2.0 requires variability among samples for accurate linear transformation.</li>
-<li>The method is designed for mixed samples, not for determining cell of origin or single-cell analysis.</li>
-</ul>
-
 ## Vignettes
 
 [Introduction to Cell Type Enrichment Analysis with xCell 2.0](https://aran-lab.com/xcell2-vignette)
 
+## Using xCell 2.0 with a User Interface (No Code Required)
+You can now run **xCell 2.0** with a simple and user-friendly interface using Docker Desktop, no coding required. 
 
+Follow these steps:
+  
+  1. **Install Docker Desktop**  
+     - Download and install Docker Desktop from [https://docs.docker.com/get-docker/](https://docs.docker.com/get-docker/).  
+   - Open Docker Desktop and make sure it is running.  
+  
+  2. **Pull the xCell 2.0 Docker Image**  
+     - Open the Docker Desktop app.  
+   - Navigate to the **Images** tab on the left sidebar.  
+   - Click the **Pull Image** button (top right corner).  
+   - Enter the following in the "Image Name" field:  
+       `almogangel/xcell2:latest`  
+   - Click **Pull** and wait for the image to download.  
+
+![](https://github.com/AlmogAngel/xCell2/blob/master/man/figures/docker_tutorial_1.gif)
+
+  3. **Run the xCell 2.0 App**  
+     - Once the image is downloaded, find it under the **Images** tab in Docker Desktop.  
+   - Click the **Run** button next to the `almogangel/xcell2:latest` image.  
+   - In the pop-up window:
+         - Set **Host Port** to `3838`.
+       - Leave all other fields as default.
+   - Click **Run** to start the container.  
+
+   *(Screenshot of the Run Container configuration screen in Docker Desktop)*
+  
+  4. **Access the App**  
+     - Open your web browser and go to [http://localhost:3838](http://localhost:3838).  
+   - Start analyzing your data with the intuitive xCell 2.0 interface!
+  
+     *(Screenshot of the xCell 2.0 user interface running in a browser)*
+     
 ## Contributors
 
 xCell 2.0 is developed by the Aran lab at the Technion - Israel Institute of Technology. Contact: Almog Angel (almog.angel at campus.technion.ac.il) Dvir Aran (dvir.aran at technion.ac.il)
