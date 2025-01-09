@@ -208,8 +208,8 @@ xCell2Analysis <- function(mix,
   }
 
   # Check reference/mixture genes intersection
-  genesIntersectFrac <- round(length(intersect(rownames(mix), getGenesUsed(xcell2object))) /
-    length(getGenesUsed(xcell2object)), 2)
+  shared_genes <- intersect(rownames(mix), getGenesUsed(xcell2object))
+  genesIntersectFrac <- round(length(shared_genes) / length(getGenesUsed(xcell2object)), 2)
   if (genesIntersectFrac < minSharedGenes) {
     stop(
       "This xCell2 reference shares ",
@@ -229,7 +229,7 @@ xCell2Analysis <- function(mix,
   
 
   # Rank mix gene expression matrix
-  mixRanked <- singscore::rankGenes(mix[getGenesUsed(xcell2object), ])
+  mixRanked <- singscore::rankGenes(mix[shared_genes, ])
   
   # Score and predict
   sigsCellTypes <- unique(unlist(lapply(
