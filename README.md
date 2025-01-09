@@ -29,10 +29,10 @@ Follow these steps:
      - Open Docker Desktop and make sure it is running.  
   
   2. **Pull the xCell 2.0 Docker Image**
-   - Navigate to the **Search** bar on the top.  
-   - Enter the following in the "Images" field:  
-       `almogangel/xcell2`  
-   - Click **Pull** and wait for the image to download.  
+     - Navigate to the **Search** bar on the top.
+     - Enter the following in the "Images" field:  
+       `almogangel/xcell2`
+     - Click **Pull** and wait for the image to download.  
 
 ![](https://github.com/AlmogAngel/xCell2/blob/master/man/figures/docker_tutorial_1.gif)
 
