@@ -40,6 +40,7 @@ Follow these steps:
      - Once the image is downloaded, find it under the **Images** tab in Docker Desktop.
      - Click the **Run** button next to the `almogangel/xcell2:latest` image.
      - In the pop-up window:
+       - Go to **Optional settings**.
        - Set **Host Port** to `3838`.
        - Leave all other fields as default.
      - Click **Run** to start the container.  
