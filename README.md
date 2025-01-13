@@ -25,8 +25,10 @@ You can now run **xCell 2.0** with a simple and user-friendly interface using Do
 Follow these steps:
   
   1. **Install Docker Desktop**
-     - Download and install Docker Desktop from [https://docs.docker.com/get-docker/](https://docs.docker.com/get-docker/).
-     - Open Docker Desktop and make sure it is running.  
+     - *Download and install Docker Desktop from [https://docs.docker.com/get-docker/](https://docs.docker.com/get-docker/).
+     - Open Docker Desktop and make sure it is running.
+    
+  * If you already have Docker installed, you might need to update it to the latest version.
   
   2. **Pull the xCell 2.0 Docker Image**
      - Navigate to the **Search** bar on the top.
