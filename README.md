@@ -28,7 +28,7 @@ Follow these steps:
      - *Download and install Docker Desktop from [https://docs.docker.com/get-docker/](https://docs.docker.com/get-docker/).
      - Open Docker Desktop and make sure it is running.
     
-  * If you already have Docker installed, you might need to update it to the latest version.
+  \* If you already have Docker Desktop installed, you might need to update to the latest version.
   
   2. **Pull the xCell 2.0 Docker Image**
      - Navigate to the **Search** bar on the top.
