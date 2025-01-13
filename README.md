@@ -53,7 +53,9 @@ Follow these steps:
      - Open your web browser and go to [http://localhost:3838](http://localhost:3838).
      - Start analyzing your data with the intuitive xCell 2.0 interface!
      - When you are done, go back to Docker Desktop and **Stop** the image.
-       
+    
+  <img src="man/figures/xcell2_shiny.png">
+
 ## Contributors
 
 xCell 2.0 is developed by the Aran lab at the Technion - Israel Institute of Technology. Contact: Almog Angel (almog.angel at campus.technion.ac.il) Dvir Aran (dvir.aran at technion.ac.il)
