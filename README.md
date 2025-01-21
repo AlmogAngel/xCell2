@@ -8,11 +8,22 @@
 **xCell 2.0** is an advanced R package and web application for cell type enrichment analysis, building upon the widely-used xCell algorithm. It introduces a training function that allows the utilization of custom reference datasets, making it adaptable to diverse tissue types and experimental conditions.
 
 ## Installation
-The package is currently available on GitHub and is being prepared for Bioconductor submission:
+Install via GitHub:
 
 ```R
 devtools::install_github('AlmogAngel/xCell2')
 library(xCell2)
+```
+
+Install via [Bioconductor](https://bioconductor.org/packages/devel/bioc/html/xCell2.html) (development version):
+```
+if (!require("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+
+# The following initializes usage of Bioc devel
+BiocManager::install(version='devel')
+
+BiocManager::install("xCell2")
 ```
 
 ## Vignettes
