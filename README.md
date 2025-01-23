@@ -1,4 +1,6 @@
 [![Bioc devel status](http://www.bioconductor.org/shields/build/devel/bioc/xCell2.svg)](https://bioconductor.org/checkResults/devel/bioc-LATEST/xCell2)
+[![Bioc last commit](https://bioconductor.org/shields/lastcommit/devel/bioc/xCell2.svg)](http://bioconductor.org/checkResults/devel/bioc-LATEST/xCell2/)
+[![Bioc support](https://bioconductor.org/shields/posts/xCell2.svg)](https://support.bioconductor.org/tag/xCell2)
 <div align="center">
   <img src="man/figures/xcell2logo.png" width="30%">
 </div>
