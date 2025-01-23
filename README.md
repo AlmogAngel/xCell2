@@ -1,4 +1,4 @@
-[![Bioc release status](http://www.bioconductor.org/shields/build/release/bioc/xCell2.svg)](https://bioconductor.org/checkResults/release/bioc-LATEST/xCell2)
+[![Bioc devel status](http://www.bioconductor.org/shields/build/devel/bioc/xCell2.svg)](https://bioconductor.org/checkResults/devel/bioc-LATEST/xCell2)
 <div align="center">
   <img src="man/figures/xcell2logo.png" width="30%">
 </div>
