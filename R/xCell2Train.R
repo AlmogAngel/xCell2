@@ -5,14 +5,6 @@ ValidateInputs <- function(ref, labels, refType) {
     stop("refType should be 'rnaseq', 'array' or 'sc'.")
   }
   
-  if (length(unique(labels$label)) < 3) {
-    stop("Reference must have at least 3 cell types!")
-  }
-  
-  if (!"data.frame" %in% class(labels)) {
-    stop("labels must be a dataframe.")
-  }
-  
   # Check if input is a SummarizedExperiment or SingleCellExperiment
   if (inherits(ref, "SummarizedExperiment") || inherits(ref, "SingleCellExperiment")) {
     se <- ref
@@ -41,7 +33,6 @@ ValidateInputs <- function(ref, labels, refType) {
         stop("No counts data found in the SummarizedExperiment object for microarray reference")
       }
     }
-    
     labels <- as.data.frame(colData(se))
   } else {
     # Handle non-SummarizedExperiment/SingleCellExperiment input
@@ -51,6 +42,9 @@ ValidateInputs <- function(ref, labels, refType) {
     if (is.null(labels)) {
       stop("labels must be a data frame with 4 columns: 'ont', 'label', 'sample', and 'dataset'")
     }
+    if (!"data.frame" %in% class(labels)) {
+      stop("labels must be a dataframe.")
+    }
   }
   
   if (all(colnames(labels) %in% c("ont", "label", "sample", "dataset"))) {
@@ -59,6 +53,9 @@ ValidateInputs <- function(ref, labels, refType) {
     stop("labels must have 4 columns: 'ont'', 'label'', 'sample'' and 'dataset'")
   }
   
+  if (length(unique(labels$label)) < 3) {
+    stop("Reference must have at least 3 cell types!")
+  }
   
   if (sum(grepl("_", labels$label)) != 0) {
     message("Changing underscores to dashes in cell-type labels!")
