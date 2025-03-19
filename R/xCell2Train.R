@@ -35,7 +35,7 @@ ValidateInputs <- function(ref, labels, refType) {
         stop("No counts data found in the SummarizedExperiment object for microarray reference")
       }
     }
-    
+
   } else {
     
     # Handle non-SummarizedExperiment/SingleCellExperiment input
@@ -49,6 +49,7 @@ ValidateInputs <- function(ref, labels, refType) {
       stop("labels must be a dataframe.")
     }
     
+
   }
   
   if (all(colnames(labels) %in% c("ont", "label", "sample", "dataset"))) {
