@@ -7,7 +7,9 @@ ValidateInputs <- function(ref, labels, refType) {
   
   # Check if input is a SummarizedExperiment or SingleCellExperiment
   if (inherits(ref, "SummarizedExperiment") || inherits(ref, "SingleCellExperiment")) {
+    
     se <- ref
+    labels <- as.data.frame(colData(se))
     
     if (refType != "array") {
       # Attempt to access TPM data first, followed by other assay types
@@ -33,8 +35,9 @@ ValidateInputs <- function(ref, labels, refType) {
         stop("No counts data found in the SummarizedExperiment object for microarray reference")
       }
     }
-    labels <- as.data.frame(colData(se))
+    
   } else {
+    
     # Handle non-SummarizedExperiment/SingleCellExperiment input
     if (!any(class(ref) %in% c("matrix", "dgCMatrix", "Matrix"))) {
       stop("ref must be one of these classes: matrix, dgCMatrix, Matrix or SummarizedExperiment/SingleCellExperiment object")
@@ -45,6 +48,7 @@ ValidateInputs <- function(ref, labels, refType) {
     if (!"data.frame" %in% class(labels)) {
       stop("labels must be a dataframe.")
     }
+    
   }
   
   if (all(colnames(labels) %in% c("ont", "label", "sample", "dataset"))) {

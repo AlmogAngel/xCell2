@@ -78,7 +78,8 @@ test_that("xCell2Train validates inputs correctly", {
   dice_ref <- SummarizedExperiment::assay(dice_demo_ref, "logcounts")
   dice_labels <- as.data.frame(SummarizedExperiment::colData(dice_demo_ref))
   
-  # Add sample and dataset columns
+  # Add sample and dataset columns without ontology
+  dice_labels$ont <- NA
   dice_labels$sample <- colnames(dice_ref)
   dice_labels$dataset <- "DICE"
   
