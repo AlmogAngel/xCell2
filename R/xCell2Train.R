@@ -9,7 +9,14 @@ ValidateInputs <- function(ref, labels, refType) {
   if (inherits(ref, "SummarizedExperiment") || inherits(ref, "SingleCellExperiment")) {
     
     se <- ref
-    labels <- as.data.frame(colData(se))
+    
+    if (is.null(labels)) {
+      labels <- as.data.frame(colData(se))
+    }else{
+      if (!"data.frame" %in% class(labels)) {
+        stop("labels must be a dataframe.")
+      }
+    }
     
     if (refType != "array") {
       # Attempt to access TPM data first, followed by other assay types
@@ -35,12 +42,12 @@ ValidateInputs <- function(ref, labels, refType) {
         stop("No counts data found in the SummarizedExperiment object for microarray reference")
       }
     }
-
+    
   } else {
     
     # Handle non-SummarizedExperiment/SingleCellExperiment input
-    if (!any(class(ref) %in% c("matrix", "dgCMatrix", "Matrix"))) {
-      stop("ref must be one of these classes: matrix, dgCMatrix, Matrix or SummarizedExperiment/SingleCellExperiment object")
+    if (!any(class(ref) %in% c("matrix", "dgCMatrix", "Matrix", "dgRMatrix"))) {
+      stop("ref must be one of these classes: matrix, dgCMatrix, Matrix, dgRMatrix or SummarizedExperiment/SingleCellExperiment object")
     }
     if (is.null(labels)) {
       stop("labels must be a data frame with 4 columns: 'ont', 'label', 'sample', and 'dataset'")
@@ -49,7 +56,6 @@ ValidateInputs <- function(ref, labels, refType) {
       stop("labels must be a dataframe.")
     }
     
-
   }
   
   if (all(colnames(labels) %in% c("ont", "label", "sample", "dataset"))) {
@@ -82,7 +88,7 @@ ScToPseudoBulk <- function(ref, labels, minPbCells, minPbSamples) {
     numGroups <- ceiling(length(cellTypeSamples) / minPbCells)
     
     if (length(cellTypeSamples) < minPbSamples) {
-    minPbSamples <- length(cellTypeSamples)
+      minPbSamples <- length(cellTypeSamples)
     }
     
     if (numGroups < minPbSamples) {
@@ -112,6 +118,7 @@ ScToPseudoBulk <- function(ref, labels, minPbCells, minPbSamples) {
     } else {
       tmp <- ref[, cellTypeSamples]
       colnames(tmp) <- as.character(seq_along(colnames(tmp)))
+      tmp <- as.data.frame(as.matrix(tmp))
       tmp
     }
   })
@@ -665,8 +672,9 @@ LearnParams <- function(gepMat, corMat, signatures, depList, BPPARAM) {
 #'     \item \code{"sample"}: The sample or cell identifier, matching column names in the reference matrix.
 #'     \item \code{"dataset"}: The dataset source for each sample. If not applicable, use a constant value for all samples.
 #'   }
-#'   This parameter is unnecessary if \code{ref} is a SummarizedExperiment or SingleCellExperiment object, as metadata should be in \code{colData}.
-#'
+#'   If \code{ref} is a \code{SummarizedExperiment} or \code{SingleCellExperiment} object, this parameter can be used to 
+#'   **override** the default labels extracted from \code{colData(ref)}.
+#'   
 #' @param refType The type of reference data: \code{"rnaseq"} for RNA-Seq, \code{"array"} for microarray, or \code{"sc"} for scRNA-Seq.
 #'
 #' @param minPbCells Minimum number of cells in a pseudo-bulk sample for scRNA-Seq references (default: \code{30}).
@@ -742,7 +750,7 @@ xCell2Train <- function(ref,
                         minPbCells = 30,
                         minPbSamples = 10,
                         minScGenes = 1e4
-                        ) {
+) {
   
   message("Starting xCell2 Train...")
   
