@@ -15,13 +15,10 @@ devtools::install_github('AlmogAngel/xCell2')
 library(xCell2)
 ```
 
-Install via [Bioconductor](https://bioconductor.org/packages/devel/bioc/html/xCell2.html) (development version):
+Install via [Bioconductor](https://bioconductor.org/packages/release/bioc/html/xCell2.html):
 ```
 if (!require("BiocManager", quietly = TRUE))
     install.packages("BiocManager")
-
-# The following initializes usage of Bioc devel
-BiocManager::install(version='devel')
 
 BiocManager::install("xCell2")
 ```
