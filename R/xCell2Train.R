@@ -125,7 +125,7 @@ ScToPseudoBulk <- function(ref, labels, minPbCells, minPbSamples, BPPARAM) {
     
   }, BPPARAM = BPPARAM)
   names(groupsList) <- cellTypes
-
+  
   pseudoRef <- as.matrix(Reduce(cbind, groupsList))
   rownames(pseudoRef) <- rownames(ref)
   
@@ -137,7 +137,7 @@ ScToPseudoBulk <- function(ref, labels, minPbCells, minPbSamples, BPPARAM) {
   
   pseudoLabel <- label_tmp %>%
     left_join(unique(labels[,c("ont", "label")]), by = "label") %>%
-    select(ont, everything()) %>%
+    dplyr::select(ont, everything()) %>%
     as.data.frame()
   
   return(list(ref = pseudoRef, labels = pseudoLabel))
@@ -632,7 +632,8 @@ LearnParams <- function(gepMat, corMat, signatures, depList, BPPARAM) {
 #' It supports references derived from RNA-Seq, microarray, and scRNA-Seq data and can be derived from various tissues and organisms. 
 #'
 #' @importFrom magrittr %>%
-#' @importFrom dplyr bind_cols select right_join mutate_all pull bind_rows
+#' @importFrom tidyselect everything
+#' @importFrom dplyr bind_cols select right_join mutate_all pull bind_rows left_join select
 #' @importFrom tibble tibble
 #' @importFrom readr read_tsv
 #' @importFrom BiocParallel SerialParam MulticoreParam bplapply
