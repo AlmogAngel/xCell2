@@ -75,7 +75,8 @@
 #'   Correction enhances specificity, particularly for related cell types.
 #' @param spilloverAlpha Numeric value controlling spillover correction strength (default: \code{0.5}). 
 #'   Lower values apply weaker correction, while higher values apply stronger correction.
-#' @param singscoreStableGenes description
+#' @param singscoreStableGenes A character vector of stable genes to be used for ranking genes in singscore (optional).
+#'   See \code{\link[singscore]{rankGenes}} and \code{\link[singscore]{getStableGenes}} for more details.
 #' @param BPPARAM A \linkS4class{BiocParallelParam} instance to define parallelization strategy (see "Details"). 
 #'   Default is \code{BiocParallel::SerialParam()}.
 #'
