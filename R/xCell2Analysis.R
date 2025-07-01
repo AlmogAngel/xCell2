@@ -5,7 +5,7 @@
 #' with options for linear transformation and spillover correction to improve specificity.
 #'
 #' @importFrom magrittr %>%
-#' @importFrom singscore rankGenes simpleScore
+#' @importFrom singscore rankGenes simpleScore getStableGenes
 #' @importFrom BiocParallel MulticoreParam SerialParam bplapply
 #' @importFrom pracma lsqlincon
 #' @importFrom progress progress_bar
@@ -75,6 +75,7 @@
 #'   Correction enhances specificity, particularly for related cell types.
 #' @param spilloverAlpha Numeric value controlling spillover correction strength (default: \code{0.5}). 
 #'   Lower values apply weaker correction, while higher values apply stronger correction.
+#' @param singscoreStableGenes description
 #' @param BPPARAM A \linkS4class{BiocParallelParam} instance to define parallelization strategy (see "Details"). 
 #'   Default is \code{BiocParallel::SerialParam()}.
 #'
@@ -124,6 +125,21 @@
 #'   BPPARAM = parallel_param
 #' )
 #'
+#' # Example using stable genes for ranking in singscore
+#' # Get a list of 30 stable genes (e.g., for cancer) from the singscore package
+#' # Important: make sure those genes exist in your input mixture!
+#' stable_genes <- singscore::getStableGenes(n_stable = 30, type = "carcinoma", id = "geneid")
+#' 
+#' # Note! Here we will use "fake" stable genes, just because the genes above not exist in "mix_demo"
+#' fake_stable_genes <- rownames(mix_demo)[1:30]
+#'
+#' # Perform analysis using the stable genes for ranking
+#' xcell2_res_stable <- xCell2::xCell2Analysis(
+#'   mix = mix_demo,
+#'   xcell2object = DICE_demo.xCell2Ref,
+#'   singscoreStableGenes = fake_stable_genes
+#' )
+#' 
 #' @seealso 
 #' \code{\link{xCell2Train}}, for creating the reference object used in this analysis.
 #'
@@ -135,6 +151,7 @@ xCell2Analysis <- function(mix,
                            rawScores = FALSE,
                            spillover = TRUE,
                            spilloverAlpha = 0.5,
+                           singscoreStableGenes = NULL,
                            BPPARAM = BiocParallel::SerialParam()) {
   
   message("Starting xCell2 Analysis...")
@@ -229,7 +246,30 @@ xCell2Analysis <- function(mix,
   
 
   # Rank mix gene expression matrix
-  mixRanked <- singscore::rankGenes(mix[shared_genes, ])
+  if (is.null(singscoreStableGenes)) {
+    mixRanked <- singscore::rankGenes(mix[shared_genes, ])
+  }else{
+    shared_stable_genes <- singscoreStableGenes[singscoreStableGenes %in% rownames(mix)]
+    if (length(shared_stable_genes) == 0) {
+      warning(
+        "All stable genes not present in the mixture - Using singscore without stable genes normalization..."
+      )
+      mixRanked <- singscore::rankGenes(mix[shared_genes, ])
+    }else{
+      if (length(shared_stable_genes) < length(singscoreStableGenes)) {
+        warning(
+          "The following stable genes not present in the mixture: ",
+          paste0(singscoreStableGenes[!singscoreStableGenes %in% rownames(mix)], collapse = " "),
+          "\nUsing stable genes normalization with ",
+          length(shared_stable_genes), " shared genes..."
+        )
+        mixRanked <- singscore::rankGenes(mix[shared_genes, ], stableGenes = shared_stable_genes)
+      }else{
+        message("Using stable genes to normalize ranks.")
+        mixRanked <- singscore::rankGenes(mix[shared_genes, ], stableGenes = shared_stable_genes)
+      }
+    }
+  }
   
   # Score and predict
   sigsCellTypes <- unique(unlist(lapply(
