@@ -35,6 +35,7 @@ xCell2Train(
 
 \strong{Notes:}
 \itemize{
+  \item If is RNA-Seq data - normalization by gene length is highly recommended.
   \item If multiple assays exist, \code{"tpm"} is prioritized.
   \item For microarray data, the \code{"counts"} assay must be used.
 }}

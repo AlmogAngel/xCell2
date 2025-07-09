@@ -13,6 +13,7 @@
 #' 
 #' @param mix A bulk mixture of gene expression matrix (genes in rows, samples in columns). 
 #'   The input should use the same gene annotation system as the reference object.
+#'   If is RNA-Seq data - normalization by gene length is highly recommended.
 #' @param xcell2object A pre-trained reference object of class \code{xCell2Object}, created using the \code{\link{xCell2Train}} function. 
 #'   Pre-trained references are available within the package for common use cases.
 #' @param minSharedGenes Minimum fraction of shared genes required between the mixture and the reference object (default: \code{0.9}). 
