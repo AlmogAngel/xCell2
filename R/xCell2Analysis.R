@@ -160,6 +160,11 @@ xCell2Analysis <- function(mix,
     pb$tick()
     calcEnrichment(cellType)
   }
+  
+  # Check for missing values
+  if (any(is.na(mix))) {
+    stop("The mixture contains NA or NaN values. Please clean your data.")
+  }
 
   # Check reference/mixture genes intersection
   shared_genes <- intersect(rownames(mix), getGenesUsed(xcell2object))
@@ -210,6 +215,15 @@ xCell2Analysis <- function(mix,
   res <- t(vapply(resRaw, function(cellTypeScores) {
     rowMeans(cellTypeScores)
   }, FUN.VALUE = double(nrow(resRaw[[1]]))))
+  
+  # Check for negative enrichment scores
+  neg_enrichment <- names(which(apply(res, 2, function(x){any(x<0)})))
+  if (length(neg_enrichment) > 0) {
+    error_msg <- paste0("There is a problem with the following samples: ",
+                        paste(neg_enrichment, collapse = ", "),
+                        ". Please check your input.")
+    stop(error_msg)
+  }
   
   if (rawScores) {
     message("Returning raw enrichment scores without linear transformation or correction.")
