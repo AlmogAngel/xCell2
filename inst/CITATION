@@ -6,10 +6,10 @@ bibentry(
     person("Almog", "Angel"),
     person("Dvir", "Aran")
   ),
-  title = "xCell 2.0: Robust Algorithm for Cell Type Proportion Estimation Predicts Response to Immune Checkpoint Blockade",
-  journal = "bioRxiv",
-  year = "2024",
-  doi = "10.1101/2024.09.06.611424",
-  url = "https://doi.org/10.1101/2024.09.06.611424"
+  title = "xCell 2.0: robust algorithm for cell type proportion estimation predicts response to immune checkpoint blockade",
+  journal = "Genome Biology",
+  year = "2025",
+  doi = "10.1186/s13059-025-03784-3",
+  url = "https://doi.org/10.1186/s13059-025-03784-3"
 )
 
