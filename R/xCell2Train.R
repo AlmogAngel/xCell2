@@ -58,10 +58,15 @@ ValidateInputs <- function(ref, labels, refType) {
     
   }
   
-  if (all(colnames(labels) %in% c("ont", "label", "sample", "dataset"))) {
+  if (all(c("ont", "label", "sample", "dataset") %in% colnames(labels))) {
     labels <- labels[, c("ont", "label", "sample", "dataset")]
   } else {
-    stop("labels must have 4 columns: 'ont'', 'label'', 'sample'' and 'dataset'")
+    if (inherits(ref, "SummarizedExperiment") || inherits(ref, "SingleCellExperiment")) {
+      stop("colData(ref) must have 4 columns: 'ont'', 'label'', 'sample'' and 'dataset'")
+      
+    }else{
+      stop("labels must have 4 columns: 'ont'', 'label'', 'sample'' and 'dataset'")
+    }
   }
   
   if (length(unique(labels$label)) < 3) {
