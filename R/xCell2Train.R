@@ -116,7 +116,7 @@ ScToPseudoBulk <- function(ref, labels, minPbCells, minPbSamples, BPPARAM) {
           if ("matrix" %in% class(ref)) {
             Rfast::rowsums(ref[, group])
           } else {
-            Matrix::rowSums(ref[, group])
+            rowSums(ref[, group])
           }
         }
       }, FUN.VALUE = double(nrow(ref)))
@@ -153,7 +153,7 @@ PrepRefMix <- function(ref, mix, refType, minScGenes) {
   
   if (refType == "sc") {
     message("> Normalizing pseudo bulk reference to CPM.")
-    libSizes <- Matrix::colSums(ref)
+    libSizes <- colSums(ref)
     normFactor <- 1e6 / libSizes
     refNorm <- ref %*% Matrix::Diagonal(x = normFactor)
     colnames(refNorm) <- colnames(ref)
@@ -647,7 +647,7 @@ LearnParams <- function(gepMat, corMat, signatures, depList, BPPARAM) {
 #' @importFrom SingleCellExperiment colData
 #' @importFrom minpack.lm nlsLM
 #' @importFrom Rfast rowMedians rowmeans rowsums Sort
-#' @importFrom Matrix rowMeans rowSums colSums Diagonal
+#' @importFrom Matrix Diagonal
 #' @importFrom singscore rankGenes simpleScore
 #' @importFrom stats coef cor lm quantile var
 #' @importFrom methods new
