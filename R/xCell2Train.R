@@ -86,6 +86,7 @@ ValidateInputs <- function(ref, labels, refType) {
 ScToPseudoBulk <- function(ref, labels, minPbCells, minPbSamples, BPPARAM) {
   cellTypes <- unique(labels$label)
   
+  
   groupsList <- BiocParallel::bplapply(cellTypes, function(cellType) {
     cellTypeSamples <- labels[labels$label == cellType, ]$sample
     
@@ -116,7 +117,7 @@ ScToPseudoBulk <- function(ref, labels, minPbCells, minPbSamples, BPPARAM) {
         } else if ("matrix" %in% class(ref)) {
           Rfast::rowsums(subset)
         } else {
-          rowSums(subset)
+          rowSums(as.matrix(subset))
         }
       }, FUN.VALUE = double(nrow(ref)))
       
