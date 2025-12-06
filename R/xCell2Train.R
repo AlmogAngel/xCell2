@@ -110,16 +110,16 @@ ScToPseudoBulk <- function(ref, labels, minPbCells, minPbSamples, BPPARAM) {
       )
       
       tmp <- vapply(listOfShuffledSamples, function(group) {
-        if (length(group) == 1) {
-          ref[, group]
+        subset <- ref[, group, drop = FALSE]
+        if (ncol(subset) == 1) {
+          as.numeric(subset[, 1])
+        } else if ("matrix" %in% class(ref)) {
+          Rfast::rowsums(subset)
         } else {
-          if ("matrix" %in% class(ref)) {
-            Rfast::rowsums(ref[, group])
-          } else {
-            rowSums(ref[, group])
-          }
+          rowSums(subset)
         }
       }, FUN.VALUE = double(nrow(ref)))
+      
     } else {
       tmp <- ref[, cellTypeSamples]
       tmp <- as.data.frame(as.matrix(tmp))
